@@ -20,8 +20,7 @@ import { renderDiff } from './diff-renderer.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
-import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
-import { lineLink } from './links.js'
+import { fileAnchorId, layerAnchorId, pointAnchorId, reviewedId, sanitizeKey } from './keys.js'
 import { renderMarkdown } from './markdown.js'
 import { writtenOn } from './diff-identity.js'
 import { pendingForPath } from './pending.js'
@@ -159,10 +158,29 @@ export function fileCount(n) {
 }
 
 /**
+ * The attention point publish made for a missing behavior: in the behavior's layer, on its anchor's
+ * file, under its title, the fields that name the point (`testPoints` in `src/review/normalize.ts`).
+ * None for a canvas written before entries kept their anchor and title.
+ * @param {Layer['tests'][number]} t
  * @param {Layer} layer
+ * @param {ReadonlyArray<Point>} points
+ */
+function missingTestPoint(t, layer, points) {
+  const { anchor, title } = t
+  if (t.status !== 'missing' || anchor === undefined || title === undefined) {
+    return undefined
+  }
+  return points.find(
+    p => p.origin === 'tests' && p.layerId === layer.id && p.path === anchor.path && p.title === title
+  )
+}
+
+/**
+ * @param {Layer} layer
+ * @param {ReadonlyArray<Point>} points the canvas's points; a missing behavior's row links to its own
  * @param {ReadonlySet<string>} paths
  */
-export function testMapHtml(layer, paths) {
+export function testMapHtml(layer, points, paths) {
   if (layer.tests.length === 0) {
     return ''
   }
@@ -172,11 +190,11 @@ export function testMapHtml(layer, paths) {
       const where = t.testPath
         ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath).replaceAll('/', '/<wbr>')}</a>`
         : ''
-      // A missing behavior with an anchor has an attention point there that carries its note, so
-      // the row links to the point instead of repeating it.
-      const point = t.status === 'missing' ? t.anchor : undefined
+      // A missing behavior's note is the body of its attention point, so the row links to the
+      // point, whose stop shows it in the one-point view, instead of repeating the note.
+      const point = missingTestPoint(t, layer, points)
       const note = point
-        ? `<div class="muted small"><a href="${esc(lineLink({ ...point, start: point.line, end: point.line }))}">See its attention point</a></div>`
+        ? `<div class="muted small"><a href="#${esc(pointAnchorId(point.id))}">See its attention point</a></div>`
         : t.note
           ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>`
           : ''
@@ -530,7 +548,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
     `${askButtonHtml({ kind: 'layer', layerId: layer.id }, { label: 'ask about this layer', title: 'Ask AI Chat about this layer' })}</div></div>` +
     `<div class="layer-body"${collapsed ? ' hidden' : ''}>` +
     `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}${judgmentHtml(layer, ctx.paths)}</div>` +
-    testMapHtml(layer, ctx.paths) +
+    testMapHtml(layer, artifact.points, ctx.paths) +
     layerPointsHtml(layer, artifact.points, ctx.paths, state, ctx.posted) +
     `<h3 class="lbl sub">Files · ${layer.files.length}<span class="fold-count" data-layer="${esc(layer.id)}">${esc(foldCountText(layerHiddenLines(layer, { artifact, files, comments: ctx.comments, state, headSha: ctx.headSha, mergeBaseSha: ctx.mergeBaseSha }, foldLevel)))}</span></h3><div class="files">${cards}</div>` +
     `<div class="layer-end"><button class="cmd" type="button" data-act="mark-layer" data-reviewed-id="${esc(layerReviewedId)}">mark layer as reviewed</button></div>` +

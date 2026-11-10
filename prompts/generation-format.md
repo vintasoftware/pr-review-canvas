@@ -202,6 +202,10 @@ hides too, behind the annotation's text.
   code. Omit `collapsed` where no level should hide the file whole, and `folds` where no level
   should hide any of its code.
 
+Folds on a file with `collapsed` are allowed: they take effect when the reader opens the file.
+Folding thresholds count diff rows in assigned chunks, including context, using the longer side
+of each chunk. They are not the manifest's additions plus deletions.
+
 ## Length rules
 
 Caps, in characters of the text a reader sees: link targets, backticks, and code-fence lines do not
@@ -254,10 +258,6 @@ The summary stands on its own. Say what changes for a user or a caller, then exp
 mechanism or decision a reviewer needs to make sense of the layers. Link the layers and files it
 names.
 
-Folds on a file with `collapsed` are allowed: they take effect when the reader opens the file.
-Folding thresholds count diff rows in assigned chunks, including context, using the longer side
-of each chunk. They are not the manifest's additions plus deletions.
-
 ## What each layer carries
 
 - `rationale`: why these hunks belong together, how this layer fits into the change, and what to read first.
@@ -277,10 +277,12 @@ of each chunk. They are not the manifest's additions plus deletions.
   (`side` is `new` or `old`, inside a chunk assigned to this layer). Without an anchor, publish
   uses the first changed row of the source file matched by `testPath`, or the layer's first
   changed row when no source matches. It never defaults to context. Give `behavior` a short,
-  specific name; generated titles fit the point-title cap at a word boundary. Optional `title`
-  overrides that generated title and uses the point-title cap. Published entries retain their
-  title, audience, and anchor so incremental copies preserve point identity and resolutions. Use `not-needed` for a behavior that needs no test, with
-  the reason in `note`. Omit uninspected behaviors; an empty test map is valid. Reading a test is
+  specific name. Without a `title`, the point's title is that name, cut at a word boundary to the
+  point-title cap; set `title`, within the same cap, when the name alone would not read as a gap.
+  The entry's `note` becomes the point's body, under the point-body cap, so write it as one: what
+  no test exercises and why that matters. Without a note, the body reads "No test covers this behavior." Published entries
+  retain their title, audience, and anchor so incremental copies preserve point identity and
+  resolutions. Use `not-needed` for a behavior that needs no test, with the reason in `note`. Omit uninspected behaviors; an empty test map is valid. Reading a test is
   evidence of what it asserts, not evidence that it passed.
 
 ## Attention points

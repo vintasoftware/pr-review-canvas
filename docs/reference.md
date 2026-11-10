@@ -525,7 +525,8 @@ optional `anchor: { "path": "src/file.ts", "line": 42, "side": "new" }` places i
 assigned to its layer (`side` may also be `old`). Without an anchor, publish uses the first
 changed row of the source matched by `testPath`, then falls back to the layer's first changed row.
 It never defaults to context. Optional `title` uses the point-title cap; otherwise the title is
-shortened at a word boundary. Published entries retain their title, audience, and anchor when
+the behavior's name, shortened at a word boundary. The entry's `note` is the point's body and uses
+the `pointBody` cap; without a note, the body reads "No test covers this behavior." Published entries retain their title, audience, and anchor when
 carried, including older generated points and their resolutions. Author and
 reviewer counts include these generated points, including counts reported for refs runs.
 

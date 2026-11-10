@@ -51,10 +51,15 @@
   something the diff doesn't show at a glance. The caps are unchanged.
 - A project with its own copy of `generation-format.md` keeps the old wording until it takes the
   **Writing** section from the bundled template.
-- A missing-test attention point reads as the generator's note on the gap, without the line
-  `The layer "…" lists this behavior without a test.` in front of it. A gap with no note reads
-  `No test covers this behavior.` The layer's Tests table no longer repeats that note: the row
-  links to the point with **See its attention point**.
+- A missing-test attention point's body is the generator's note on the gap, without the line
+  `The layer "…" lists this behavior without a test.` in front of it, and the prompt asks for the
+  note as a point body. A gap with no note reads `No test covers this behavior.` The layer's Tests
+  table no longer repeats that note: the row links to the point with **See its attention point**,
+  which opens the point's card, or its stop in the one-point view.
+- `validate` checks a missing test's note against the attention-point body cap, since the note is
+  that point's body. A canvas whose missing-test note runs past the cap, such as one an incremental
+  run copies from an older canvas, fails `validate` with `TEXT_TOO_LONG` until the note is
+  shortened.
 
 ## 0.10.0
 

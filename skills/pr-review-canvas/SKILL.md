@@ -267,8 +267,9 @@ author: the reason is theirs to give.
 - A `missing` test entry may set `audience` (default `reviewer`) and an `anchor` with `path`,
   `line`, and `side` (`new` or `old`) inside one of its layer's chunks. Without an anchor, publish
   chooses the first changed row of the source matched by `testPath`, or the layer's first changed
-  row. Optional `title` uses the point-title cap; otherwise the title is shortened at a word
-  boundary. Carried entries retain their published title, audience, and anchor. Follow the
+  row. Optional `title` uses the point-title cap; otherwise the title is the behavior's name,
+  shortened at a word boundary. Its `note` is the point's body and uses the point-body cap: say
+  what no test exercises and why that matters. Carried entries retain their published title, audience, and anchor. Follow the
   printed carried coordinates when the anchor moves, so author resolutions keep their identity.
 - Write no point for a settled decision the prompt lists, and do not raise its question again;
   publish adds the ones in the diff as resolved points.

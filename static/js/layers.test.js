@@ -8,7 +8,12 @@ import { toPatchMap } from '../../src/git/diff-collector.js'
 import { createGit } from '../../src/git/git.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { PACKAGE_ROOT } from '../../src/server/context.js'
-import { GH_REVIEW_COMMENTS, SYNTHETIC_FILES, syntheticArtifact } from '../../src/testing/synthetic.js'
+import {
+  GH_REVIEW_COMMENTS,
+  publishedSyntheticArtifact,
+  SYNTHETIC_FILES,
+  syntheticArtifact,
+} from '../../src/testing/synthetic.js'
 import { setChatEnabled } from './ask.js'
 import {
   applyDecorations,
@@ -106,11 +111,12 @@ describe('layer sections', () => {
   const paths = pathSet(files)
 
   it('renders the test map with links for covered tests', () => {
-    const layer = artifact.layers[0]
+    const published = publishedSyntheticArtifact()
+    const layer = published.layers[0]
     if (!layer) {
       throw new Error('no layer')
     }
-    document.body.innerHTML = testMapHtml(layer, paths)
+    document.body.innerHTML = testMapHtml(layer, published.points, paths)
     // Closed, under a label that says how much of what needs a test has one.
     expect(document.querySelector('details.test-map')?.hasAttribute('open')).toBe(false)
     expect(document.querySelector('.test-map > summary.lbl.sub h3')?.textContent).toBe('Tests')
@@ -120,16 +126,23 @@ describe('layer sections', () => {
     const rows = [...document.querySelectorAll('tbody tr')]
     expect(rows.map(r => r.querySelector('.st')?.textContent)).toEqual(['covered', 'missing', 'not-needed'])
     expect(rows[0]?.querySelector('a.loc')?.getAttribute('href')).toBe('#file:src/app.test.ts')
-    // A missing behavior's note lives on its attention point; the row links there instead.
+    // A missing behavior's note is the body of the point publish made for it; the row links to
+    // that point's card, not to its line, where the layer's decision sits too.
     expect(rows[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe('See its attention point')
-    expect(rows[1]?.querySelector('.muted.small a')?.getAttribute('href')).toBe('#line:src/app.ts:1')
-    // A canvas written before tests stored their anchor keeps the note in the row.
-    const legacy = layer.tests.map(t => (t.status === 'missing' ? { ...t, anchor: undefined } : t))
-    document.body.innerHTML = testMapHtml({ ...layer, tests: legacy }, paths)
+    const href = rows[1]?.querySelector('.muted.small a')?.getAttribute('href') ?? ''
+    document.body.innerHTML = renderLayers(published, files, state)
+    const card = document.querySelector(href)
+    expect(card?.matches('li.finding')).toBe(true)
+    expect(card?.querySelector('.prose')?.textContent?.trim()).toBe('y is unused')
+    // A canvas written before tests stored their anchor and title keeps the note in the row.
+    const legacy = layer.tests.map(t =>
+      t.status === 'missing' ? { ...t, anchor: undefined, title: undefined } : t
+    )
+    document.body.innerHTML = testMapHtml({ ...layer, tests: legacy }, published.points, paths)
     expect(document.querySelectorAll('tbody tr')[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe(
       'y is unused'
     )
-    expect(testMapHtml({ ...layer, tests: [] }, paths)).toBe('')
+    expect(testMapHtml({ ...layer, tests: [] }, published.points, paths)).toBe('')
   })
 
   it('labels the coverage from the behaviors that need a test', () => {

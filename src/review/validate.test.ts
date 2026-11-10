@@ -53,6 +53,21 @@ describe('validateModelOutput', () => {
     expect(errorsOf(output)).toEqual([])
   })
 
+  it('caps a missing behavior’s note as the point body it becomes, and no other test note', () => {
+    const output = clean()
+    const tests = layer(output, 0).tests
+    const missing = tests.findIndex(t => t.status === 'missing')
+    const notNeeded = tests.findIndex(t => t.status === 'not-needed')
+    const long = 'x'.repeat(TEXT_CAPS.pointBody + 1)
+    tests[missing] = { ...tests[missing]!, note: long }
+    expect(errorsOf(output)).toEqual([
+      expect.objectContaining({ code: 'TEXT_TOO_LONG', where: `layers.0.tests.${missing}.note` }),
+    ])
+    tests[missing] = { ...tests[missing]!, note: 'x'.repeat(TEXT_CAPS.pointBody) }
+    tests[notNeeded] = { ...tests[notNeeded]!, note: long }
+    expect(errorsOf(output)).toEqual([])
+  })
+
   it('keeps descriptive fold fields in the validated JSON', () => {
     const output = clean()
     const file = output.layers.flatMap(entry => entry.files).find(entry => entry.path === 'src/app.test.ts')

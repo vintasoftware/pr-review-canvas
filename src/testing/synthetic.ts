@@ -1,8 +1,9 @@
 // Synthetic PR data shared by server tests: one small diff with the shapes the collector must
 // handle, the GitHub payloads that describe it, and an artifact that layers it.
-import type { ReviewArtifact } from '../contract/review-artifact.js'
-import { parseUnifiedDiff, toFileEntry } from '../git/diff-collector.js'
+import { type ReviewArtifact, TEXT_CAPS } from '../contract/review-artifact.js'
+import { parseUnifiedDiff, toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import type { CliResponse } from '../host/client.js'
+import { artifactToModelOutput, normalize } from '../review/normalize.js'
 import {
   createFakeGh,
   createFakeGit,
@@ -339,6 +340,24 @@ export function syntheticArtifact(): ReviewArtifact {
     generator: { agent: 'claude', model: 'claude-opus-4-1', harness: 'claude-code', attempts: 1 },
     source: 'local',
   }
+}
+
+/**
+ * The synthetic canvas as publish writes it: the generator's output run through `normalize`, so the
+ * point the missing test adds sits on the entry's anchor, in the entry's layer, after the decision
+ * on the same chunk.
+ */
+export function publishedSyntheticArtifact(): ReviewArtifact {
+  const artifact = syntheticArtifact()
+  return normalize(artifactToModelOutput(artifact), {
+    pr: artifact.pr,
+    files: artifact.files,
+    patches: toPatchMap(SYNTHETIC_FILES),
+    highRisk: [],
+    caps: TEXT_CAPS,
+    generatedAt: artifact.generatedAt,
+    generator: artifact.generator,
+  })
 }
 
 /** A clone that holds PR #42: the head and base refs, the diff between them, and the file blobs. */
