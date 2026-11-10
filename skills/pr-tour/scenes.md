@@ -404,12 +404,17 @@ Rules:
 - **What the frame lacks.** It has no origin, network, storage, eval, or workers; it loads nothing,
   so icons, styles, and scripts are all inline (images as SVG, canvas, or `data:`). A scene takes no
   input: the tour owns clicks, drags, and keys, so a scene is watched, never used. A micro-world
-  takes input through its own controls, and only there. Validation refuses `<img>`, frames,
-  `<link>`, `<meta>`, forms, `<video>`, `<audio>`, event handler attributes (write code in a
-  `<script>`), `url()` of anything but `#id` or `data:`, links, and scripts that use `fetch`,
-  `XMLHttpRequest`, `WebSocket`, storage, `eval`, or workers; for a scene, it refuses inputs,
-  buttons, and selects too, and a scene with no `data-technique` (a micro-world may name its
-  pattern the same way; it is not counted).
+  takes input through its own controls, and only there. Validation refuses `<img>`, `<picture>`,
+  `<source>`, frames, `<object>`, `<embed>`, `<link>`, `<meta>`, `<base>`, forms, `<video>`,
+  `<audio>`, event handler attributes (write code in a `<script>`), `url()` of anything but `#id`
+  or `data:`, `@import`, `javascript:`, `expression()`, links and any `href`, `src`, `srcset`, or
+  `action` that is not an `#id` or `data:`, an icon name Lucide does not have, and scripts that
+  use `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `sendBeacon`, `RTCPeerConnection`,
+  `WebTransport`, `import()`, `importScripts`, workers, `eval`, `Function()`, or storage
+  (`localStorage`, `sessionStorage`, `indexedDB`, `document.cookie`); those names are matched in
+  the script's code, strings included, so keep them out of captions a script writes. For a scene,
+  it refuses inputs, buttons, textareas, and selects too, and a scene with no `data-technique` on
+  its root element (a micro-world may name its pattern the same way; it is not counted).
 - **Size.** At most 12,000 characters per scene; most need far fewer.
 - **If a script throws,** what the markup shows is what the reader sees.
 - **No secrets, credentials, or protected health information,** even as sample data.

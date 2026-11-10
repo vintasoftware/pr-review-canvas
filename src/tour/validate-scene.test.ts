@@ -87,6 +87,13 @@ describe('sceneProblems', () => {
     expect(sceneTechnique("<div data-technique=' Sankey '>x</div>")).toBe('sankey')
     expect(sceneTechnique('<div class="scene"><p>x</p></div>')).toBeNull()
     expect(sceneTechnique('<div data-technique="two words">x</div>')).toBeNull()
+    // Named deeper than the root, or in a style, it does not count.
+    expect(sceneTechnique('<div class="scene"><p data-technique="sankey">x</p></div>')).toBeNull()
+    expect(
+      sceneTechnique(
+        '<style>[data-technique="x"] {}</style><div class="scene" data-technique="trace">x</div>'
+      )
+    ).toBe('trace')
     expect(
       sceneTechnique('<p>x</p><script>el.dataset.technique = "x"; `data-technique="t"`</script>')
     ).toBeNull()

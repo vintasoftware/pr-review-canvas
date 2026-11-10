@@ -18,11 +18,26 @@ import { sceneProblems, sceneTechnique } from './validate-scene.js'
 
 export interface TourValidationInput {
   files: readonly FileEntry[]
+  /** Each file's patch by its key, without the hunk labels; a code chunk's lines must be in it. */
+  patches?: Readonly<Record<string, string>> | undefined
   caps: TourCaps
   budget: TourBudget
   categories: TourContext['categories']
   stateRequired: boolean
   options: TourContext['options']
+}
+
+/**
+ * The lines of a chunk's diff the patch does not have, by their number in the chunk: a chunk is
+ * copied from the patch, never retyped. The header is not compared, since a trimmed chunk counts
+ * its own lines.
+ */
+export function chunkLinesOutsidePatch(diff: string, patch: string): number[] {
+  const lines = new Set(patch.split('\n'))
+  return diff
+    .split('\n')
+    .slice(1)
+    .flatMap((line, i) => (lines.has(line) ? [] : [i + 2]))
 }
 
 export type TourValidationResult = TourValidationReport & { output: TourModel | null }
@@ -94,8 +109,7 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     })
   }
   // Only why landmarks are budgeted; a state landmark never counts.
-  const counted = model.landmarks.filter(l => l.state !== true)
-  const whys = counted.filter(l => l.stage === 'why').length
+  const whys = model.landmarks.filter(l => l.state !== true && l.stage === 'why').length
   const { why, whyMax } = input.budget
   if (whys > whyMax) {
     errors.push({
@@ -111,7 +125,8 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
     })
   }
   if (model.overBudget !== undefined) tooLong('overBudget', model.overBudget, caps.overBudget)
-  const limits = budgetLimits(input.budget, counted.length, whys)
+  // Questions follow every landmark written, the state landmark included: a reader read it too.
+  const limits = budgetLimits(input.budget, model.landmarks.length, whys)
   if (input.stateRequired && !model.landmarks.some(l => l.state === true)) {
     errors.push({
       code: 'STATE_LANDMARK_MISSING',
@@ -136,11 +151,21 @@ export function validateTourModel(raw: unknown, input: TourValidationInput): Tou
           where: `${where}.code.${j}`,
           message: `${where}.code.${j}: ${c.path} is not in the diff`,
         })
-      if (!/^@@ /.test(c.diff))
+      if (!/^@@ /.test(c.diff)) {
         errors.push({
           code: 'CHUNK_UNKNOWN',
           where: `${where}.code.${j}`,
           message: `${where}.code.${j}: a code chunk starts with its @@ header`,
+        })
+        return
+      }
+      const patch = input.patches?.[byPath.get(c.path)?.key ?? '']
+      const outside = patch === undefined ? [] : chunkLinesOutsidePatch(c.diff, patch)
+      if (outside.length > 0)
+        errors.push({
+          code: 'CHUNK_UNKNOWN',
+          where: `${where}.code.${j}`,
+          message: `${where}.code.${j}: line${outside.length === 1 ? '' : 's'} ${outside.slice(0, 5).join(', ')} of the chunk ${outside.length === 1 ? 'is' : 'are'} not in the patch of ${c.path}; copy chunks with \`pr-review tour hunk\`, never by hand`,
         })
     })
     l.literate.forEach((b, j) => {

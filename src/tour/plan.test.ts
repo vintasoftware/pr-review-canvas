@@ -81,9 +81,25 @@ describe('buildTourPrompt', () => {
     expect(prompt).toContain(
       '## What a change must respect\nA later change adds to the sum, never replaces it.'
     )
-    expect(prompt).toContain('- sum-over-product: Sum\n')
+    // Each landmark with its code, and each kept decision where it is and what was asked.
+    expect(prompt).toContain('## The change, landmark by landmark\n- run() returned a() alone: ')
+    expect(prompt).toContain('- Sum, not product: ')
+    expect(prompt).toContain(' (src/app.ts)\n')
+    expect(prompt).toContain('- sum-over-product: Sum (src/app.ts:4)\n  The question was: Sum over product? ')
     expect(prompt).not.toContain('## Changes to make')
-    expect(prompt).toContain('- Run /pr-tour 42 again; picks carry by decision key.')
+    expect(prompt).toContain('- Run the project checks.\n')
+    expect(prompt).toContain(
+      "- Run /pr-tour 42 again; the author's picks carry onto the decisions that still stand."
+    )
+    // A project with a guide is pointed at its checks.
+    const guided = buildTourPrompt(
+      syntheticTour({ guide: 'docs/pr-tour.md' }),
+      reader({ picks: { 'sum-over-product': { pick: 'keep', approved: true } } }),
+      '42'
+    )
+    expect(guided).toContain(
+      '- Run the project checks, as the guide (docs/pr-tour.md, "The agent may run") names them.'
+    )
   })
 
   it('lists approved changes with their restatement, and the notes', () => {
@@ -113,7 +129,7 @@ describe('buildTourPrompt', () => {
       '42'
     )
     expect(prompt).toContain('# Re-implement PR #42 as the tour settled it')
-    expect(prompt).toContain('- second: Sum')
+    expect(prompt).toContain('- second: Sum (src/app.ts:4)')
     expect(prompt).toContain(
       '## Changes to make, as approved in the tour\n1. Sum over product?\n   What: Multiply.\n   Where: src/app.ts\n   Stays the same: The callers.'
     )

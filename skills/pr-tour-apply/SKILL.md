@@ -57,8 +57,8 @@ touch failures that were there before; report them.
 
 Say what changed, file by file, and what the checks said.
 Then offer to commit, and to run `/pr-tour <key>` again once the new commit is on the pull request:
-the new head gets a new tour, and the reader's picks carry over by decision key, so only what
-changed is asked again.
+the new head gets a new tour, and the author's picks carry onto the decisions that still stand
+(same key, title, and file), so only what changed is asked again.
 
 ## Rules
 

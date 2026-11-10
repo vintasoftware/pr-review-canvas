@@ -783,8 +783,8 @@ export function staleBarHtml(bundle) {
         : `The tour is for ${tour}, which is not in this branch any more; the head is ${head}.`
   const shared = bundle.local === undefined ? ` ${fetchSharedHtml()}` : ''
   const action = canGenerate(bundle)
-    ? ` <button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">update the tour</button> or run <code>${esc(bundle.skillCommand)}</code>; picks carry by decision key.`
-    : ` Run <code>${esc(bundle.skillCommand)}</code> to update it; picks carry by decision key.`
+    ? ` <button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">update the tour</button> or run <code>${esc(bundle.skillCommand)}</code>; picks carry onto the decisions that still stand.`
+    : ` Run <code>${esc(bundle.skillCommand)}</code> to update it; picks carry onto the decisions that still stand.`
   return `<div class="tour-stale" role="status"><strong>Tour is outdated.</strong> You are reading an older commit. ${summary}${action}${shared}</div>`
 }
 

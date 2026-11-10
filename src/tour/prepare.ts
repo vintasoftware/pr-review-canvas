@@ -225,7 +225,11 @@ export async function prepareTour(
     (await loadPromptFile('tour.md', undefined, { repoRoot: ctx.config.repoRoot, overrides: config.prompts }))
   await writeTextAtomic(
     result.promptPath,
-    renderTourPrompt(context, derived.patches, template, { sceneGuidePath: SCENE_GUIDE_PATH, guidePath })
+    renderTourPrompt(context, derived.patches, template, {
+      sceneGuidePath: SCENE_GUIDE_PATH,
+      guidePath,
+      inlineDiffMaxLines: config.generation.inlineDiffMaxLines,
+    })
   )
   await writeJsonAtomic(result.contextPath, context)
   await appendFile(path.join(tourDir, 'tour.log'), `${context.preparedAt} prepared ${pr.headSha}\n`, 'utf8')

@@ -101,9 +101,26 @@ async function attachScenes(raw: unknown, scenesDir: string): Promise<void> {
   }
 }
 
-export function tourValidationInput(context: TourContext): TourValidationInput {
+/** Each file's patch as prepared, by key, without the `### hunk` labels; empty when none is on disk. */
+export async function readPatches(
+  context: Pick<TourContext, 'files' | 'paths'>
+): Promise<Record<string, string>> {
+  const patches: Record<string, string> = {}
+  for (const file of context.files) {
+    const labeled = await readText(path.join(context.paths.patches, `${file.key}.diff`))
+    if (labeled === null) continue
+    patches[file.key] = labeled
+      .split('\n')
+      .filter(line => !line.startsWith('### hunk '))
+      .join('\n')
+  }
+  return patches
+}
+
+export async function tourValidationInput(context: TourContext): Promise<TourValidationInput> {
   return {
     files: context.files,
+    patches: await readPatches(context),
     caps: context.caps,
     budget: context.budget,
     categories: context.categories,
@@ -198,7 +215,7 @@ export async function publishTour(
           errors: [{ code: 'SCHEMA' as const, where: '(root)', message: model.error.message }],
           output: null,
         }
-      : validateTourModel(model.raw, tourValidationInput(context))
+      : validateTourModel(model.raw, await tourValidationInput(context))
   const now = ctx.now().toISOString()
   const attempts = await recordAttempt(path.join(tourDir, 'tour.log'), now, result)
   if (!result.ok || result.output === null)

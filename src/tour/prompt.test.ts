@@ -72,4 +72,20 @@ describe('renderTourPrompt', () => {
     expect(diffs).not.toContain('#### `assets/logo.png`')
     expect(diffs).not.toContain('#### `src/new.ts`')
   })
+
+  it("inlines up to the project's limit, in a fence no line of the patch closes", async () => {
+    const { context, patches } = await prepared()
+    const short = renderTourPrompt(context, patches, '{{DIFFS}}', { ...EXTRAS, inlineDiffMaxLines: 1 })
+    expect(short).toContain('above the 1-line inline limit, so it is not inlined')
+    const app = context.files.find(f => f.path === 'src/app.ts')
+    if (app === undefined) throw new Error('synthetic diff')
+    const fenced = renderTourPrompt(
+      context,
+      { ...patches, [app.key]: `${patches[app.key]}\n@@ -20,1 +21,2 @@\n \`\`\`\`\n+text` },
+      '{{DIFFS}}',
+      EXTRAS
+    )
+    expect(fenced).toContain('`````diff\n### hunk ')
+    expect(fenced).toContain('+text\n`````')
+  })
 })

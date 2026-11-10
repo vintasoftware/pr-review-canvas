@@ -43,8 +43,10 @@ export interface SceneChecks {
  * none. The tour counts them, so the same picture is not dealt over and over.
  */
 export function sceneTechnique(html: string): string | null {
-  const markup = html.replace(SCRIPT_RE, '')
-  const m = /\bdata-technique\s*=\s*["']([^"']*)["']/i.exec(markup)
+  const markup = html.replace(SCRIPT_RE, '').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '')
+  // The root is the first tag; a technique named deeper in the markup does not count.
+  const root = /<\s*[a-z][^>]*>/i.exec(markup)?.[0] ?? ''
+  const m = /\bdata-technique\s*=\s*["']([^"']*)["']/i.exec(root)
   const name = m?.[1]?.trim().toLowerCase() ?? ''
   return /^[a-z0-9][a-z0-9-]*$/.test(name) ? name : null
 }

@@ -104,10 +104,19 @@ export function buildTourPrompt(tour: TourArtifact, reader: TourReaderState, key
     respect.lead,
     ...respect.body,
     '',
+    '## The change, landmark by landmark',
+    ...tour.landmarks.map(l => {
+      const paths = [...new Set(l.code.map(c => c.path))]
+      return `- ${l.title}: ${l.lead}${paths.length === 0 ? '' : ` (${paths.join(', ')})`}`
+    }),
+    '',
     '## Decisions kept by the author (do not reopen)',
     ...(plan.kept.length === 0
       ? ['- none']
-      : plan.kept.map(({ decision }) => `- ${decision.key}: ${decision.keep.label}`)),
+      : plan.kept.flatMap(({ decision: d }) => [
+          `- ${d.key}: ${d.keep.label} (${d.anchor.path}:${d.anchor.line})`,
+          `  The question was: ${d.title} ${d.context}`,
+        ])),
   ]
   if (plan.changes.length > 0) {
     lines.push('', '## Changes to make, as approved in the tour')
@@ -127,8 +136,10 @@ export function buildTourPrompt(tour: TourArtifact, reader: TourReaderState, key
   lines.push(
     '',
     '## Then',
-    '- Run the project checks.',
-    `- Run /pr-tour ${key} again; picks carry by decision key.`
+    tour.guide === null
+      ? '- Run the project checks.'
+      : `- Run the project checks, as the guide (${tour.guide}, "The agent may run") names them.`,
+    `- Run /pr-tour ${key} again; the author's picks carry onto the decisions that still stand.`
   )
   return lines.join('\n')
 }

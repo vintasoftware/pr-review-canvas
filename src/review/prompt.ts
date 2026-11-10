@@ -94,10 +94,23 @@ export function patchLineCount(patches: Record<string, string>): number {
   return Object.values(patches).reduce((n, p) => n + (p === '' ? 0 : p.split('\n').length), 0)
 }
 
+/** A fence no line of the text closes: one backtick longer than the longest run in it, four at least. */
+export function diffFence(text: string): string {
+  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map(m => m[0].length))
+  return '`'.repeat(Math.max(4, longest + 1))
+}
+
+/** One file's labeled patch, fenced as a diff. */
+export function fencedPatch(file: FileEntry, patch: string): string {
+  const labeled = labelPatch(file.key, patch)
+  const fence = diffFence(labeled)
+  return `#### \`${file.path}\`\n\n${fence}diff\n${labeled}\n${fence}`
+}
+
 function inlineDiffs(files: readonly FileEntry[], patches: Record<string, string>): string {
   return files
     .filter(f => (patches[f.key] ?? '') !== '')
-    .map(f => `#### \`${f.path}\`\n\n\`\`\`\`diff\n${labelPatch(f.key, patches[f.key] ?? '')}\n\`\`\`\``)
+    .map(f => fencedPatch(f, patches[f.key] ?? ''))
     .join('\n\n')
 }
 

@@ -175,19 +175,21 @@ you recommend changing, if any.
 - A state landmark when the change touches stored data.
 - Every decision anchors on a why or respect landmark of this tour and on a new-side line inside a
   hunk; every quiz question names a landmark of this tour.
-- Code chunks and literate snippets name files of the diff and start with their `@@` header; a
-  literate `chunk` index exists.
+- Code chunks name files of the diff, start with their `@@` header, and hold lines of that file's
+  patch; a literate snippet names a file of the diff, and a literate `chunk` index exists.
 - Every landmark has a picture: the background a scene, any other landmark a scene or a
   micro-world standing in for it.
 - Scenes pass the frame's checks (the scene guide lists them); a scene takes no input, a
   micro-world takes it only through its controls; at most two micro-worlds.
-- Every scene names its technique (`data-technique` on its root), and no technique draws more
-  than two scenes of a tour.
+- Every scene names its technique (`data-technique` on its root element, the first tag), and no
+  technique draws more than two scenes of a tour.
 - Categories the project turned off are not used; a `tryIt` is `verified` or absent.
 - Every text within its cap, measured on what a reader sees.
 
 ## Updating a shared tour
 
-After new commits, run this skill again for the pull request number. A new head gets a new tour;
-the reader's picks carry by decision key, so keep the keys of decisions that still hold. Add
-`--force` to regenerate the tour of the same commit.
+After new commits, run this skill again for the pull request number. A new head gets a new tour.
+The author's picks, once they confirmed the plan, carry onto the decisions that still stand: the
+same key, title, and anchored file, so keep all three for a decision that still holds. Reviewers'
+picks stay on their machines and with their pending review. Add `--force` to regenerate the tour
+of the same commit; the reader's answers on this machine carry the same way.

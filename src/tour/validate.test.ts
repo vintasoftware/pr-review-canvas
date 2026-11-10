@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { toFileEntry } from '../git/diff-collector.js'
 import { TOUR_CAPS, type TourModel } from '../contract/tour.js'
-import { SYNTHETIC_FILES } from '../testing/synthetic.js'
+import { SYNTHETIC_DIFF, SYNTHETIC_FILES } from '../testing/synthetic.js'
 import { syntheticTourModel } from '../testing/synthetic-tour.js'
 import { type TourValidationInput, validateTourModel } from './validate.js'
 
@@ -99,6 +99,8 @@ describe('validateTourModel', () => {
     const four = [0, 1, 2, 3].map(i => ({ ...question, id: `q-${i}` }))
     expect(codes({ ...model, quiz: four })).toEqual(['QUIZ_BUDGET'])
     expect(codes({ ...model, quiz: four.slice(0, 3) })).toEqual([])
+    // The state landmark is read too, so it counts for the questions, though not for the whys.
+    expect(codes({ ...withLandmark(model, 2, { state: true }), quiz: four.slice(0, 3) })).toEqual([])
     expect(codes(model, { budget: { why: 1, whyMax: 4, decisions: 0, quiz: 0 } })).toEqual([
       'DECISION_BUDGET',
       'QUIZ_BUDGET',
@@ -152,6 +154,28 @@ describe('validateTourModel', () => {
       'CHUNK_UNKNOWN',
     ])
     expect(codes(withLandmark(model, 1, { literate: [{ chunk: 3 }] }))).toEqual(['CHUNK_UNKNOWN'])
+    // With the patches at hand, a chunk's lines must be the patch's: a retyped line is refused by
+    // its number in the chunk, and a chunk of another file's lines too.
+    const app = files.find(f => f.path === 'src/app.ts')
+    if (app === undefined) throw new Error('synthetic diff')
+    const patches = { [app.key]: SYNTHETIC_DIFF }
+    expect(codes(model, { patches })).toEqual([])
+    const retyped = withLandmark(model, 2, {
+      code: [{ path: 'src/app.ts', diff: '@@ -1,4 +1,5 @@\n-  return a()\n+  return a() + b() // sum\n }' }],
+    })
+    const errors = validateTourModel(retyped, input({ patches })).errors
+    expect(errors.map(e => e.code)).toEqual(['CHUNK_UNKNOWN'])
+    expect(errors[0]?.message).toBe(
+      'landmarks.2.code.0: line 3 of the chunk is not in the patch of src/app.ts; copy chunks with `pr-review tour hunk`, never by hand'
+    )
+    const twoLines = withLandmark(model, 2, {
+      code: [{ path: 'src/app.ts', diff: '@@ -1,2 +1,2 @@\n+nope one\n+nope two' }],
+    })
+    expect(validateTourModel(twoLines, input({ patches })).errors[0]?.message).toContain(
+      'lines 2, 3 of the chunk are not'
+    )
+    // A file whose patch is not at hand is checked for its header alone.
+    expect(codes(twoLines, { patches: {} })).toEqual([])
     expect(
       codes(withLandmark(model, 1, { literate: [{ path: 'src/nope.ts', diff: '@@ -1 +1 @@\n+x' }] }))
     ).toEqual(['PATH_UNKNOWN'])

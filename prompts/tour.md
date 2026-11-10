@@ -28,9 +28,9 @@ tests.
   way the guide says. A server you start there listens on the `port` that checkout printed (the
   head and the base each print their own) and keeps all its state (a data directory, a database
   file, a HOME) in `scratch`, never in the reader's; stop it when you are done. To draw the screen
-  before the change, run the base checkout the same way. Before you publish, remove the base
-  checkout with `pr-review tour checkout <tourDir> base --remove`; leave the head, which AI Chat
-  reads.
+  before the change, run the base checkout the same way. Before you publish, remove the checkouts
+  you took, `pr-review tour checkout <tourDir> head --remove` and the same for `base`: they are
+  the generator's own, apart from the one AI Chat reads.
 - The {{TARGET_WORD}} head is **not** checked out. Read a changed file as it is at the head from
   `<head>/<path>` and at the merge base from `<base>/<path>`. Read untouched files with
   `git show {{HEAD_SHA}}:<path>` from the repository root. Use `git show {{MERGE_BASE_SHA}}:<path>`
@@ -178,7 +178,8 @@ out of `<model>`: publish reads each landmark's files from `<scenes>`.
 
 **Code.** `code` holds the chunks of the diff behind the landmark, zero to three, each a file path
 and a unified-diff excerpt starting with its `@@` header, copied from the patch. A long hunk may be
-trimmed to the lines that matter, with an `@@` header whose numbers match the lines kept. Do not
+trimmed to the lines that matter, with an `@@` header whose numbers match the lines kept; every
+line after the header is a line of the file's patch, and validation refuses one that is not. Do not
 copy chunks by hand: `pr-review tour hunk <tourDir> <hunk id>` prints the chunk as JSON, ready to
 paste, and `--from <line> --to <line>` trims it to a range of the file's own line numbers at the
 head (as the `@@` header counts them, not the line numbers of this prompt). A range of only added lines

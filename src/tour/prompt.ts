@@ -3,16 +3,15 @@
 import { z } from 'zod'
 import type { TourContext } from '../contract/tour.js'
 import { type DecisionCategory, TOUR_LIMITS, tourModelSchema } from '../contract/tour.js'
-import { labelPatch } from '../git/patch-lines.js'
+import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import {
   bodyMarkdown,
   embedMarkdown,
+  fencedPatch,
   manifestMarkdown,
   metaMarkdown,
   patchLineCount,
 } from '../review/prompt.js'
-
-const INLINE_DIFF_MAX_LINES = 1500
 
 const CATEGORY_TEXT: Record<DecisionCategory, string> = {
   'trade-off':
@@ -25,21 +24,19 @@ const CATEGORY_TEXT: Record<DecisionCategory, string> = {
   spec: 'Spec fidelity: where the change departs from the spec or the design it was built from.',
 }
 
-function diffsMarkdown(ctx: TourContext, patches: Record<string, string>): string {
+function diffsMarkdown(ctx: TourContext, patches: Record<string, string>, inlineMaxLines: number): string {
   const lines = patchLineCount(patches)
-  if (lines <= INLINE_DIFF_MAX_LINES) {
+  if (lines <= inlineMaxLines) {
     const inline = ctx.files
       .flatMap(f => {
         const patch = patches[f.key] ?? ''
-        return patch === ''
-          ? []
-          : [`#### \`${f.path}\`\n\n\`\`\`\`diff\n${labelPatch(f.key, patch)}\n\`\`\`\``]
+        return patch === '' ? [] : [fencedPatch(f, patch)]
       })
       .join('\n\n')
     return `The whole diff follows (${lines} lines). Every hunk is labeled with its id.\n\n${inline}`
   }
   return (
-    `The diff has ${lines} lines, above the ${INLINE_DIFF_MAX_LINES}-line inline limit, so it is not inlined. ` +
+    `The diff has ${lines} lines, above the ${inlineMaxLines}-line inline limit, so it is not inlined. ` +
     'Read one file at a time from `<patches>/<key>.diff`; each file carries the same `### hunk <id>` labels the manifest uses.'
   )
 }
@@ -113,7 +110,7 @@ function basisMarkdown(ctx: TourContext): string {
     '',
     "- **Carry** a landmark, decision, or question whose code names only unchanged files: keep its text, its id or key, and its picture (copy the file from the earlier tour's pictures into `<scenes>`). Its hunk ids and line numbers follow the head's diff.",
     '- **Judge again** everything that names a changed, new, or gone file: rewrite it, redraw its picture, drop it, or write a new one. The new commits may have carried out a change a reader asked for in the earlier tour, and rebuilt the code around it.',
-    "- Keep the `key` of a decision that still stands, so the reader's pick carries to this tour. A decision the new commits settled, by taking its alternative or something else, is no longer open: drop it, or write the new trade-off under a new key.",
+    "- Keep the `key`, the `title`, and the anchor's file of a decision that still stands, so the author's pick carries to this tour: a pick carries only onto a decision with the same key, title, and file. A decision the new commits settled, by taking its alternative or something else, is no longer open: drop it, or write the new trade-off under a new key.",
     '- The background and the world landmarks describe the whole change as it is now, not what changed since the earlier tour.',
     '- The budget, the caps, and every rule below hold as for a new tour; carried content counts against them.',
   ].join('\n')
@@ -129,6 +126,8 @@ export interface TourPromptExtras {
   sceneGuidePath: string
   /** Where the project keeps its tour guide, relative to the repository, whether or not it is there. */
   guidePath: string
+  /** The diff is inlined up to this many lines (`generation.inlineDiffMaxLines`), as the canvas prompt does. */
+  inlineDiffMaxLines?: number | undefined
 }
 
 /** Fills the template's tokens. Throws on a token the template names that this module does not. */
@@ -148,7 +147,11 @@ export function renderTourPrompt(
     MODEL_PATH: ctx.paths.model,
     SCENES_DIR: ctx.scenesDir,
     MANIFEST: manifestMarkdown(ctx.files),
-    DIFFS: diffsMarkdown(ctx, patches),
+    DIFFS: diffsMarkdown(
+      ctx,
+      patches,
+      extras.inlineDiffMaxLines ?? DEFAULT_PROJECT_CONFIG.generation.inlineDiffMaxLines
+    ),
     GUIDE: guideMarkdown(ctx, extras.guidePath),
     BUDGET: budgetMarkdown(ctx),
     CAPS: capsMarkdown(ctx),
