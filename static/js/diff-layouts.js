@@ -34,6 +34,14 @@ export function layoutForWidth(chosen, width) {
   return chosen === 'split' && width < SPLIT_MIN_WIDTH ? 'unified' : chosen
 }
 
+/**
+ * @param {DiffLayout} layout
+ * @returns {DiffLayout}
+ */
+export function nextDiffLayout(layout) {
+  return layout === 'split' ? 'unified' : 'split'
+}
+
 /** The layout the reader chose, from the settings file until they switch. */
 let chosen = /** @type {DiffLayout} */ (DEFAULT_DIFF_LAYOUT)
 

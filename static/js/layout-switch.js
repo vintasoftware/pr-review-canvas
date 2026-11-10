@@ -1,14 +1,23 @@
 // @ts-check
 // The reader's switch between the unified and split layouts of the diffs. The choice is saved in
 // the settings file; the page draws split only while the diff column is wide enough for two sides.
-import { chosenDiffLayout, drawnDiffLayout, layoutForWidth, SPLIT_MIN_WIDTH } from './diff-layouts.js'
+import {
+  chosenDiffLayout,
+  drawnDiffLayout,
+  layoutForWidth,
+  nextDiffLayout,
+  SPLIT_MIN_WIDTH,
+} from './diff-layouts.js'
 
 /** @typedef {import('./diff-layouts.js').DiffLayout} DiffLayout */
 
 /** What the layout button and the `s` key say while the column is too narrow for split. */
 export const TOO_NARROW = `split needs a diff column at least ${SPLIT_MIN_WIDTH}px wide`
 
-export const DIFF_LAYOUT_TOGGLE_ID = 'diff-layout-toggle'
+const TOGGLE_ID = 'diff-layout-toggle'
+
+/** @param {DiffLayout} drawn */
+const toggleLabel = drawn => `layout: ${drawn}`
 
 /**
  * The header's layout button, beside skin and theme: it names the layout on screen and switches to
@@ -16,7 +25,7 @@ export const DIFF_LAYOUT_TOGGLE_ID = 'diff-layout-toggle'
  */
 export function diffLayoutToggleHtml() {
   const drawn = drawnDiffLayout()
-  return `<button class="cmd" type="button" id="${DIFF_LAYOUT_TOGGLE_ID}" data-act="diff-layout" data-layout="${drawn}">layout: ${drawn}</button>`
+  return `<button class="cmd" type="button" id="${TOGGLE_ID}" data-act="diff-layout" data-layout="${drawn}">${toggleLabel(drawn)}</button>`
 }
 
 /**
@@ -24,18 +33,17 @@ export function diffLayoutToggleHtml() {
  * @param {boolean} fits
  */
 function paintToggle(root, fits) {
-  const button = root.querySelector(`#${DIFF_LAYOUT_TOGGLE_ID}`)
+  const button = root.querySelector(`#${TOGGLE_ID}`)
   if (!(button instanceof HTMLButtonElement)) {
     return
   }
   const drawn = drawnDiffLayout()
-  const other = drawn === 'split' ? 'unified' : 'split'
-  button.textContent = `layout: ${drawn}`
+  button.textContent = toggleLabel(drawn)
   button.setAttribute('data-layout', drawn)
-  button.disabled = other === 'split' && !fits
-  button.title = button.disabled
-    ? `Diff layout: unified; ${TOO_NARROW}`
-    : `Diff layout: ${drawn}. Switch to ${other} (s); the choice is saved`
+  button.disabled = !fits
+  button.title = fits
+    ? `Diff layout: ${drawn}. Switch to ${nextDiffLayout(drawn)} (s); the choice is saved`
+    : `Diff layout: ${drawn}; ${TOO_NARROW}`
 }
 
 /** @param {Element} el */

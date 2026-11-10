@@ -32,7 +32,7 @@ import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decoratio
 import { conversationHtml } from './overview.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
 import { hostLabel } from './host.js'
-import { drawnDiffLayout, setChosenDiffLayout, setDrawnDiffLayout } from './diff-layouts.js'
+import { drawnDiffLayout, nextDiffLayout, setChosenDiffLayout, setDrawnDiffLayout } from './diff-layouts.js'
 import { isFoldLevel, nextFoldLevel } from './fold-levels.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
@@ -940,7 +940,7 @@ export function wireReview(root, session, opts = {}) {
    * as the reader's choice. Split waits for a column wide enough to hold it.
    */
   const toggleDiffLayout = () => {
-    const layout = drawnDiffLayout() === 'split' ? 'unified' : 'split'
+    const layout = nextDiffLayout(drawnDiffLayout())
     if (layout === 'split' && !layoutSwitch.fits()) {
       toast(root, TOO_NARROW, { tone: 'note' })
       return
@@ -1103,7 +1103,7 @@ export function wireReview(root, session, opts = {}) {
 
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
-    'diff-layout': () => toggleDiffLayout(),
+    'diff-layout': toggleDiffLayout,
     'toggle-card': (el, event) => toggleFromTitle(el, event, () => setCardCollapsed(el)),
     'mark-layer': el => {
       const id = el.getAttribute('data-reviewed-id') ?? ''
