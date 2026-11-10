@@ -642,6 +642,10 @@ pr-tour[data-at='plan'] {
   font-size: 18px;
   line-height: 1.65;
 }
+/* The stage takes the focus after each move so the keyboard reads on from it; it draws no ring. */
+.tour-stage:focus {
+  outline: none;
+}
 .tour-stage > * {
   max-width: var(--stage-w);
   margin-left: auto;
