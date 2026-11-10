@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { CanvasSharing } from '../contract/self-review.js'
 import type { Generator } from '../contract/review-artifact.js'
 import {
+  standingDecisions,
   type TourArtifact,
   type TourContext,
   TourContextSchema,
@@ -15,6 +16,7 @@ import { UNCOMMITTED_STATE } from '../git/local-target.js'
 import { currentHead, parseModelText, PublishError, recordAttempt } from '../review/publish.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
+import { carryReaderState } from './reader.js'
 import { shareTourOnPr } from './share.js'
 import { type TourValidationInput, validateTourModel } from './validate.js'
 
@@ -139,17 +141,18 @@ export function tourArtifactOf(
 
 /**
  * The record a regenerated tour keeps: who toured the earlier tour of the same commit, and the
- * author's picks whose decision key survived. A pick on a decision that is gone goes with it.
+ * author's picks on the decisions that still stand (`decisionStillStands`). A pick on a decision
+ * that is gone, or rewritten under its old key, goes with it.
  */
 export function carriedRecord(previous: TourArtifact | null, model: TourModel): TourRecord {
   if (previous === null) return { touredBy: [] }
-  const keys = new Set(model.decisions.map(d => d.key))
   const record: TourRecord = { touredBy: previous.record.touredBy }
   const author = previous.record.author
   if (author !== undefined) {
+    const standing = standingDecisions(previous.decisions, model.decisions)
     record.author = {
       ...author,
-      picks: Object.fromEntries(Object.entries(author.picks).filter(([key]) => keys.has(key))),
+      picks: Object.fromEntries(Object.entries(author.picks).filter(([key]) => standing.has(key))),
     }
   }
   return record
@@ -213,6 +216,9 @@ export async function publishTour(
   })
   const worktree = context.target.kind === 'local' && context.pr.state === UNCOMMITTED_STATE
   await ctx.tours.write(context.headSha, artifact, { worktree })
+  // The reader's answers outlive prepare, so a regeneration that fails leaves them; now that the
+  // new tour is stored, they are carried onto it, and the plan confirmed on the old one goes.
+  await carryReaderState(ctx, context.headSha, previous, artifact)
   if (worktree) await ctx.git.anchorCommit(context.headSha)
   const published: TourPublishResult = {
     status: 'published',

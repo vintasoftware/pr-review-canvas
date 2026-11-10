@@ -699,6 +699,9 @@ function sharingLine(sharing) {
   if (sharing.status === 'off') {
     return '<li class="private">Sharing is off for this project: the record stays here.</li>'
   }
+  if (sharing.status === 'outdated') {
+    return '<li class="private">This tour is of an earlier commit: the record stays on this machine, and the pull request keeps the tour of its head.</li>'
+  }
   return '<li class="private">A local review: the record stays on this machine.</li>'
 }
 

@@ -5,6 +5,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { type CliIo, reportFailure } from '../commands.js'
+import { freshReaderState } from '../contract/tour-api.js'
 import { TourContextSchema, TourArtifactSchema } from '../contract/tour.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { ghPost, makeTestContext, type TestContext } from '../testing/fakes.js'
@@ -26,6 +27,7 @@ import { guideHasRunRecipe, prepareTour } from './prepare.js'
 import { previewTour } from './preview.js'
 import { renderTourPrompt } from './prompt.js'
 import { carriedRecord, publishTour, readTourContext, readTourModel, TourInvalidError } from './publish.js'
+import { planPromptFile, savedReaderState, writeReaderState } from './reader.js'
 import { exportTour, tourManifest, zipStoredTour } from './share.js'
 import { buildZipName, parseZipName } from '../canvas/name.js'
 import { buildZip, readZip } from '../canvas/zip.js'
@@ -264,23 +266,97 @@ describe('tour publish', () => {
     }
   })
 
-  it('carries who toured and the author picks whose decisions survive a regeneration', () => {
+  it('carries who toured and the author picks on the decisions that still stand', () => {
     const model = syntheticTourModel()
-    const previous = {
-      record: {
-        touredBy: [{ login: 'octocat', at: '2026-09-11T00:00:00.000Z' }],
-        author: {
-          finishedAt: '2026-09-11T00:00:00.000Z',
-          prompt: 'p',
-          picks: { 'sum-over-product': { pick: 'keep' as const }, gone: { pick: 'change' as const } },
-        },
+    const [decision] = model.decisions
+    if (decision === undefined) throw new Error('synthetic tour')
+    const record = {
+      touredBy: [{ login: 'octocat', at: '2026-09-11T00:00:00.000Z' }],
+      author: {
+        finishedAt: '2026-09-11T00:00:00.000Z',
+        prompt: 'p',
+        picks: { 'sum-over-product': { pick: 'keep' as const }, gone: { pick: 'change' as const } },
       },
     }
     expect(carriedRecord(null, model)).toEqual({ touredBy: [] })
-    expect(carriedRecord(previous as never, model)).toEqual({
-      touredBy: previous.record.touredBy,
-      author: { ...previous.record.author, picks: { 'sum-over-product': { pick: 'keep' } } },
+    const same = { decisions: [decision, { ...decision, key: 'gone' }], record }
+    expect(carriedRecord(same as never, model)).toEqual({
+      touredBy: record.touredBy,
+      author: { ...record.author, picks: { 'sum-over-product': { pick: 'keep' } } },
     })
+    // A decision rewritten under its old key, or moved to another file, is asked again.
+    const rewritten = { decisions: [{ ...decision, title: 'Product over sum?' }], record }
+    expect(carriedRecord(rewritten as never, model).author?.picks).toEqual({})
+    const moved = {
+      decisions: [{ ...decision, anchor: { ...decision.anchor, path: 'src/other.ts' } }],
+      record,
+    }
+    expect(carriedRecord(moved as never, model).author?.picks).toEqual({})
+  })
+
+  it('keeps the reader state through prepare and a failed publish, and carries it onto the published tour', async () => {
+    const first = await prepared()
+    await writeTourFiles(first.tourDir, first.scenesDir)
+    await publishTour(t.ctx, first.tourDir, OPTS)
+    const finished = {
+      at: 'then',
+      promptPath: planPromptFile(t.ctx, HEAD_SHA),
+      prompt: 'the plan',
+      sharing: { status: 'off' as const },
+    }
+    await writeReaderState(t.ctx, HEAD_SHA, {
+      ...freshReaderState(),
+      step: 3,
+      picks: {
+        'sum-over-product': { pick: 'keep', approved: true },
+        gone: { pick: 'change', approved: true },
+      },
+      quiz: { 'q-run': { answered: 1, right: true }, 'q-gone': { answered: 0, right: false } },
+      notes: { world: 'Rename b later.', gone: 'x' },
+      seen: { world: true, gone: true },
+      codeOpen: { world: true },
+      codeView: { gone: 'raw' },
+      returnTo: 1,
+      audioOff: true,
+      finished,
+    })
+    await writeFile(finished.promptPath, 'the plan\n')
+    const forced = await prepareTour(t.ctx, { kind: 'pr', number: 42 }, { force: true, log: () => undefined })
+    expect((await savedReaderState(t.ctx, HEAD_SHA))?.step).toBe(3)
+    // A publish that is refused leaves the state, and the plan, as they were.
+    await writeFile(path.join(forced.tourDir, 'tour-model.json'), '{ not json')
+    await expect(publishTour(t.ctx, forced.tourDir, OPTS)).rejects.toThrow(TourInvalidError)
+    expect((await savedReaderState(t.ctx, HEAD_SHA))?.finished).toEqual(finished)
+    expect(await readFile(finished.promptPath, 'utf8')).toBe('the plan\n')
+    // The published tour rewrites the decision, so its pick is asked again; the rest carries,
+    // from the first step, and what was finished on the old tour is not finished on this one.
+    const model = syntheticTourModel()
+    const [decision] = model.decisions
+    if (decision === undefined) throw new Error('synthetic tour')
+    await writeTourFiles(forced.tourDir, forced.scenesDir, {
+      ...model,
+      decisions: [{ ...decision, title: 'Product over sum?' }],
+    })
+    await publishTour(t.ctx, forced.tourDir, OPTS)
+    expect(await savedReaderState(t.ctx, HEAD_SHA)).toEqual({
+      ...freshReaderState(),
+      picks: {},
+      quiz: { 'q-run': { answered: 1, right: true } },
+      notes: { world: 'Rename b later.' },
+      seen: { world: true },
+      codeOpen: { world: true },
+      codeView: {},
+      audioOff: true,
+    })
+    await expect(readFile(finished.promptPath)).rejects.toThrow()
+    // A tour published where no tour was leaves no state behind at all.
+    await rm(first.tourDir, { recursive: true, force: true })
+    await rm(path.join(t.ctx.tours.root, 'index.json'), { force: true })
+    const fresh = await prepareTour(t.ctx, { kind: 'pr', number: 42 }, { force: true, log: () => undefined })
+    await writeReaderState(t.ctx, HEAD_SHA, { ...freshReaderState(), step: 2 })
+    await writeTourFiles(fresh.tourDir, fresh.scenesDir)
+    await publishTour(t.ctx, fresh.tourDir, OPTS)
+    expect(await savedReaderState(t.ctx, HEAD_SHA)).toBeNull()
   })
 
   it('refuses a tour dir from another data dir, and a head that moved', async () => {

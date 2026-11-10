@@ -249,6 +249,34 @@ export type Decision = TourModel['decisions'][number]
 export type QuizQuestion = TourModel['quiz'][number]
 export type CodeChunk = z.infer<ReturnType<typeof codeChunkSchema>>
 
+/**
+ * A regenerated tour's decision is the one the reader answered when it keeps its key, its title,
+ * and the file it points at: a pick carries only then, so a decision rewritten under an old key
+ * is asked again.
+ */
+export function decisionStillStands(
+  previous: Pick<Decision, 'key' | 'title' | 'anchor'>,
+  next: Pick<Decision, 'key' | 'title' | 'anchor'>
+): boolean {
+  return (
+    previous.key === next.key && previous.title === next.title && previous.anchor.path === next.anchor.path
+  )
+}
+
+/** The keys of the decisions a regenerated tour asks the same way as the earlier one did. */
+export function standingDecisions(
+  previous: ReadonlyArray<Pick<Decision, 'key' | 'title' | 'anchor'>>,
+  next: ReadonlyArray<Pick<Decision, 'key' | 'title' | 'anchor'>>
+): Set<string> {
+  const before = new Map(previous.map(d => [d.key, d]))
+  const standing = new Set<string>()
+  for (const d of next) {
+    const earlier = before.get(d.key)
+    if (earlier !== undefined && decisionStillStands(earlier, d)) standing.add(d.key)
+  }
+  return standing
+}
+
 /** One reader who finished the tour: the shared record lists them, and nothing of their quiz. */
 export const TouredBySchema = z.object({ login: z.string().min(1), at: z.string() })
 export type TouredBy = z.infer<typeof TouredBySchema>

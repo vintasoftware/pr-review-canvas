@@ -2,14 +2,16 @@
 // directory, the record says who finished and, for the author, what they picked, and the record
 // is shared on the pull request once.
 import { writeFile } from 'node:fs/promises'
-import path from 'node:path'
+import type { CommentsPayload } from '../contract/comments.js'
+import type { Pr } from '../contract/review-artifact.js'
 import type { TourFinished, TourFinishResponse, TourReaderState, TourSharing } from '../contract/tour-api.js'
 import { isLocalKey, keyToString, type ReviewKey } from '../contract/review-key.js'
 import type { AuthorPick, Decision, TourArtifact, TourRecord } from '../contract/tour.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
+import { mergeSharedRecords } from './import.js'
 import { buildTourPrompt, type ChangeAsked, planOf, unansweredQuiz, unsettledDecisions } from './plan.js'
-import { writeReaderState } from './reader.js'
+import { planPromptFile, writeReaderState } from './reader.js'
 import { shareTourOnPr } from './share.js'
 
 export interface FinishTourInput {
@@ -20,6 +22,11 @@ export interface FinishTourInput {
   reviewer: { login: string | null; author: boolean }
   /** True when the tour describes the pull request's head, so its lines are the head's lines. */
   current?: boolean | undefined
+  /**
+   * The pull request as it is now, when the record is about to be shared on it: the copies other
+   * readers shared are read first, so the record posted holds everyone who finished.
+   */
+  shared?: { pr: Pr; comments: CommentsPayload } | undefined
   /** The page's summary of what the plan was made of, kept so the page can tell a later change. */
   basis?: string | undefined
 }
@@ -84,15 +91,25 @@ export async function finishTour(ctx: AppContext, input: FinishTourInput): Promi
   const at = ctx.now().toISOString()
   const prompt = buildTourPrompt(artifact, reader, keyToString(key))
   // prompt.md beside it is the generation prompt prepare wrote; this one is the reader's plan.
-  const promptPath = path.join(ctx.tours.tourDir(headSha), 'plan-prompt.md')
+  const promptPath = planPromptFile(ctx, headSha)
   await writeFile(promptPath, `${prompt}\n`, 'utf8')
-  const record = finishedRecord(artifact.record, input, prompt, at)
+  const previous =
+    input.shared === undefined
+      ? artifact.record
+      : (await mergeSharedRecords(ctx, input.shared.pr, input.shared.comments, headSha)).record
+  const record = finishedRecord(previous, input, prompt, at)
   // A reviewer's changes go into their pending review, only for the tour of the head: a line of an
   // older commit means something else on the head a comment would land on.
   const queues = !isLocalKey(key) && input.current === true && !input.reviewer.author
   const queued = queues ? await queueChangeRequests(ctx, key as number, headSha, artifact, reader) : 0
   await ctx.tours.revise(headSha, { ...artifact, record, revisedAt: at })
-  const sharing: TourSharing = isLocalKey(key) ? { status: 'local' } : await shareTourOnPr(ctx, headSha, key)
+  // The record of an outdated tour stays here: shared, it would replace the comment that carries
+  // the head's tour.
+  const sharing: TourSharing = isLocalKey(key)
+    ? { status: 'local' }
+    : input.current !== true
+      ? { status: 'outdated' }
+      : await shareTourOnPr(ctx, headSha, key)
   const finished: TourFinished = { at, promptPath, prompt, sharing }
   if (queues) finished.queued = queued
   if (input.basis !== undefined) finished.basis = input.basis

@@ -22,7 +22,7 @@ import { CANVAS_ZIP_MAX_BYTES } from '../../canvas/zip.js'
 import { isLocalKey } from '../../contract/review-key.js'
 import { fetchSharedTour, importTour } from '../../tour/import.js'
 import { lookupTour, requireTourOf } from '../../tour/lookup.js'
-import { zipStoredTour } from '../../tour/share.js'
+import { tourSharingOn, zipStoredTour } from '../../tour/share.js'
 import { readReaderState, savedReaderState, writeReaderState } from '../../tour/reader.js'
 import type { PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
@@ -139,13 +139,21 @@ export function tourRoutes(ctx: AppContext, loader: PrLoader): Hono {
       const found = await tourOnScreen(ctx, loader, key, input.headSha)
       const reviewer = await tourReviewer(ctx, key, found.pr)
       const reader = await readReaderState(ctx, found.headSha, found.artifact, reviewer.author)
+      const current = found.status === 'ready'
+      // The record is about to be shared: what other readers shared on the pull request is read
+      // afresh, so the comment posted holds everyone who finished.
+      const shared =
+        !isLocalKey(key) && current && (await tourSharingOn(ctx))
+          ? await loader.load(key, { refresh: true, poll: false })
+          : undefined
       return finishTour(ctx, {
         key,
         headSha: found.headSha,
         artifact: found.artifact,
         reader,
         reviewer,
-        current: found.status === 'ready',
+        current,
+        shared,
         basis: input.basis,
       })
     })

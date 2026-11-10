@@ -109,6 +109,52 @@ export async function importTour(ctx: AppContext, opts: TourImportOptions): Prom
   return { status: 'imported', headSha, warnings }
 }
 
+/**
+ * Every tour of this commit shared on the pull request, in a comment's hidden block or attached,
+ * folded into the stored tour's record: each reader who finished posts a copy of their own, so
+ * the record is whole only once every copy is read. The content of the stored tour stays as it
+ * is; only the record changes. A copy that cannot be read is named in the warnings and skipped.
+ */
+export async function mergeSharedRecords(
+  ctx: AppContext,
+  pr: Pr,
+  comments: CommentsPayload,
+  headSha: string
+): Promise<{ record: TourRecord; merged: number; warnings: string[] }> {
+  const stored = await ctx.tours.read(headSha)
+  if (stored === null) throw new AppError('CANVAS_NOT_FOUND', `no tour of ${headSha.slice(0, 7)}`, 404)
+  const number = pr.number
+  if (number === null) return { record: stored.record, merged: 0, warnings: [] }
+  const sources: DiscoverySources = { body: pr.body, bodyUpdatedAt: pr.updatedAt ?? '', comments }
+  const copies = collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments, 'tour').filter(
+    c => headSha.startsWith(c.parsed.shaPrefix) && !namesAnotherPr(c, number)
+  )
+  const warnings: string[] = []
+  let record = stored.record
+  let merged = 0
+  for (const copy of copies) {
+    const download =
+      copy.bytes === undefined
+        ? await downloadAttachment(ctx, copy.url)
+        : { ok: true as const, bytes: copy.bytes }
+    if (!download.ok) {
+      warnings.push(`${copy.name} ${DOWNLOAD_FAILURES[download.reason]}`)
+      continue
+    }
+    try {
+      const { artifact } = readZipOrThrow(download.bytes, TOUR_ZIP)
+      if (artifact.headSha !== headSha) continue
+      const next = mergedRecord(record, artifact.record)
+      if (next.changed) merged += 1
+      record = next.record
+    } catch (err) {
+      warnings.push(`${copy.name}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  if (merged > 0) await ctx.tours.revise(headSha, { ...stored, record, revisedAt: ctx.now().toISOString() })
+  return { record, merged, warnings }
+}
+
 /** What the reader is told about an attachment the import could not use, after its name. */
 const DOWNLOAD_FAILURES: Record<DownloadFailure, string> = {
   'auth-required': 'was refused by the host; check that you are logged in',

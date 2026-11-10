@@ -60,8 +60,11 @@ export interface TourPrepareResult {
   local?: { review: LocalKey; base: string; headRef: string; uncommitted: boolean }
 }
 
-/** What an earlier run left behind goes; the published tour stays until publish replaces it. */
-const KEPT_ON_PREPARE = new Set(['tour.json', 'tour.log'])
+/**
+ * What an earlier run left behind goes; the published tour stays until publish replaces it, and
+ * so do the reader's answers and the plan they confirmed, which publish carries or clears.
+ */
+const KEPT_ON_PREPARE = new Set(['tour.json', 'tour.log', 'reader.json', 'plan-prompt.md'])
 
 async function clearTourDir(tourDir: string): Promise<void> {
   let names: string[]

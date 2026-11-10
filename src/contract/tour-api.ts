@@ -41,6 +41,8 @@ export const TourSharingSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('failed'), warning: z.string(), zipPath: z.string() }),
   z.object({ status: z.literal('off') }),
   z.object({ status: z.literal('local') }),
+  /** The tour is of an earlier commit than the head: its record stays on this machine. */
+  z.object({ status: z.literal('outdated') }),
 ])
 export type TourSharing = z.infer<typeof TourSharingSchema>
 

@@ -16,10 +16,11 @@ import type {
 } from '../contract/tour-api.js'
 import { freshReaderState } from '../contract/tour-api.js'
 import { writeTextAtomic } from '../store/atomic-json.js'
-import { buildTourComment, TOUR_COMMENT_MARKER } from '../tour/comment.js'
+import { buildTourComment, TOUR_COMMENT_MARKER, TOUR_ZIP } from '../tour/comment.js'
 import { readZipEnvelope } from '../canvas/comment.js'
-import { CANVAS_ZIP_MAX_BYTES } from '../canvas/zip.js'
-import { zipStoredTour } from '../tour/share.js'
+import { buildZipName } from '../canvas/name.js'
+import { buildZip, CANVAS_ZIP_MAX_BYTES } from '../canvas/zip.js'
+import { tourManifest, zipStoredTour } from '../tour/share.js'
 import { prepareTour } from '../tour/prepare.js'
 import { DEFAULT_PROJECT_CONFIG } from '../project-config.js'
 import { createFakeRunner } from '../testing/fake-runner.js'
@@ -56,7 +57,10 @@ let t: TestContext
 afterEach(() => t?.cleanup())
 
 /** GitHub for PR #42 that accepts the tour comment and lists it afterwards. */
-function ghSharing(postRoutes: Record<string, ReturnType<typeof ghPost>> = {}): {
+function ghSharing(
+  postRoutes: Record<string, ReturnType<typeof ghPost>> = {},
+  already: Array<Record<string, unknown>> = []
+): {
   gh: ReturnType<typeof ghFor42>
   posted: () => Array<Record<string, unknown>>
 } {
@@ -74,7 +78,11 @@ function ghSharing(postRoutes: Record<string, ReturnType<typeof ghPost>> = {}): 
   return {
     gh: ghFor42({
       routes: {
-        'repos/acme/widgets/issues/42/comments': ghHandler(() => [...GH_ISSUE_COMMENTS, ...posted]),
+        'repos/acme/widgets/issues/42/comments': ghHandler(() => [
+          ...GH_ISSUE_COMMENTS,
+          ...already,
+          ...posted,
+        ]),
       },
       postRoutes: {
         'repos/acme/widgets/issues/42/comments': share,
@@ -416,6 +424,70 @@ describe('POST /api/tours/:n/finish', () => {
     await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
     expect((await t.ctx.tours.read(HEAD_SHA))?.record.touredBy).toHaveLength(1)
     expect(sharing.posted()).toHaveLength(2)
+  })
+
+  it('folds the copies other readers shared on the pull request into the record before posting it', async () => {
+    // A reviewer finished the same tour on their machine and shared their copy.
+    const copy = syntheticTour({
+      record: { touredBy: [{ login: 'reviewer', at: '2026-09-09T00:00:00.000Z' }] },
+      revisedAt: '2026-09-09T00:00:00.000Z',
+    })
+    const zip = {
+      name: buildZipName('tour', {
+        repo: copy.repo,
+        headSha: HEAD_SHA,
+        prNumber: 42,
+        generatedAt: copy.generatedAt,
+      }),
+      bytes: buildZip(TOUR_ZIP, tourManifest(copy, '0.0.0'), copy),
+      headSha: HEAD_SHA,
+      prNumber: 42,
+    }
+    const theirs = {
+      ...GH_ISSUE_COMMENTS[0],
+      id: 5001,
+      user: { login: 'reviewer' },
+      body: buildTourComment(zip, copy, 65_536),
+      updated_at: '2026-09-09T00:00:00Z',
+    }
+    const sharing = ghSharing({}, [theirs])
+    t = await context({ gh: sharing.gh })
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: settledReader() })
+    const body = await json<TourFinishResponse>(
+      await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
+    )
+    expect(body.record.touredBy).toEqual([
+      { login: 'reviewer', at: '2026-09-09T00:00:00.000Z' },
+      { login: 'octocat', at: '2026-09-10T12:00:00.000Z' },
+    ])
+    expect((await t.ctx.tours.read(HEAD_SHA))?.record.touredBy).toEqual(body.record.touredBy)
+    // The comment posted is the author's own, and it names both.
+    expect(sharing.posted()).toHaveLength(1)
+    expect(String(sharing.posted()[0]?.['body'])).toContain('reviewer (2026-09-09), octocat (2026-09-10)')
+  })
+
+  it('keeps the record of an outdated tour on this machine', async () => {
+    const sharing = ghSharing()
+    const git = gitFor42()
+    t = await context({ git, gh: sharing.gh })
+    await t.ctx.tours.write(HEAD_SHA, syntheticTour())
+    moveFakeHead(git, {
+      headRef: 'pull/42/head',
+      baseRef: 'refs/pr/42/base',
+      headSha: OTHER_SHA,
+      mergeBaseSha: BASE_SHA,
+      diff: SYNTHETIC_DIFF,
+      ahead: { [HEAD_SHA]: 1 },
+    })
+    expect((await json<TourBundle>(await get('/api/tours/42?refresh=1'))).status).toBe('stale')
+    await send('/api/tours/42/reader', 'PUT', { headSha: HEAD_SHA, reader: settledReader() })
+    const body = await json<TourFinishResponse>(
+      await send('/api/tours/42/finish', 'POST', { headSha: HEAD_SHA })
+    )
+    expect(body.finished.sharing).toEqual({ status: 'outdated' })
+    expect(body.record.touredBy).toEqual([{ login: 'octocat', at: '2026-09-10T12:00:00.000Z' }])
+    expect(sharing.posted()).toHaveLength(0)
   })
 
   it('records a reviewer without picks, and reports a failed share with the exported zip', async () => {
