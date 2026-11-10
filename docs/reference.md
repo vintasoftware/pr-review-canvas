@@ -583,7 +583,7 @@ app](#generating-from-the-review-app). `chatModel` is AI Chat only: generation r
 `generation.models` in the project config instead. A file written before these keys were renamed
 keeps working: `agent` and `model` are read as
 `chatAgent` and `chatModel`, and the next save renames them in the file.
-(3) Overrides `sharing.canvasComment` or `sharing.mentionCanvas` in the project config for you; see
+(3) Overrides `sharing.canvasComment`, `sharing.mentionCanvas`, or `tour.share` in the project config for you; see
 [turning sharing off](#turning-sharing-off). Edit these in the file; the settings dialog does not
 show them.
 
@@ -1167,7 +1167,7 @@ same targets `prepare` takes. [pr-tour-setup](../skills/pr-tour-setup/SKILL.md) 
 the tour is generated with.
 
 ```text
-pr-review tour open [<n>|branch|uncommitted] [--no-open] [--json]
+pr-review tour open [<n>|branch|uncommitted] [--no-open] [--chat-agent <id>] [--chat-model <id>] [--json]
 pr-review tour generate [<n>|branch|uncommitted] [--force] [--base <ref>] [--agent claude|codex] [--model <id>] [--out <file|dir>] [--open] [--json]
 pr-review tour prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--force]
 pr-review tour validate <tour-model.json> --tour <dir> [--human]
@@ -1195,15 +1195,19 @@ repository root, through acpx with every permission approved, because the skill 
 runs `tour validate`, `preview`, and `checkout`, and runs try-it recipes. It calls this server's own
 `pr-review` over the server's data dir. A publish that rejects the tour sends the problems back,
 up to `generation.maxRepairRounds` times. One generation of either kind runs at a time in a clone
-(`GET|POST|DELETE /api/tours/<n>/generate`).
+(`GET|POST|DELETE /api/tours/<n>/generate`; the page reads the skill it will run and the target's head from `GET /api/generate/skill?kind=tour` and `GET /api/generate/target`).
 
 A tour of a later commit updates the newest tour of the same review whose head is an ancestor,
 as an incremental canvas updates its basis (`tour.incremental`, on by default; `--force` starts
-blank). Prepare copies that tour's model and pictures into `<tourDir>/basis/`, prints `basis`
+blank). A `--force` regeneration of the same commit keeps the reader's answers on this machine
+through prepare, so a publish that is refused loses nothing; the publish that stores the new tour
+carries them onto it: picks on the decisions that still stand, notes, answers, and marks on the
+landmarks and questions it still has, from the first step, with the plan to confirm again. Prepare copies that tour's model and pictures into `<tourDir>/basis/`, prints `basis`
 (`tourSha`, `modelPath`, `scenesDir`), and the prompt lists each file of the diff as unchanged,
 changed, new, or gone against it: what names only unchanged files carries, the rest is judged
 again, and a decision keeps its key while it still stands. Publishing such a tour carries the
-author's picks by decision key; nobody has toured it yet. A tour whose head moved shows as
+author's picks, once they confirmed the plan, onto the decisions that still stand: the same key,
+title, and anchored file; nobody has toured it yet. A tour whose head moved shows as
 outdated, with an update command.
 
 `tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
@@ -1223,9 +1227,9 @@ as `<landmark id>.scene.html`, plus at most two `<landmark id>.micro.html`, the 
 micro-world may stand in for its landmark's scene. Each scene names its technique with
 `data-technique` on its root. `tour validate` checks the model against the context: the schema,
 the landmark order (background, world, whys, respect), the budget, the caps measured on visible
-text, every path and anchor against the diff, that every landmark has a picture, every scene against
-the frame's rules, that no technique draws more than two scenes, and the categories the project
-keeps. `tour preview` validates, then screenshots, through a quiet copy of the server, every
+text, every path and anchor against the diff, that every code chunk's lines are the patch's, that
+every landmark has a picture, every scene against the frame's rules, that no technique (read from
+the scene's root element) draws more than two scenes, and the categories the project keeps. `tour preview` validates, then screenshots, through a quiet copy of the server, every
 landmark on a desktop and a phone, every scene and micro-world alone at its desktop and phone
 widths, and every decision and question, using Chrome, Chromium, or Edge from the PATH or
 `PR_REVIEW_BROWSER`; without one it prints a `previewUrl` to open in a browser tool.
@@ -1277,7 +1281,7 @@ Opening the tour page resolves the head as the review page does: a pull request'
 whether it moved, and local work is read again, so a tour of an earlier commit shows as outdated.
 The page's polls answer from the head last read (`GET /api/tours/<n>?poll=1`).
 
-The three later steps use the data directory that holds the tour dir, as `validate` and `publish`
+`validate`, `preview`, `publish`, and `checkout` use the data directory that holds the tour dir, as `validate` and `publish`
 do for a canvas. `tour publish` answers `CANVAS_STALE` when the head moved and `CANVAS_ELSEWHERE`
 when the tour dir sits in another data directory.
 
@@ -1289,7 +1293,7 @@ the decisions, the quiz, and the plan; every step is a browser history entry, so
 forward buttons move through the tour, a reload lands on the step the reader was on, and a step's
 URL (`#landmark-<id>`, `#decision-<key>`, `#quiz-<id>`, `#plan`) can be shared. The keys: `→`,
 `space`, and `Enter` for next, `←` for back, `i` for the code behind a landmark, `k`, `a`, and `c`
-to keep, take the alternative, or ask for something else, `1` to `3` to answer, `/` to ask AI Chat, `?` for help. A landmark's scene and
+to keep, take the alternative, or ask for something else, `1` to `3` to answer, `/` to ask AI Chat, `?` for help, `esc` to close the help or the drawer. A landmark's scene and
 micro-world are drawn in sandboxed frames from `/tour-scene/<key>/<landmark>/scene|micro`.
 
 Where the reader is and what they answered is saved to `tours/<headSha>/reader.json` as they go
@@ -1308,7 +1312,7 @@ Something else opens the **grilling**: with AI Chat on (`chat.enabled`, acpx ins
 `tour.grill` not `off`), the drawer talks to the chat agent in the tour's own thread (`t0`, which
 the canvas's pane never lists), seeded from `prompts/tour-grill.md` with the landmarks and the
 decisions, and read-only like every chat turn (`POST /api/tours/<n>/grill`, its history at
-`GET /api/tours/<n>/grill/history`). The agent asks what it needs, then emits a fenced
+`GET /api/tours/<n>/grill/history`, and **stop** at `POST /api/tours/<n>/grill/cancel`). The agent asks what it needs, then emits a fenced
 `restatement` block that the page turns into a card once the block is whole: approve settles the
 decision and puts it in the plan, and reopening the conversation keeps it approved; edit lets the
 reader correct it, reject sends the correction back. A decision asked about but never answered gets
@@ -1319,8 +1323,11 @@ audio goes, and the reader can turn audio off for themselves. Without chat, the 
 restatement in the same card. **confirm the plan** (`POST /api/tours/<n>/finish`) writes
 the re-implementation prompt to `tours/<headSha>/plan-prompt.md` (the generation prompt beside it,
 `prompt.md`, stays as prepare wrote it), records the reader in the tour's
-record (and the author's picks, so a regenerated tour carries them by decision key), and shares
-the record on the pull request once. On the tour of the pull request's head, a reviewer's approved
+record (and the author's picks, so a regenerated tour carries them), and shares the record on the
+pull request once. Before it does, it reads the copies of the same commit other readers shared
+there and folds their records in, so the comment names everyone who finished on any machine. The
+tour of an earlier commit than the head is finished on this machine alone: shared, its record
+would replace the comment that carries the head's tour. On the tour of the pull request's head, a reviewer's approved
 changes go into their pending review as comments on their decisions' lines, once each, and leave
 with their verdict. The quiz result stays on the machine. With `?preview`, the
 page draws `tour-model.json` as the generator has written it and saves nothing; `?landmark=<id>`
@@ -1340,7 +1347,8 @@ its answer until the reader has it right. The threads are kept with the pull req
 threads, apart from the grilling's, and the canvas's pane never lists them; each is its own
 read-only agent session, seeded from `prompts/tour-chat.md` (`POST /api/tours/<n>/chat`,
 `GET /api/tours/<n>/chat/threads`, a thread's history at
-`GET /api/tours/<n>/chat/threads/<name>/history`).
+`GET /api/tours/<n>/chat/threads/<name>/history`, **stop** at `POST /api/tours/<n>/chat/cancel`, and
+the count of answers not yet seen at `PUT /api/tours/<n>/chat/threads/<name>/unseen`).
 
 ### The guide
 
@@ -1645,13 +1653,13 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `GLAB_MISSING` / `GLAB_UNAUTHENTICATED` | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), run `glab auth login`, and check authentication in the same environment that runs the server                                                   |
 | `GITLAB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitLab service problems                                                                                                        |
 | `PR_NOT_FOUND`                          | Check the PR number, repository, and your access                                                                                                                                                        |
-| `CANVAS_NOT_FOUND`                      | Generate or import a canvas for the requested commit                                                                                                                                                    |
+| `CANVAS_NOT_FOUND`                      | Generate or import a canvas, or a tour, for the requested commit                                                                                                                                        |
 | `CANVAS_INVALID`                        | Read the format errors; re-export or regenerate the canvas                                                                                                                                              |
 | `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                                                                            |
 | `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own                                                                |
 | `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                                                                             |
-| `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                                                                                 |
-| `CANVAS_ELSEWHERE`                      | `publish` got a canvas dir outside its data dir; publish the `canvasDir` prepare printed, with the `--data-dir` prepare used or none                                                                    |
+| `CANVAS_STALE`                          | The PR head moved, or the tour page shows another commit; prepare again, or reload                                                                                                                      |
+| `CANVAS_ELSEWHERE`                      | `publish` got a canvas or tour dir outside its data dir; publish the dir prepare printed, with the `--data-dir` prepare used or none                                                                    |
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                                                                 |
 | `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                                                                               |
 | `CHAT_BUSY`                             | Wait for the running reply, or press **stop** on the page that asked; when a canvas generation, another worktree of the clone, or another `pr-review serve` holds the review, ask again once it is done |
@@ -1663,7 +1671,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                                                                          |
 | `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                                                                            |
 | `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                                                                                 |
-| `NOT_AUTHOR`                            | Only the pull request's author resolves points; sign in with that account, or dismiss the point instead                                                                                                 |
+| `NOT_AUTHOR`                            | Only the pull request's author resolves points, or generates a tour from the app by default; sign in with that account                                                                                  |
 | `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                                                                    |
 | `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                                                                                |
 | `SERVER_NOT_RUNNING`                    | Start the server with `pr-review serve` in any terminal, then run `pr-review open` again                                                                                                                |
@@ -1687,3 +1695,15 @@ Validation reports name the field, file, hunk, or line to fix. Common groups are
 | `POINT_IMPACT`                                                  | Every `decide` point has an impact, and no other point has one                                                                                         |
 | `POINT_LEVEL`                                                   | A `question` point is `decide` or `check`                                                                                                              |
 | `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                                                     |
+
+The tour's `tour validate` and `tour publish` report the same way, with these codes:
+
+| Codes                                                                                | What to check                                                                                                                |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `SCHEMA`, `TEXT_TOO_LONG`, `MARKUP_IN_PLAIN_TEXT`                                    | Required fields, text caps on what a reader sees, and no backticks in titles, side labels, or not-toured lines               |
+| `LANDMARK_ORDER`, `LANDMARK_BUDGET`, `STATE_LANDMARK_MISSING`                        | Background, world, whys, respect, once each; the why budget and `overBudget`; a state landmark for stored data               |
+| `DECISION_BUDGET`, `QUIZ_BUDGET`, `CATEGORY_OFF`                                     | Decisions at most one more than the whys, questions one fewer than the landmarks, categories the project keeps               |
+| `ID_DUPLICATE`, `LANDMARK_UNKNOWN`                                                   | Unique ids and keys; a decision anchored on a why or respect landmark, a question on any landmark of this tour               |
+| `PATH_UNKNOWN`, `ANCHOR_OUTSIDE_DIFF`, `CHUNK_UNKNOWN`                               | Files of the diff; an anchor on a new-side line inside a hunk; chunks with their `@@` header and lines copied from the patch |
+| `PICTURE_MISSING`, `SCENE_INVALID`, `MICRO_INVALID`, `MICRO_LIMIT`, `SCENE_REPEATED` | A picture per landmark; the frame's rules; at most two micro-worlds; a technique on at most two scenes                       |
+| `TRY_IT_UNVERIFIED`                                                                  | A `tryIt` is `verified`, or left out; none when try-it is off                                                                |

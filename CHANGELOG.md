@@ -8,9 +8,10 @@
   scene each (one may be a micro-world to play with), decisions to keep, change to the tour's
   alternative, or change to something else through a grilling, and a quiz.
   `/pr-tour <n|branch|uncommitted>` generates and shares it; `/pr-tour-setup` writes the
-  project's tour guide; `/pr-tour-apply` carries the confirmed plan out. `pr-review tour
-prepare|validate|preview|publish|plan` are the steps. The design is ADR 0005; scenes run in a
-  sandboxed frame (ADR 0006).
+  project's tour guide; `/pr-tour-apply` carries the confirmed plan out. The `pr-review tour`
+  steps are `open`, `generate`, `prepare`, `validate`, `preview`, `publish`, `plan`, `gallery`,
+  `hunk`, `checkout`, `export`, and `import`. The design is ADR 0005; scenes run in a sandboxed
+  frame (ADR 0006).
 - The page is `/r/<owner>/<repo>/tour/<n|branch|uncommitted>`, linked from the canvas header: every step a history entry, keyboard and phone
   parity, the code behind a landmark as a literate or raw diff, a note per landmark, and a plan
   that writes the re-implementation prompt and shares who toured on the pull request. A change

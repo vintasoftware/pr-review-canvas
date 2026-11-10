@@ -7,7 +7,7 @@ this file whole; `/pr-tour-setup` edits it.
 
 ```bash
 pnpm install          # once; about a minute
-pnpm start --fixture-canvas __fixtures__/pr-278/review.json   # http://localhost:3010, about two seconds
+pnpm start --fixture-canvas __fixtures__/pr-278/review.json   # http://localhost:3011, about two seconds
 ```
 
 The CLI runs from source through `tsx`; there is no build step.
