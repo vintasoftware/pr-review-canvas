@@ -715,23 +715,19 @@ A diff reads in one of two layouts, as on GitHub:
 - **unified**: one column, each deleted line above the line that replaced it (the default).
 - **split**: the old file on the left and the new file on the right. In each run of changes, the
   first deleted line sits beside the first added line, the second beside the second, and the
-  shorter side is left blank. Long lines wrap, so both sides of a row stay side by side.
+  shorter side is left blank. Long lines wrap.
 
-The layout button in the header, beside the skin and theme buttons, shows the layout on screen;
-it and the `s` key switch every diff on the page to the other layout and save it as `diffLayout`
-in `settings.yml`. The **Diff layout** field in the
-settings dialog sets it too. Every file diff follows it, in the layers and in the stops of
-[one point at a time](#one-point-at-a-time). The folds, threads and points you opened or closed,
-an open comment box, the selection, and the line at the top of the screen stay as they were.
+The layout button in the header, beside skin and theme, shows the layout on screen. It, the `s`
+key, and **Diff layout** in the settings dialog switch every diff, in the layers and in the stops
+of [one point at a time](#one-point-at-a-time), and save the choice as `diffLayout` in
+`settings.yml`. What you opened or closed, an open comment box, and your place stay as they were.
 
-Split needs a diff column at least 900px wide. Where it is narrower, as at 1440px with the AI Chat
-pane docked, the page draws unified and keeps the saved choice: the layout button is disabled and
-says why, `s` shows a note, and the page draws split again once the column is wide enough.
+Split needs a diff column at least 900px wide. Narrower, as at 1440px with the AI Chat pane
+docked, the page draws unified and keeps the saved choice: the button is disabled and says why,
+and split comes back once the column is wide enough.
 
-In split, each side has its own line numbers and comment button. A click or drag on the left
-numbers selects lines of the old file, and on the right of the new file, context lines included; a
-selection stays on one side. Comments, attention points, and annotations span both sides under the
-line they belong to.
+In split, each side has its own line numbers, comment button and selection; a selection stays on
+one side. Comments, attention points and annotations span both sides under their line.
 
 ### One layer at a time
 
