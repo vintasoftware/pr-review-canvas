@@ -47,19 +47,12 @@
 }
 /* How much code is hidden: a setting on the reading, so it sits with the progress line and not
    among the commands, and says what it hides rather than leaving the reader to find out. */
-/* The diff's layout, then how much of it is hidden, on one line under the PR's title. */
-.reading-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
-  align-items: baseline;
-  margin-top: 14px;
-}
 .reading {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
   align-items: baseline;
+  margin-top: 14px;
 }
 .reading label {
   font-size: 12px;
@@ -68,34 +61,6 @@
 .reading select {
   padding: 2px 6px;
   font-size: 13px;
-}
-/* Unified | Split: the pressed one is the layout on screen. */
-.diff-layout {
-  display: inline-flex;
-  gap: 10px;
-}
-.diff-layout button {
-  padding: 0 0 2px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.diff-layout button[aria-pressed='true'] {
-  border-bottom-color: var(--accent);
-  color: var(--fg);
-  cursor: default;
-}
-.diff-layout button[aria-pressed='false']:not(:disabled):hover {
-  color: var(--fg);
-}
-.diff-layout button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 .fold-hint {
   font-size: 12px;

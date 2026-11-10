@@ -4,8 +4,8 @@
 
 ### Reading
 
-- **Split diffs**: the **Unified | Split** switch beside **Hide code**, or the `s` key, draws every
-  diff with the old code on the left and the new on the right, as GitHub's split view does. The
+- **Split diffs**: the layout button in the header, beside skin and theme, or the `s` key, draws
+  every diff with the old code on the left and the new on the right, as GitHub's split view does. The
   choice is saved as `diffLayout` in `settings.yml`, and the settings dialog's **Diff layout** sets
   it too. Each side has its own line numbers, comment button, and selection. A diff column under
   900px wide draws unified until it widens. Unified stays the default.

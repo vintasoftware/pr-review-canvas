@@ -21,7 +21,7 @@ for (const skin of ['github', 'olive', 'terminal']) {
     await page.locator('[data-act="settings-save"]').click()
     await expect(page.locator('#settings-dialog')).toBeHidden()
     await expect(file.locator('#L-src_app_ts-new-4 td.code.del')).toBeVisible()
-    await expect(page.locator('.diff-layout [data-layout="split"]')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('#diff-layout-toggle')).toHaveAttribute('data-layout', 'split')
     await file.screenshot({ path: testInfo.outputPath(`split-${skin}.png`) })
 
     await page.reload()
@@ -54,7 +54,7 @@ test.describe('split layout', () => {
     ])
     expect(right!.x).toBeGreaterThan(left!.x + left!.width - 1)
     expect(Math.abs(left!.width - right!.width)).toBeLessThan(2)
-    await expect(page.locator('.diff-layout [data-layout="split"]')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('#diff-layout-toggle')).toHaveAttribute('data-layout', 'split')
     await page.screenshot({ path: testInfo.outputPath('split.png') })
 
     const saved = page.waitForRequest(r => r.url().endsWith('/api/settings') && r.method() === 'PUT')
@@ -66,7 +66,7 @@ test.describe('split layout', () => {
     await page.reload()
     await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
     await expect(page.locator('#L-src_app_ts-old-3')).toHaveClass(/\bdel\b/)
-    await expect(page.locator('.diff-layout [data-layout="unified"]')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.locator('#diff-layout-toggle')).toHaveAttribute('data-layout', 'unified')
   })
 
   test('comments on the old side from its own gutter, and keeps a half-written box across a switch', async ({
@@ -92,10 +92,10 @@ test.describe('split layout', () => {
     await editor.locator('textarea').fill('why drop the product?')
 
     // The box rides along to the unified row of its line, then back.
-    await page.locator('.diff-layout [data-layout="unified"]').click()
+    await page.locator('#diff-layout-toggle').click()
     await expect(file.locator('table.diff.split')).toHaveCount(0)
     await expect(editor.locator('textarea')).toHaveValue('why drop the product?')
-    await page.locator('.diff-layout [data-layout="split"]').click()
+    await page.locator('#diff-layout-toggle').click()
     await expect(file.locator('table.diff.split')).not.toHaveCount(0)
     await expect(editor.locator('textarea')).toHaveValue('why drop the product?')
 
@@ -138,7 +138,7 @@ test.describe('split layout', () => {
     await file.scrollIntoViewIfNeeded()
     await expect(file.locator('tr.del#L-src_app_ts-old-3')).toBeVisible()
     await expect(page.locator('table.diff.split')).toHaveCount(0)
-    const split = page.locator('.diff-layout [data-layout="split"]')
+    const split = page.locator('#diff-layout-toggle')
     await expect(split).toBeDisabled()
     await expect(split).toHaveAttribute('title', /split needs a diff column at least 900px wide/)
 

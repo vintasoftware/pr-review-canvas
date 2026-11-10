@@ -1,45 +1,41 @@
 // @ts-check
 // The reader's switch between the unified and split layouts of the diffs. The choice is saved in
 // the settings file; the page draws split only while the diff column is wide enough for two sides.
-import {
-  chosenDiffLayout,
-  DIFF_LAYOUTS,
-  drawnDiffLayout,
-  layoutForWidth,
-  SPLIT_MIN_WIDTH,
-} from './diff-layouts.js'
+import { chosenDiffLayout, drawnDiffLayout, layoutForWidth, SPLIT_MIN_WIDTH } from './diff-layouts.js'
 
 /** @typedef {import('./diff-layouts.js').DiffLayout} DiffLayout */
 
-/** What the switch and the `s` key say while the column is too narrow for split. */
+/** What the layout button and the `s` key say while the column is too narrow for split. */
 export const TOO_NARROW = `split needs a diff column at least ${SPLIT_MIN_WIDTH}px wide`
 
+export const DIFF_LAYOUT_TOGGLE_ID = 'diff-layout-toggle'
+
 /**
- * The Unified | Split switch beside Hide code. The pressed button is the layout on screen.
- * @param {DiffLayout} layout
+ * The header's layout button, beside skin and theme: it names the layout on screen and switches to
+ * the other. `initLayoutSwitch` paints it once the page knows how wide the diff column is.
  */
-export function diffLayoutControlHtml(layout) {
-  const buttons = DIFF_LAYOUTS.map(
-    l =>
-      `<button type="button" data-act="diff-layout" data-layout="${l}" aria-pressed="${l === layout}">${l}</button>`
-  ).join('')
-  return `<div class="diff-layout" role="group" aria-label="Diff layout" title="Read the diff in one column or side by side. Press s to switch; the choice is saved.">${buttons}</div>`
+export function diffLayoutToggleHtml() {
+  const drawn = drawnDiffLayout()
+  return `<button class="cmd" type="button" id="${DIFF_LAYOUT_TOGGLE_ID}" data-act="diff-layout" data-layout="${drawn}">layout: ${drawn}</button>`
 }
 
 /**
- * Points the switch at the layout on screen, and disables split while the column is too narrow.
  * @param {ParentNode} root
  * @param {boolean} fits
  */
-function paintControl(root, fits) {
-  for (const button of root.querySelectorAll('.diff-layout button')) {
-    const layout = button.getAttribute('data-layout')
-    button.setAttribute('aria-pressed', String(layout === drawnDiffLayout()))
-    if (layout === 'split') {
-      button.toggleAttribute('disabled', !fits)
-      button.setAttribute('title', fits ? '' : TOO_NARROW)
-    }
+function paintToggle(root, fits) {
+  const button = root.querySelector(`#${DIFF_LAYOUT_TOGGLE_ID}`)
+  if (!(button instanceof HTMLButtonElement)) {
+    return
   }
+  const drawn = drawnDiffLayout()
+  const other = drawn === 'split' ? 'unified' : 'split'
+  button.textContent = `layout: ${drawn}`
+  button.setAttribute('data-layout', drawn)
+  button.disabled = other === 'split' && !fits
+  button.title = button.disabled
+    ? `Diff layout: unified; ${TOO_NARROW}`
+    : `Diff layout: ${drawn}. Switch to ${other} (s); the choice is saved`
 }
 
 /** @param {Element} el */
@@ -62,7 +58,7 @@ export function initLayoutSwitch(root, relayout) {
   const apply = () => {
     const next = layoutForWidth(chosenDiffLayout(), width())
     if (next !== drawnDiffLayout()) relayout(next)
-    paintControl(root, fits())
+    paintToggle(root, fits())
   }
   const observer = main === null || typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(apply)
   if (main !== null) observer?.observe(main)

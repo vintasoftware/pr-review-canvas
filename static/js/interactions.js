@@ -32,13 +32,7 @@ import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decoratio
 import { conversationHtml } from './overview.js'
 import { flash, scrollIntoViewSafe } from './dom.js'
 import { hostLabel } from './host.js'
-import {
-  chosenDiffLayout,
-  drawnDiffLayout,
-  isDiffLayout,
-  setChosenDiffLayout,
-  setDrawnDiffLayout,
-} from './diff-layouts.js'
+import { drawnDiffLayout, setChosenDiffLayout, setDrawnDiffLayout } from './diff-layouts.js'
 import { isFoldLevel, nextFoldLevel } from './fold-levels.js'
 import { refreshProgress } from './header.js'
 import { keyAction, openHelpDialog } from './keyboard.js'
@@ -942,14 +936,11 @@ export function wireReview(root, session, opts = {}) {
   const layoutSwitch = initLayoutSwitch(root, relayout)
 
   /**
-   * Switches the diffs to `layout` from the switch or the `s` key, and saves it as the reader's
-   * choice. Split waits for a column wide enough to hold it.
-   * @param {import('./diff-layouts.js').DiffLayout} layout
+   * Switches the diffs to the other layout from the header's button or the `s` key, and saves it
+   * as the reader's choice. Split waits for a column wide enough to hold it.
    */
-  const chooseDiffLayout = layout => {
-    if (layout === drawnDiffLayout() && layout === chosenDiffLayout()) {
-      return
-    }
+  const toggleDiffLayout = () => {
+    const layout = drawnDiffLayout() === 'split' ? 'unified' : 'split'
     if (layout === 'split' && !layoutSwitch.fits()) {
       toast(root, TOO_NARROW, { tone: 'note' })
       return
@@ -1112,10 +1103,7 @@ export function wireReview(root, session, opts = {}) {
 
   /** @type {Record<string, (el: HTMLElement, event: MouseEvent) => void>} */
   const actions = {
-    'diff-layout': el => {
-      const layout = el.getAttribute('data-layout')
-      if (isDiffLayout(layout)) chooseDiffLayout(layout)
-    },
+    'diff-layout': () => toggleDiffLayout(),
     'toggle-card': (el, event) => toggleFromTitle(el, event, () => setCardCollapsed(el)),
     'mark-layer': el => {
       const id = el.getAttribute('data-reviewed-id') ?? ''
@@ -1542,7 +1530,7 @@ export function wireReview(root, session, opts = {}) {
         applyFoldLevel(nextFoldLevel(getFoldLevel()))
         break
       case 'diff-layout':
-        chooseDiffLayout(drawnDiffLayout() === 'split' ? 'unified' : 'split')
+        toggleDiffLayout()
         break
       case 'overview':
         focusItem(byId('overview'))

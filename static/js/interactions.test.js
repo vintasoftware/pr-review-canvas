@@ -1477,18 +1477,19 @@ describe('diff layout', () => {
     key('s')
     expect(root.querySelectorAll('table.diff.split').length).toBeGreaterThan(0)
     expect(root.querySelector('table.diff:not(.split)')).toBeNull()
-    expect(root.querySelector('[data-layout="split"]')?.getAttribute('aria-pressed')).toBe('true')
+    expect(root.querySelector('#diff-layout-toggle')?.getAttribute('data-layout')).toBe('split')
     // The open box moved to the new row of its line, text and all.
     expect(root.querySelector('tr.composer')?.previousElementSibling?.id).toBe('L-src_app_ts-new-4')
     expect(root.querySelector('tr.composer textarea')).toBe(area)
-    // The layout on screen is pressed: a click on it changes nothing.
-    click(root, '[data-layout="split"]')
+    // The header's button switches back.
+    click(root, '#diff-layout-toggle')
     await flush()
-    expect(fetch).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({ diffLayout: 'split' })
-    click(root, '[data-layout="unified"]')
     expect(root.querySelector('table.diff.split')).toBeNull()
     expect(chosenDiffLayout()).toBe('unified')
+    expect(fetch.mock.calls.map(call => JSON.parse(String(call[1]?.body)))).toEqual([
+      { diffLayout: 'split' },
+      { diffLayout: 'unified' },
+    ])
   })
 
   it('keeps the line at the top of the screen, or else the element there, at the same height', () => {
@@ -1548,16 +1549,6 @@ describe('diff layout', () => {
     const now = root.querySelector('.is-focused')
     expect(now?.closest('table.diff.split')).not.toBeNull()
     expect(now?.getAttribute('data-fingerprint')).toBe(ringed)
-  })
-
-  it('saves unified from its button while split waits for a wider column', async () => {
-    setChosenDiffLayout('split')
-    const { root, fetch } = wide(600)
-    expect(root.querySelector('table.diff.split')).toBeNull()
-    click(root, '[data-layout="unified"]')
-    await flush()
-    expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({ diffLayout: 'unified' })
-    expect(chosenDiffLayout()).toBe('unified')
   })
 
   it('keeps a selection on its side across a switch', () => {
