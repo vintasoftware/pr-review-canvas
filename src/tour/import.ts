@@ -26,6 +26,21 @@ export interface TourImportOptions {
   prNumber?: number | undefined
   /** Accepts a tour exported from another repository. */
   force?: boolean | undefined
+  /**
+   * Who shared this copy on the pull request, and who wrote the change, when the copy was found
+   * there rather than handed over: its record is trusted as far as its poster may speak.
+   */
+  shared?: { postedBy: string | null; prAuthor: string } | undefined
+}
+
+/**
+ * The part of a shared copy's record its poster may speak for. The author's copy speaks for the
+ * whole record: their picks, and the finishes they folded in. Anyone else's speaks only for
+ * their own finish: a commenter cannot settle the author's decisions, nor sign off for others.
+ */
+export function trustedRecord(record: TourRecord, postedBy: string | null, prAuthor: string): TourRecord {
+  if (postedBy !== null && postedBy.toLowerCase() === prAuthor.toLowerCase()) return record
+  return { touredBy: record.touredBy.filter(t => postedBy !== null && t.login === postedBy) }
 }
 
 /** When a tour last changed: its author revises it by finishing, which keeps its generation time. */
@@ -68,7 +83,11 @@ export function mergedRecord(
  * finishes either way, so no copy loses a reader's sign-off or the author's picks.
  */
 export async function importTour(ctx: AppContext, opts: TourImportOptions): Promise<TourImportResult> {
-  const { manifest, artifact, prNumber: named } = readZipOrThrow(opts.bytes, TOUR_ZIP)
+  const { manifest, artifact: copy, prNumber: named } = readZipOrThrow(opts.bytes, TOUR_ZIP)
+  const artifact =
+    opts.shared === undefined
+      ? copy
+      : { ...copy, record: trustedRecord(copy.record, opts.shared.postedBy, opts.shared.prAuthor) }
   const warnings: string[] = []
   if (!sameRepo(manifest.repo, ctx.config.repo)) {
     const from = `${manifest.repo.owner}/${manifest.repo.name}`
@@ -125,7 +144,12 @@ export async function mergeSharedRecords(
   if (stored === null) throw new AppError('CANVAS_NOT_FOUND', `no tour of ${headSha.slice(0, 7)}`, 404)
   const number = pr.number
   if (number === null) return { record: stored.record, merged: 0, warnings: [] }
-  const sources: DiscoverySources = { body: pr.body, bodyUpdatedAt: pr.updatedAt ?? '', comments }
+  const sources: DiscoverySources = {
+    body: pr.body,
+    bodyUpdatedAt: pr.updatedAt ?? '',
+    bodyAuthor: pr.author,
+    comments,
+  }
   const copies = collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments, 'tour').filter(
     c => headSha.startsWith(c.parsed.shaPrefix) && !namesAnotherPr(c, number)
   )
@@ -144,7 +168,7 @@ export async function mergeSharedRecords(
     try {
       const { artifact } = readZipOrThrow(download.bytes, TOUR_ZIP)
       if (artifact.headSha !== headSha) continue
-      const next = mergedRecord(record, artifact.record)
+      const next = mergedRecord(record, trustedRecord(artifact.record, copy.postedBy, pr.author))
       if (next.changed) merged += 1
       record = next.record
     } catch (err) {
@@ -177,7 +201,12 @@ export async function fetchSharedTour(
 ): Promise<SharedTourFetchResponse> {
   const number = pr.number
   if (number === null) return { outcome: 'none', warnings: [] }
-  const sources: DiscoverySources = { body: pr.body, bodyUpdatedAt: pr.updatedAt ?? '', comments }
+  const sources: DiscoverySources = {
+    body: pr.body,
+    bodyUpdatedAt: pr.updatedAt ?? '',
+    bodyAuthor: pr.author,
+    comments,
+  }
   const ranked = rankCandidates(
     collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments, 'tour'),
     { headSha: pr.headSha, prNumber: number }
@@ -194,7 +223,11 @@ export async function fetchSharedTour(
       continue
     }
     try {
-      const result = await importTour(ctx, { bytes: download.bytes, prNumber: number })
+      const result = await importTour(ctx, {
+        bytes: download.bytes,
+        prNumber: number,
+        shared: { postedBy: candidate.postedBy, prAuthor: pr.author },
+      })
       return { outcome: result.status, warnings }
     } catch (err) {
       warnings.push(`${candidate.name}: ${err instanceof Error ? err.message : String(err)}`)

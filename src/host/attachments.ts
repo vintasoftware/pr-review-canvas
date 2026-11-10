@@ -32,6 +32,8 @@ export interface AttachmentCandidate extends AttachmentLink {
    * the edit, which is when the attachment appeared.
    */
   postedAt: string
+  /** Who posted the text carrying it: the comment's author, or the pull request's for its body. */
+  postedBy: string | null
   /** Position in the scan, used when two links carry the same time. */
   order: number
 }
@@ -40,6 +42,8 @@ export interface DiscoverySources {
   /** The PR body and the time the pull request was last edited. */
   body: string
   bodyUpdatedAt: string
+  /** The pull request's author, who wrote its body; null when the caller does not say. */
+  bodyAuthor?: string | null | undefined
   comments: CommentsPayload
 }
 
@@ -53,18 +57,22 @@ export function collectCandidates(
   attachments: HostAttachments,
   kind: ZipKind = 'canvas'
 ): AttachmentCandidate[] {
-  const texts: Array<{ text: string; postedAt: string }> = [
-    { text: sources.body, postedAt: sources.bodyUpdatedAt },
-    ...sources.comments.issueComments.map(c => ({ text: c.body, postedAt: c.updatedAt })),
-    ...sources.comments.reviewComments.map(c => ({ text: c.body, postedAt: c.updatedAt })),
+  const texts: Array<{ text: string; postedAt: string; postedBy: string | null }> = [
+    { text: sources.body, postedAt: sources.bodyUpdatedAt, postedBy: sources.bodyAuthor ?? null },
+    ...sources.comments.issueComments.map(c => ({ text: c.body, postedAt: c.updatedAt, postedBy: c.author })),
+    ...sources.comments.reviewComments.map(c => ({
+      text: c.body,
+      postedAt: c.updatedAt,
+      postedBy: c.author,
+    })),
   ]
   const candidates: AttachmentCandidate[] = []
   let order = 0
-  for (const { text, postedAt } of texts) {
+  for (const { text, postedAt, postedBy } of texts) {
     for (const link of attachments.findLinks(text, repo)) {
       const parsed = parseZipName(kind, link.name, repo)
       if (parsed !== null) {
-        candidates.push({ ...link, parsed, postedAt, order: order++ })
+        candidates.push({ ...link, parsed, postedAt, postedBy, order: order++ })
       }
     }
   }
@@ -73,7 +81,14 @@ export function collectCandidates(
     if (embedded === null) continue
     const parsed = parseZipName(kind, embedded.name, repo)
     if (parsed !== null) {
-      candidates.push({ ...embedded, url: comment.url, parsed, postedAt: comment.updatedAt, order: order++ })
+      candidates.push({
+        ...embedded,
+        url: comment.url,
+        parsed,
+        postedAt: comment.updatedAt,
+        postedBy: comment.author,
+        order: order++,
+      })
     }
   }
   return candidates

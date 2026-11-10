@@ -1378,7 +1378,11 @@ the zip is exported to `<dataDir>/exports/` for the author to attach by hand; th
 the attachment as the review page finds a canvas's, by its name. The zip is named
 `pr-<n>-<time>-<sha8>-<repo>-tour.zip` and holds `manifest.json` and `tour.json`. A copy of a
 tour already stored brings its record along: who finished it on another machine, and the
-author's picks when they finished later there.
+author's picks when they finished later there. A copy found on the pull request is trusted as far
+as its poster may speak: the author's comment, or the pull request body, supplies the whole
+record, the author's picks included; anyone else's comment supplies only their own sign-off, so a
+commenter can neither settle the author's decisions nor sign off for others. A reviewer's own
+picks never leave their machine; the author's reach every reviewer through the record.
 
 ### Tour config
 

@@ -21,7 +21,9 @@
   mode the plan writes the re-implementation prompt and the picks are shared; in reviewer mode
   each decision shows the author's answer, the reader picks for themselves, the plan writes a
   review suggestion from their picks and notes, and their approved changes go into their pending
-  review as comments on the decisions' lines.
+  review as comments on the decisions' lines. A reviewer's picks stay on their machine; the
+  author's reach every reviewer through the shared record, which a copy found on the pull request
+  supplies only when the author posted it.
 - With AI Chat on, the tour page has AI Chat on every step: **ask AI Chat** in the nav, or `/`,
   opens a pane beside the tour with a thread per place (the whole tour, each landmark, decision,
   and quiz question, and the plan), as the canvas keeps a thread per place. The pane follows the

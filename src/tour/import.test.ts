@@ -4,7 +4,7 @@ import type { TourArtifact } from '../contract/tour.js'
 import { makeTestContext, type TestContext } from '../testing/fakes.js'
 import { HEAD_SHA, syntheticArtifact } from '../testing/synthetic.js'
 import { syntheticTour } from '../testing/synthetic-tour.js'
-import { fetchSharedTour, importTour, mergedRecord, mergeSharedRecords } from './import.js'
+import { fetchSharedTour, importTour, mergedRecord, mergeSharedRecords, trustedRecord } from './import.js'
 import { tourManifest } from './share.js'
 import { buildZipName } from '../canvas/name.js'
 import { buildZip } from '../canvas/zip.js'
@@ -139,6 +139,98 @@ describe('fetchSharedTour', () => {
       warnings: [`${name} could not be downloaded`],
     })
     expect((await t.ctx.tours.read(HEAD_SHA))?.source).toBe('import')
+  })
+})
+
+describe('trustedRecord', () => {
+  const record = {
+    touredBy: [
+      { login: 'octocat', at: 'a' },
+      { login: 'reviewer', at: 'b' },
+    ],
+    author: { finishedAt: 'a', picks: { k: { pick: 'keep' as const } }, prompt: 'p' },
+  }
+
+  it("takes the whole record from the author's copy, and only their own finish from anyone else's", () => {
+    expect(trustedRecord(record, 'Octocat', 'octocat')).toBe(record)
+    expect(trustedRecord(record, 'reviewer', 'octocat')).toEqual({
+      touredBy: [{ login: 'reviewer', at: 'b' }],
+    })
+    expect(trustedRecord(record, 'someone', 'octocat')).toEqual({ touredBy: [] })
+    expect(trustedRecord(record, null, 'octocat')).toEqual({ touredBy: [] })
+  })
+})
+
+describe('a shared copy found on the pull request', () => {
+  const NO_COMMENTS: CommentsPayload = {
+    fetchedAt: '2026-09-10T12:00:00.000Z',
+    headSha: HEAD_SHA,
+    reviewComments: [],
+    issueComments: [],
+  }
+  /** A copy whose record claims the author's picks and two finishes. */
+  const claiming = () =>
+    syntheticTour({
+      record: {
+        touredBy: [
+          { login: 'octocat', at: '2026-09-09T00:00:00.000Z' },
+          { login: 'someone', at: '2026-09-09T01:00:00.000Z' },
+        ],
+        author: {
+          finishedAt: '2026-09-09T00:00:00.000Z',
+          picks: { 'sum-over-product': { pick: 'change' } },
+          prompt: 'p',
+        },
+      },
+      revisedAt: '2026-09-09T01:00:00.000Z',
+    })
+  const comment = (author: string, body: string) => ({
+    id: 1,
+    author,
+    body,
+    createdAt: 'x',
+    updatedAt: '2026-09-09T01:00:00Z',
+    url: 'u',
+  })
+
+  it("supplies the author's picks only when the author posted it, on import and when records are folded", async () => {
+    const copy = claiming()
+    const bytes = zipOf(copy)
+    const name = buildZipName('tour', {
+      repo: copy.repo,
+      headSha: HEAD_SHA,
+      prNumber: 42,
+      generatedAt: copy.generatedAt,
+    })
+    t = await makeTestContext({
+      fetch: async () => new Response(bytes.slice().buffer as ArrayBuffer, { status: 200 }),
+    })
+    const pr = syntheticArtifact().pr
+    const link = `https://github.com/user-attachments/files/1/${name}`
+    // Posted by a commenter: their own sign-off, nothing of the author's.
+    const theirs: CommentsPayload = { ...NO_COMMENTS, issueComments: [comment('someone', link)] }
+    expect((await fetchSharedTour(t.ctx, pr, theirs)).outcome).toBe('imported')
+    expect((await t.ctx.tours.read(HEAD_SHA))?.record).toEqual({
+      touredBy: [{ login: 'someone', at: '2026-09-09T01:00:00.000Z' }],
+    })
+    // Folded in from a commenter's copy, the same; from the author's, the whole record.
+    const folded = await mergeSharedRecords(t.ctx, pr, theirs, HEAD_SHA)
+    expect(folded.merged).toBe(0)
+    const ours: CommentsPayload = { ...NO_COMMENTS, issueComments: [comment('octocat', link)] }
+    const whole = await mergeSharedRecords(t.ctx, pr, ours, HEAD_SHA)
+    expect(whole.record).toEqual(copy.record)
+    // The pull request body is the author's text.
+    await t.cleanup()
+    t = await makeTestContext({
+      fetch: async () => new Response(bytes.slice().buffer as ArrayBuffer, { status: 200 }),
+    })
+    expect((await fetchSharedTour(t.ctx, { ...pr, body: link }, NO_COMMENTS)).outcome).toBe('imported')
+    expect((await t.ctx.tours.read(HEAD_SHA))?.record).toEqual(copy.record)
+    // A copy handed over by file is taken as it is.
+    await t.cleanup()
+    t = await makeTestContext()
+    await importTour(t.ctx, { bytes, prNumber: 42 })
+    expect((await t.ctx.tours.read(HEAD_SHA))?.record).toEqual(copy.record)
   })
 })
 
