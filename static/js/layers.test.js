@@ -342,6 +342,16 @@ describe('layer sections', () => {
     const done = { ...state, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     document.body.innerHTML = renderLayerSection(layer, 0, artifact, files, done, cctx)
     expect(document.querySelector('.layer-ctl input')?.hasAttribute('checked')).toBe(true)
+    // The heading renders the title's Markdown.
+    document.body.innerHTML = renderLayerSection(
+      { ...layer, title: 'How `run()` adds' },
+      0,
+      artifact,
+      files,
+      state,
+      cctx
+    )
+    expect(document.querySelector('h2')?.innerHTML).toContain('How <code>run()</code> adds')
   })
 
   it('starts routine files collapsed without marking them reviewed', () => {

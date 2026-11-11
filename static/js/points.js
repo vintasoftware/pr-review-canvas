@@ -10,7 +10,7 @@ import { lineLink } from './links.js'
 import { pendingCommentHtml, pendingForPoint, pendingRange } from './pending.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
 import { LEVELS, levelIconHtml, pointKindText, pointLevelText } from './point-level.js'
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleHtml, titleText } from './markdown.js'
 import {
   audiencePillHtml,
   canSettle,
@@ -382,14 +382,14 @@ function pointPartsHtml(p, ctx, opts) {
   const toggle =
     status === 'open' && !opts.card
       ? ''
-      : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(p.title)}">show</button>`
+      : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(titleText(p.title))}">show</button>`
   const loc = opts.card ? `<a class="loc" href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>` : ''
   return {
     attrs:
       `data-point="${esc(p.id)}" data-fingerprint="${esc(p.fingerprint)}" data-status="${status}" ` +
       `data-sig="${esc(pointSignature(p, status, ctx))}"`,
     handled: status === 'open' ? '' : status === 'resolved' ? ' is-handled is-resolved' : ' is-handled',
-    title: `<span class="p-title"${opts.card ? ' data-act="point-expand"' : ''}>${esc(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}${toggle}`,
+    title: `<span class="p-title"${opts.card ? ' data-act="point-expand"' : ''}>${titleHtml(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}${toggle}`,
     rest:
       parts.summary +
       `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +

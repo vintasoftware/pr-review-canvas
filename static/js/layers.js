@@ -21,7 +21,7 @@ import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, pointAnchorId, reviewedId, sanitizeKey } from './keys.js'
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleHtml } from './markdown.js'
 import { writtenOn } from './diff-identity.js'
 import { pendingForPath } from './pending.js'
 import { openPoints, pointCardHtml, pointCountText, pointsDensityToggleHtml, postedUrls } from './points.js'
@@ -494,7 +494,7 @@ export function elsewhereHtml(lf, entry, layer, hunkIndex) {
   }
   const parts = [...others.values()].map(
     o =>
-      `${o.n} more ${o.n === 1 ? 'chunk' : 'chunks'} in <a href="#${esc(layerAnchorId(o.layer.key))}">${o.layer.kind === 'other' ? esc(o.layer.title) : `layer ${o.index + 1} · ${esc(o.layer.title)}`}</a>`
+      `${o.n} more ${o.n === 1 ? 'chunk' : 'chunks'} in <a href="#${esc(layerAnchorId(o.layer.key))}">${o.layer.kind === 'other' ? titleHtml(o.layer.title) : `layer ${o.index + 1} · ${titleHtml(o.layer.title)}`}</a>`
   )
   return `<div class="more-hunks">${parts.join(' · ')}</div>`
 }
@@ -522,7 +522,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
   const id = layerAnchorId(layer.key)
   if (layer.kind === 'other') {
     return (
-      `<pr-layer><section class="panel" id="${esc(id)}" aria-labelledby="${esc(id)}-h"><details>${detailsSummaryHtml(`<h2 id="${esc(id)}-h">${esc(layer.title)} <span class="muted">&mdash; ${fileCount(layer.files.length)}, ignored</span></h2>`, 'Toggle other changes')}` +
+      `<pr-layer><section class="panel" id="${esc(id)}" aria-labelledby="${esc(id)}-h"><details>${detailsSummaryHtml(`<h2 id="${esc(id)}-h">${titleHtml(layer.title)} <span class="muted">&mdash; ${fileCount(layer.files.length)}, ignored</span></h2>`, 'Toggle other changes')}` +
       `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}</div>${cards}</details></section></pr-layer>`
     )
   }
@@ -543,7 +543,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
   const layerReviewedId = reviewedId(layer.key)
   return (
     `<pr-layer><section class="layer${reviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
-    `<div class="panel-h layer-h">${chevronHtml('Collapse layer', !collapsed, { act: 'toggle-card' })}<h2 id="${esc(id)}-h"><span class="lbl">Layer ${semanticIndex + 1} of ${total}</span>${esc(layer.title)}${risks}</h2>` +
+    `<div class="panel-h layer-h">${chevronHtml('Collapse layer', !collapsed, { act: 'toggle-card' })}<h2 id="${esc(id)}-h"><span class="lbl">Layer ${semanticIndex + 1} of ${total}</span>${titleHtml(layer.title)}${risks}</h2>` +
     `<div class="layer-ctl"><label class="chk"><input type="checkbox" data-reviewed-id="${esc(layerReviewedId)}"${reviewed ? ' checked' : ''}> reviewed</label>` +
     `${askButtonHtml({ kind: 'layer', layerId: layer.id }, { label: 'ask about this layer', title: 'Ask AI Chat about this layer' })}</div></div>` +
     `<div class="layer-body"${collapsed ? ' hidden' : ''}>` +

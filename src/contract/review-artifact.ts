@@ -211,7 +211,7 @@ function textOrEmpty(caps: Caps, key: keyof TextCaps): z.ZodString {
     .string()
     .max(caps[key])
     .meta({
-      description: `At most ${visibleCap} visible characters. Link targets, backticks, and code-fence lines do not count. maxLength is only the raw Markdown ceiling.${diagrams}`,
+      description: `At most ${visibleCap} visible characters. Link targets, backticks, asterisks, and code-fence lines do not count. maxLength is only the raw Markdown ceiling.${diagrams}`,
       'x-visibleMaxLength': visibleCap,
     })
 }
@@ -229,7 +229,7 @@ export function testEntrySchema(caps: Caps) {
     note: z
       .string()
       .meta({
-        description: `For not-needed, the reason. For missing, the body of the attention point the entry adds: at most ${caps.pointBody / HARD_CAP_FACTOR} visible characters. Link targets, backticks, and code-fence lines do not count.`,
+        description: `For not-needed, the reason. For missing, the body of the attention point the entry adds: at most ${caps.pointBody / HARD_CAP_FACTOR} visible characters. Link targets, backticks, asterisks, and code-fence lines do not count.`,
       })
       .optional(),
   })

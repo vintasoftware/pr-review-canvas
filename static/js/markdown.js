@@ -253,6 +253,50 @@ function linkDefinitions(src) {
     .join('\n')
 }
 
+/** What a title keeps of its Markdown: it is one line, and it often sits inside a link. */
+const TITLE_TAGS = ['code', 'strong', 'em', 'del']
+
+/** @param {string} src markdown */
+function sanitizedTitle(src) {
+  const title = DOMPurify.sanitize(marked.parseInline(src, { async: false }), {
+    ALLOWED_TAGS: TITLE_TAGS,
+    ALLOWED_ATTR: [],
+    KEEP_CONTENT: true,
+    RETURN_DOM_FRAGMENT: true,
+  })
+  // As in renderProse, the tag list is enforced again after the sanitizer: an element outside it
+  // gives way to its text, so an image's leaves nothing.
+  for (const element of title.querySelectorAll('*')) {
+    if (TITLE_TAGS.includes(element.tagName.toLowerCase())) {
+      for (const name of element.getAttributeNames()) element.removeAttribute(name)
+    } else {
+      element.replaceWith(...element.childNodes)
+    }
+  }
+  return title
+}
+
+/**
+ * A layer's or a point's title as one line of sanitized HTML: code, bold, italics and
+ * strikethrough. A title sits inside a link in the rail and the stop bar, so a link in it shows
+ * as its text.
+ * @param {string} src markdown
+ * @returns {string} sanitized HTML
+ */
+export function titleHtml(src) {
+  const box = document.createElement('div')
+  box.append(sanitizedTitle(src))
+  return box.innerHTML
+}
+
+/**
+ * A title's words without its Markdown, for an accessible name, a tooltip, or the chat's labels.
+ * @param {string} src markdown
+ */
+export function titleText(src) {
+  return sanitizedTitle(src).textContent ?? ''
+}
+
 /**
  * Markdown as sanitized HTML. Two fields draw diagrams, the PR summary and a layer rationale, and
  * they ask for it with `diagrams`. Everywhere else a ```mermaid fence stays a code block: a PR

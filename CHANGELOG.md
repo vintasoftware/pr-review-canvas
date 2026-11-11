@@ -56,6 +56,12 @@
   note as a point body. A gap with no note reads `No test covers this behavior.` The layer's Tests
   table no longer repeats that note: the row links to the point with **See its attention point**,
   which opens the point's card, or its stop in the one-point view.
+- Layer and attention-point titles render their Markdown on the page, as a posted comment already
+  did on GitHub: `code`, **bold**, _italics_ and ~~strikethrough~~, with a link shown as its text.
+  Before, a title such as "`toast()` ignores **Show layers**" showed its backticks and asterisks.
+  The chat, tooltips and the button that opens a point name the title in plain words.
+- Caps no longer count asterisks, as they already did not count backticks, so `**Retry**` costs 5
+  characters.
 - `validate` checks a missing test's note against the attention-point body cap, since the note is
   that point's body. A canvas whose missing-test note runs past the cap, such as one an incremental
   run copies from an older canvas, fails `validate` with `TEXT_TOO_LONG` until the note is

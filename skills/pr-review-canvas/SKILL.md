@@ -257,8 +257,8 @@ author: the reason is theirs to give.
 - Test files come after the files they cover, inside the same layer, never in a layer of their own.
   The prompt's layering rules name the path patterns this project counts as tests; they are the
   ones the validator uses.
-- Every text is within its cap, measured on the text a reader sees (link targets and backticks do
-  not count). Write complete sentences a reviewer can read in one pass, as the prompt's Writing
+- Every text is within its cap, measured on the text a reader sees (link targets, backticks, and
+  asterisks do not count). Write complete sentences a reviewer can read in one pass, as the prompt's Writing
   section describes; when a field runs over its cap, leave out a detail, not the words a sentence
   needs.
 - At most 12 attention points, counting one per `missing` test entry.

@@ -10,6 +10,7 @@
 /** @typedef {import('./point-steps.js').Stop} Stop */
 import { cssEscape, drawCardOf } from './anchors.js'
 import { esc } from './dom.js'
+import { titleHtml } from './markdown.js'
 import { layerAnchorId } from './keys.js'
 import { hunkIdForPoint } from './layers.js'
 import { setPointExpanded } from './points.js'
@@ -168,7 +169,7 @@ export function stopNavHtml(stops, index, artifact) {
         ? link('#overview', '&larr; overview')
         : link(
             `#${previous.id}`,
-            `&larr; ${esc(previous.kind === 'layer' ? previous.layer.title : 'previous point')}`
+            `&larr; ${previous.kind === 'layer' ? titleHtml(previous.layer.title) : 'previous point'}`
           )
   const here =
     stop?.kind === 'point'
@@ -189,8 +190,9 @@ export function stopNavHtml(stops, index, artifact) {
   } else if (stop === undefined) {
     // The first stop is a layer's opening: every point's layer has one.
     const n = artifact.layers.filter(l => l.kind !== 'other').indexOf(next.layer) + 1
-    const name = next.layer.kind === 'other' ? next.layer.title : `Layer ${n}: ${next.layer.title}`
-    on = link(`#${next.id}`, `start with ${esc(name)} &rarr;`, ' class="step-on"')
+    const title = titleHtml(next.layer.title)
+    const name = next.layer.kind === 'other' ? title : `Layer ${n}: ${title}`
+    on = link(`#${next.id}`, `start with ${name} &rarr;`, ' class="step-on"')
   } else if (stop.kind === 'layer' && next.kind === 'point') {
     on = link(
       `#${next.id}`,
@@ -200,7 +202,7 @@ export function stopNavHtml(stops, index, artifact) {
   } else {
     on = link(
       `#${next.id}`,
-      `${next.kind === 'layer' ? `next layer: ${esc(next.layer.title)}` : 'next point'} &rarr;`
+      `${next.kind === 'layer' ? `next layer: ${titleHtml(next.layer.title)}` : 'next point'} &rarr;`
     )
   }
   return `${back}${here}${on}`

@@ -498,7 +498,8 @@ Compare the rest of your templates with the new bundled ones when upgrading.
 ### Text limits
 
 Set any of these keys under `generation.caps`. Prose limits count visible characters, so Markdown
-link targets do not count. `diagram` counts raw Mermaid source characters.
+link targets, backticks, and asterisks do not count. Fold titles are plain text and count in full.
+`diagram` counts raw Mermaid source characters.
 
 | Key            | Default |
 | -------------- | ------- |

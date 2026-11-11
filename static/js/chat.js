@@ -43,7 +43,7 @@ import { esc, flash, qs, scrollIntoViewSafe, timeAgo } from './dom.js'
 import { cssEscape } from './anchors.js'
 import { getRenderContext } from './layers.js'
 import { lineLink } from './links.js'
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleHtml, titleText } from './markdown.js'
 import { pendingComments } from './pending.js'
 import { pointStatus, resolvable } from './points.js'
 import { proposalFingerprint, splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
@@ -337,7 +337,7 @@ function proposedPointHtml(id, send) {
     : ''
   // The key is what the line shows: the point, and whether it can still come off.
   const key = `${send.point.fingerprint}:${open ? 'open' : 'sent'}`
-  return `<p class="proposed-point muted small" data-key="${esc(key)}">about the point “${esc(send.point.title)}”${unlink}</p>`
+  return `<p class="proposed-point muted small" data-key="${esc(key)}">about the point “${titleHtml(send.point.title)}”${unlink}</p>`
 }
 
 /**
@@ -423,7 +423,7 @@ function proposedResolutionHtml(resolution, id, state) {
   return (
     `<div class="proposed resolution" data-proposed="${esc(id)}">` +
     '<div class="proposed-h"><span class="lbl">proposed resolution</span></div>' +
-    `<p class="proposed-point muted small">about the point “${esc(resolution.point.title)}”</p>` +
+    `<p class="proposed-point muted small">about the point “${titleHtml(resolution.point.title)}”</p>` +
     `<div class="prose">${renderMarkdown(resolution.reason)}</div>` +
     resolutionCommandsHtml(resolution, id, state) +
     '</div>'
@@ -686,9 +686,13 @@ export function wireChat(options) {
   }
   applyWidth(readChatWidth(storage))
 
-  const layerTitle = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)?.title
+  // The chat names places in plain text: its head, chips and thread names are not Markdown.
+  const plain = /** @param {string | undefined} title */ title =>
+    title === undefined ? undefined : titleText(title)
+  const layerTitle = /** @param {string} id */ id =>
+    plain(session.artifact.layers.find(l => l.id === id)?.title)
   const pointTitle = /** @param {string} fp */ fp =>
-    session.artifact.points.find(p => p.fingerprint === fp)?.title
+    plain(session.artifact.points.find(p => p.fingerprint === fp)?.title)
   const currentThread = () => threads.find(t => t.name === activeThread)
   /**
    * Whether a place is on the canvas on screen. A thread outlives the canvas it was made on, and a

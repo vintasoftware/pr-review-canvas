@@ -7,6 +7,7 @@
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 import { diffstatHtml, layerChanges } from './diffstat.js'
 import { esc } from './dom.js'
+import { titleHtml } from './markdown.js'
 import { layerAnchorId } from './keys.js'
 import { fileCount, getRenderContext } from './layers.js'
 import { levelIconHtml } from './point-level.js'
@@ -46,10 +47,10 @@ function railPointsHtml(artifact, state, current) {
       const link = (/** @type {string} */ inner) =>
         `<a href="#${esc(stop.id)}"${current(stop.id)}>${inner}</a>`
       if (stop.kind === 'layer') {
-        return `<li class="pt-layer">${link(`<span class="t">${esc(stop.layer.title)}</span>`)}</li>`
+        return `<li class="pt-layer">${link(`<span class="t">${titleHtml(stop.layer.title)}</span>`)}</li>`
       }
       const handled = pointStatus(stop.point, state) === 'open' ? '' : ' class="is-handled"'
-      return `<li${handled}>${link(`${levelIconHtml(stop.point.level, null)}<span class="t">${esc(stop.point.title)}</span>`)}</li>`
+      return `<li${handled}>${link(`${levelIconHtml(stop.point.level, null)}<span class="t">${titleHtml(stop.point.title)}</span>`)}</li>`
     })
     .join('')
   return `<li class="grp">${railViewSwitchHtml(true)}<ul class="rail-points">${items}</ul></li>`
@@ -86,13 +87,13 @@ export function railInnerHtml(artifact, state, opts = {}) {
       const id = layerAnchorId(layer.key)
       return (
         `<li><a href="#${esc(id)}"${current(id)}><span class="${dotClass}" style="--dc:${dotColor(i)}" role="img" aria-label="${dotLabel}"></span>` +
-        `<span class="n">${i + 1}</span><span class="t">${esc(layer.title)}</span><span class="m">${meta}${stat}${risk}</span></a></li>`
+        `<span class="n">${i + 1}</span><span class="t">${titleHtml(layer.title)}</span><span class="m">${meta}${stat}${risk}</span></a></li>`
       )
     })
     .join('')
   const points = openPoints(artifact.points, state).length
   const otherItem = other
-    ? `<li class="other"><a href="#${esc(layerAnchorId(other.key))}"${current(layerAnchorId(other.key))}><span class="t">${esc(other.title)}</span><span class="m">${fileCount(other.files.length)}, ignored</span></a></li>`
+    ? `<li class="other"><a href="#${esc(layerAnchorId(other.key))}"${current(layerAnchorId(other.key))}><span class="t">${titleHtml(other.title)}</span><span class="m">${fileCount(other.files.length)}, ignored</span></a></li>`
     : ''
   const overview = `<li><a href="#overview"${current('overview')}><span class="t">Overview</span><span class="m">${points} open attention ${points === 1 ? 'point' : 'points'}</span></a></li>`
   const hasPoints = artifact.points.length > 0

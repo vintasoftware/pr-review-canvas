@@ -208,8 +208,9 @@ of each chunk. They are not the manifest's additions plus deletions.
 
 ## Length rules
 
-Caps, in characters of the text a reader sees: link targets, backticks, and code-fence lines do not
-count, so `[the store](#hunk:packages/x/store.ts#2)` costs 9 characters. The validator rejects
+Caps, in characters of the text a reader sees: link targets, backticks, asterisks, and code-fence
+lines do not count, so `[the store](#hunk:packages/x/store.ts#2)` costs 9 characters and
+`**Retry**` costs 5. The validator rejects
 anything longer. Each prose field's schema description states its visible-character cap;
 `maxLength` only bounds raw Markdown, including link targets. Passing JSON Schema alone does not
 check visible length. Draft below the visible caps, then run `validate --human --fix` before publish.
