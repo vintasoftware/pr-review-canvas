@@ -743,11 +743,15 @@ export function wireChat(options) {
   const placeName = anchor =>
     anchor.kind === 'pr' ? 'whole PR' : chatContextName(anchor, layerTitle, pointTitle)
   /**
-   * The title a thread was saved with. A thread about a place was named after the place's title as
-   * written, Markdown and all, so it shows in words; a general thread keeps the reader's own words.
+   * The title a thread was saved with. A thread about a layer or a point was named after its title
+   * as written, Markdown and all, so it shows in words. One about a file or lines was named after a
+   * path, and a general thread keeps the reader's own words: both show as saved.
    * @param {(typeof threads)[number]} thread
    */
-  const savedTitle = thread => (thread.anchor === undefined ? thread.title : titleText(thread.title))
+  const savedTitle = thread =>
+    thread.anchor?.kind === 'point' || thread.anchor?.kind === 'layer'
+      ? titleText(thread.title)
+      : thread.title
   /**
    * A thread as the head and the index name it: by its place while the canvas has it, by the title
    * it was saved with otherwise.

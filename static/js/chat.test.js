@@ -320,6 +320,14 @@ describe('the context chip', () => {
               turns: 1,
               anchor: { kind: 'point', fingerprint: 'gone' },
             },
+            {
+              name: 't2',
+              agent: 'claude',
+              title: 'src/__tests__/gone.test.ts',
+              createdAt: '',
+              turns: 1,
+              anchor: { kind: 'file', path: 'src/__tests__/gone.test.ts' },
+            },
           ],
           activeThread: 't1',
           agent: 'claude',
@@ -339,6 +347,11 @@ describe('the context chip', () => {
     await flush()
     // A thread saved under a place's title, Markdown and all, shows it in words.
     expect(el(root, '#thread-title').textContent).toBe('point · gone() left · not on this canvas')
+    // One saved under a path shows the path as saved: it is not Markdown.
+    expect([...root.querySelectorAll('#thread-index .thread-item-t')].map(item => item.textContent)).toEqual([
+      'point · gone() left',
+      'src/__tests__/gone.test.ts',
+    ])
     chat.setContext({ kind: 'layer', layerId: 'run-path' })
     expect(el(root, '#chat-ctx').textContent).toBe('layer · Run path')
     chat.setContext({ kind: 'point', fingerprint: 'fp-1' })

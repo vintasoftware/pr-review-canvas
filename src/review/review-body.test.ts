@@ -78,6 +78,10 @@ describe('inlineText', () => {
     expect(inlineText('[link](x) `code` <b> # | _a_ ~~b~~ \\')).toBe(
       '\\[link\\](x) `code` \\<b\\> \\# \\| _a_ ~~b~~ \\\\'
     )
+    // Markdown reads no escapes inside a code span, so a span is copied as written.
+    expect(inlineText('`items[0]` and items[0], `Map<K, V>`, ``a`|b`` and a lone ` [x]')).toBe(
+      '`items[0]` and items\\[0\\], `Map<K, V>`, ``a`|b`` and a lone ` \\[x\\]'
+    )
   })
 })
 

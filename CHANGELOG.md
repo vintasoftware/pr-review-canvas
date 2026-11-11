@@ -63,8 +63,8 @@
   a point name the title in plain words. A behavior's name in the Tests table renders the same
   way, since it becomes the title of a missing test's point.
 - The review body that sign-off posts lists layer and dismissed-point titles with their code and
-  emphasis rendered, as the page shows them. It still escapes the characters that would open a
-  link, a heading, a table cell or raw HTML.
+  emphasis rendered, as the page shows them. Outside code spans it still escapes the characters
+  that would open a link, a heading, a table cell or raw HTML; a code span is copied as written.
 - Caps no longer count asterisks, as they already did not count backticks, so `**Retry**` costs 5
   characters.
 - `validate` checks a missing test's note against the attention-point body cap, since the note is

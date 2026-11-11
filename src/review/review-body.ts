@@ -10,16 +10,29 @@ import { marksOn } from '../../static/js/diff-identity.js'
 
 export const REVIEW_BODY_FOOTER = 'Reviewed with the pr-review canvas (localhost).'
 
+// A code span: a run of backticks, then its text, then a run of the same length. A backtick with no
+// closing run ends nothing, as in `settled-decisions.ts`.
+const CODE_SPAN = /(?<!`)(`+)(?!`).*?[^`]\1(?!`)/g
+
+/** Escapes what would open a link, a heading, a table cell, or raw HTML. */
+function escapeProse(text: string): string {
+  return text.replace(/([\\[\]<>#|])/g, '\\$1')
+}
+
 /**
- * A title on one line of a list. Code and emphasis render, as they do on the page; the characters
- * that would open a link, a heading, a table cell, or raw HTML in the published review are
- * escaped.
+ * A title on one line of a list. Code and emphasis render, as they do on the page. Outside its code
+ * spans, the characters that would open a link, a heading, a table cell, or raw HTML in the
+ * published review are escaped; inside one, Markdown reads no escapes, so it is copied as written.
  */
 export function inlineText(text: string): string {
-  return text
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/([\\[\]<>#|])/g, '\\$1')
+  const line = text.replace(/\s+/g, ' ').trim()
+  let out = ''
+  let last = 0
+  for (const span of line.matchAll(CODE_SPAN)) {
+    out += escapeProse(line.slice(last, span.index)) + span[0]
+    last = span.index + span[0].length
+  }
+  return out + escapeProse(line.slice(last))
 }
 
 /**
