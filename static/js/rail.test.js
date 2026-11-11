@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { emptyState } from '../../src/contract/state.js'
 import { toPatchMap } from '../../src/git/diff-collector.js'
 import { mapReviewComment } from '../../src/github/comments.js'
-import { GH_REVIEW_COMMENTS, SYNTHETIC_FILES, syntheticArtifact } from '../../src/testing/synthetic.js'
+import {
+  GH_REVIEW_COMMENTS,
+  SYNTHETIC_FILES,
+  syntheticArtifact,
+  withMarkdownTitles,
+} from '../../src/testing/synthetic.js'
 import { setRenderContext } from './layers.js'
 import { dotColor, refreshRail, renderRail } from './rail.js'
 
@@ -41,6 +46,10 @@ describe('rail', () => {
     expect(items[1]?.querySelector('.m')?.textContent).toBe('3 files · schema')
     expect(document.querySelector('li.other .m')?.textContent).toBe('3 files, ignored')
     expect(dotColor(7)).toBe('var(--s2)')
+    // The layers' titles render their Markdown.
+    document.body.innerHTML = renderRail(withMarkdownTitles(artifact), state)
+    expect(document.querySelector('a[href="#layer-run-path"] .t')?.innerHTML).toBe('Run <code>path</code>')
+    expect(document.querySelector('li.other .t')?.innerHTML).toBe('Other <strong>changes</strong>')
   })
 
   it('shows partial and done dots and the active item', () => {

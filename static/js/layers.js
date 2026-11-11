@@ -198,7 +198,7 @@ export function testMapHtml(layer, points, paths) {
         : t.note
           ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>`
           : ''
-      return `<tr><td>${esc(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
+      return `<tr><td>${titleHtml(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
     })
     .join('')
   const coverage = testCoverage(layer.tests)

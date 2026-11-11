@@ -11,14 +11,15 @@ import { marksOn } from '../../static/js/diff-identity.js'
 export const REVIEW_BODY_FOOTER = 'Reviewed with the pr-review canvas (localhost).'
 
 /**
- * Model text on one line of a list. Markdown characters are escaped so a title cannot open a
- * heading, a link, or a code span in the published review.
+ * A title on one line of a list. Code and emphasis render, as they do on the page; the characters
+ * that would open a link, a heading, a table cell, or raw HTML in the published review are
+ * escaped.
  */
 export function inlineText(text: string): string {
   return text
     .replace(/\s+/g, ' ')
     .trim()
-    .replace(/([\\`*_[\]<>#|])/g, '\\$1')
+    .replace(/([\\[\]<>#|])/g, '\\$1')
 }
 
 /**

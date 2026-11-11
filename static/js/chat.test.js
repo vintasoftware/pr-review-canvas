@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS } from '../../src/contract/settings.js'
 import { emptyState } from '../../src/contract/state.js'
 import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
-import { GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
+import { GH_REVIEW_COMMENTS, syntheticArtifact, withMarkdownTitles } from '../../src/testing/synthetic.js'
 import { cssEscape } from './anchors.js'
 import { setChatEnabled } from './ask.js'
 import {
@@ -36,11 +36,11 @@ const artifact = syntheticArtifact()
 const targets = targetsFromFiles(artifact.files)
 const paths = new Set(artifact.files.map(f => f.path))
 
-function session() {
+function session(canvas = artifact) {
   return createReviewSession({
     prNumber: 42,
-    artifact,
-    files: artifact.files,
+    artifact: canvas,
+    files: canvas.files,
     state: emptyState('2026-09-11T10:00:00.000Z'),
     capabilities: UNKNOWN_CAPABILITIES,
     headSha: artifact.pr.headSha,
@@ -305,6 +305,48 @@ describe('the context chip', () => {
     const { root, chat } = mount()
     chat.setContext({ kind: 'layer', layerId: 'run-path' })
     expect(el(root, '#chat-ctx').textContent).toBe('layer · Run path')
+  })
+
+  it('names places in their titles’ words, and renders a proposal’s point title', async () => {
+    const { root, chat } = mount(
+      {
+        fetchThreads: async () => ({
+          threads: [
+            {
+              name: 't1',
+              agent: 'claude',
+              title: 'point · `gone()` **left**',
+              createdAt: '',
+              turns: 1,
+              anchor: { kind: 'point', fingerprint: 'gone' },
+            },
+          ],
+          activeThread: 't1',
+          agent: 'claude',
+        }),
+        streamChat: async (_pr, _input, opts) => {
+          opts.onEvent({ event: 'turn', data: { thread: 't1', agent: 'claude', seeded: true } })
+          opts.onEvent({
+            event: 'chunk',
+            data: {
+              text: '```comment\n{"path":"src/app.ts","line":3,"body":"Rename.","point":"fp-1"}\n```\n',
+            },
+          })
+        },
+      },
+      { session: session(withMarkdownTitles(artifact)) }
+    )
+    await flush()
+    // A thread saved under a place's title, Markdown and all, shows it in words.
+    expect(el(root, '#thread-title').textContent).toBe('point · gone() left · not on this canvas')
+    chat.setContext({ kind: 'layer', layerId: 'run-path' })
+    expect(el(root, '#chat-ctx').textContent).toBe('layer · Run path')
+    chat.setContext({ kind: 'point', fingerprint: 'fp-1' })
+    expect(el(root, '#chat-ctx').textContent).toBe('point · run() sums twice')
+    await sendMessage(root, 'x')
+    expect(el(root, '.proposed-point').innerHTML).toContain(
+      'about the point “<code>run()</code> sums <strong>twice</strong>”'
+    )
   })
 
   it('clear is the only way back to the whole pull request', () => {

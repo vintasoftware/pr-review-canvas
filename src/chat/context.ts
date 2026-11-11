@@ -65,8 +65,9 @@ function patchOf(sources: ContextSources, entry: FileEntry): string | null {
 }
 
 /**
- * The context block for one message. The label is the same text the chip on screen shows, so the
- * reader and the agent are talking about the same thing.
+ * The context block for one message. The label names the place as the chip on screen does, with
+ * the title as written where the chip shows its words, so the reader and the agent are talking
+ * about the same thing.
  */
 export async function renderChatContext(context: ChatContext, sources: ContextSources): Promise<string> {
   const label = chatContextLabel(

@@ -73,10 +73,10 @@ describe('unreviewedLayers', () => {
 })
 
 describe('inlineText', () => {
-  it('puts model text on one line and escapes what markdown would read', () => {
-    expect(inlineText('  Sum\ninstead of *product*  ')).toBe('Sum instead of \\*product\\*')
-    expect(inlineText('[link](x) `code` <b> # | _a_ \\')).toBe(
-      '\\[link\\](x) \\`code\\` \\<b\\> \\# \\| \\_a\\_ \\\\'
+  it('puts a title on one line, keeps its code and emphasis, and escapes what opens anything else', () => {
+    expect(inlineText('  Sum\ninstead of *product*  ')).toBe('Sum instead of *product*')
+    expect(inlineText('[link](x) `code` <b> # | _a_ ~~b~~ \\')).toBe(
+      '\\[link\\](x) `code` \\<b\\> \\# \\| _a_ ~~b~~ \\\\'
     )
   })
 })

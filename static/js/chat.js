@@ -686,13 +686,17 @@ export function wireChat(options) {
   }
   applyWidth(readChatWidth(storage))
 
+  const layerOf = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)
+  const pointOf = /** @param {string} fp */ fp => session.artifact.points.find(p => p.fingerprint === fp)
   // The chat names places in plain text: its head, chips and thread names are not Markdown.
-  const plain = /** @param {string | undefined} title */ title =>
-    title === undefined ? undefined : titleText(title)
-  const layerTitle = /** @param {string} id */ id =>
-    plain(session.artifact.layers.find(l => l.id === id)?.title)
-  const pointTitle = /** @param {string} fp */ fp =>
-    plain(session.artifact.points.find(p => p.fingerprint === fp)?.title)
+  const layerTitle = /** @param {string} id */ id => {
+    const layer = layerOf(id)
+    return layer === undefined ? undefined : titleText(layer.title)
+  }
+  const pointTitle = /** @param {string} fp */ fp => {
+    const point = pointOf(fp)
+    return point === undefined ? undefined : titleText(point.title)
+  }
   const currentThread = () => threads.find(t => t.name === activeThread)
   /**
    * Whether a place is on the canvas on screen. A thread outlives the canvas it was made on, and a
@@ -702,9 +706,9 @@ export function wireChat(options) {
   const onCanvas = place => {
     switch (place.kind) {
       case 'point':
-        return pointTitle(place.fingerprint) !== undefined
+        return pointOf(place.fingerprint) !== undefined
       case 'layer':
-        return layerTitle(place.layerId) !== undefined
+        return layerOf(place.layerId) !== undefined
       case 'file':
       case 'lines':
         return paths.has(place.path)
@@ -739,12 +743,18 @@ export function wireChat(options) {
   const placeName = anchor =>
     anchor.kind === 'pr' ? 'whole PR' : chatContextName(anchor, layerTitle, pointTitle)
   /**
+   * The title a thread was saved with. A thread about a place was named after the place's title as
+   * written, Markdown and all, so it shows in words; a general thread keeps the reader's own words.
+   * @param {(typeof threads)[number]} thread
+   */
+  const savedTitle = thread => (thread.anchor === undefined ? thread.title : titleText(thread.title))
+  /**
    * A thread as the head and the index name it: by its place while the canvas has it, by the title
    * it was saved with otherwise.
    * @param {(typeof threads)[number]} thread
    */
   const shownTitle = thread =>
-    thread.anchor !== undefined && onCanvas(thread.anchor) ? placeName(thread.anchor) : thread.title
+    thread.anchor !== undefined && onCanvas(thread.anchor) ? placeName(thread.anchor) : savedTitle(thread)
 
   const drawHead = () => {
     const thread = currentThread()
@@ -782,7 +792,7 @@ export function wireChat(options) {
     if (place !== undefined && onCanvas(place)) {
       return chatContextLabel(place, layerTitle, pointTitle)
     }
-    return thread !== undefined ? thread.title : 'New thread'
+    return thread !== undefined ? savedTitle(thread) : 'New thread'
   }
 
   /**

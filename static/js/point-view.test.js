@@ -8,6 +8,7 @@ import {
   publishedSyntheticArtifact,
   SYNTHETIC_FILES,
   syntheticArtifact,
+  withMarkdownTitles,
 } from '../../src/testing/synthetic.js'
 import { defineLayerElements, hunkIdForPoint, renderLayers, setRenderContext } from './layers.js'
 import { initOneLayer } from './one-layer.js'
@@ -76,6 +77,16 @@ describe('stopNavHtml', () => {
       ['#layer-other', 'next layer: Other changes →'],
     ])
     expect(links(4)).toEqual([['#point-p-2', '← previous point'], expect.anything()])
+  })
+
+  it('renders the Markdown of the layer titles it names', () => {
+    const titled = withMarkdownTitles(artifact)
+    const html = (/** @type {number} */ index) =>
+      Array.from(draw(stopNavHtml(stopsOf(titled), index, titled)).querySelectorAll('a')).map(
+        a => a.innerHTML
+      )
+    expect(html(-1)).toEqual(['start with Layer 1: Run <code>path</code> →'])
+    expect(html(1)).toEqual(['← Run <code>path</code>', 'next layer: Other <strong>changes</strong> →'])
   })
 
   it('leads from the last stop to the layers, as the rail’s switch does', () => {

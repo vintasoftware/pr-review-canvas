@@ -13,6 +13,7 @@ import {
   publishedSyntheticArtifact,
   SYNTHETIC_FILES,
   syntheticArtifact,
+  withMarkdownTitles,
 } from '../../src/testing/synthetic.js'
 import { setChatEnabled } from './ask.js'
 import {
@@ -126,6 +127,15 @@ describe('layer sections', () => {
     const rows = [...document.querySelectorAll('tbody tr')]
     expect(rows.map(r => r.querySelector('.st')?.textContent)).toEqual(['covered', 'missing', 'not-needed'])
     expect(rows[0]?.querySelector('a.loc')?.getAttribute('href')).toBe('#file:src/app.test.ts')
+    // A behavior's name renders like the title of the point it becomes.
+    expect(rows[0]?.querySelector('td')?.innerHTML).toMatch(/^run\(\) adds b\(\)/)
+    const coded = {
+      ...layer,
+      tests: [{ behavior: '`run()` adds **b**', status: /** @type {const} */ ('not-needed') }],
+    }
+    document.body.innerHTML = testMapHtml(coded, published.points, paths)
+    expect(document.querySelector('tbody td')?.innerHTML).toBe('<code>run()</code> adds <strong>b</strong>')
+    document.body.innerHTML = testMapHtml(layer, published.points, paths)
     // A missing behavior's note is the body of the point publish made for it; the row links to
     // that point's card, not to its line, where the layer's decision sits too.
     expect(rows[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe('See its attention point')
@@ -244,6 +254,18 @@ describe('layer sections', () => {
     expect(other?.querySelector('article.file#file-src_app_ts-other')).not.toBeNull()
     expect(other?.querySelector('article.file#file-src_app_ts-other .more-hunks')?.textContent).toBe(
       '1 more chunk in layer 1 · Run path'
+    )
+    // Every layer title on the page renders its Markdown: the headings and the "more chunks" links.
+    document.body.innerHTML = renderLayers(withMarkdownTitles(artifact), files, state)
+    expect(document.querySelector('#layer-run-path h2')?.innerHTML).toContain('Run <code>path</code>')
+    expect(document.querySelector('#layer-run-path .more-hunks a')?.innerHTML).toBe(
+      'Other <strong>changes</strong>'
+    )
+    expect(document.querySelector('#layer-other summary h2')?.innerHTML).toContain(
+      'Other <strong>changes</strong>'
+    )
+    expect(document.querySelector('#file-src_app_ts-other .more-hunks a')?.innerHTML).toBe(
+      'layer 1 · Run <code>path</code>'
     )
   })
 

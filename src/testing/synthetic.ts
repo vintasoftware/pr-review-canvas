@@ -343,6 +343,19 @@ export function syntheticArtifact(): ReviewArtifact {
 }
 
 /**
+ * A canvas whose titles carry Markdown, as a generator writes them: the run path layer names code,
+ * the Other layer bolds a word, and the decision point does both.
+ */
+export function withMarkdownTitles(artifact: ReviewArtifact): ReviewArtifact {
+  const titled: Record<string, string> = { 'run-path': 'Run `path`', other: 'Other **changes**' }
+  return {
+    ...artifact,
+    layers: artifact.layers.map(l => ({ ...l, title: titled[l.id] ?? l.title })),
+    points: artifact.points.map(p => (p.id === 'p-1' ? { ...p, title: '`run()` sums **twice**' } : p)),
+  }
+}
+
+/**
  * The synthetic canvas as publish writes it: the generator's output run through `normalize`, so the
  * point the missing test adds sits on the entry's anchor, in the entry's layer, after the decision
  * on the same chunk.

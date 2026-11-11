@@ -59,7 +59,12 @@
 - Layer and attention-point titles render their Markdown on the page, as a posted comment already
   did on GitHub: `code`, **bold**, _italics_ and ~~strikethrough~~, with a link shown as its text.
   Before, a title such as "`toast()` ignores **Show layers**" showed its backticks and asterisks.
-  The chat, tooltips and the button that opens a point name the title in plain words.
+  The chat's head, chips and thread names, the approve button's reason, and the button that opens
+  a point name the title in plain words. A behavior's name in the Tests table renders the same
+  way, since it becomes the title of a missing test's point.
+- The review body that sign-off posts lists layer and dismissed-point titles with their code and
+  emphasis rendered, as the page shows them. It still escapes the characters that would open a
+  link, a heading, a table cell or raw HTML.
 - Caps no longer count asterisks, as they already did not count backticks, so `**Retry**` costs 5
   characters.
 - `validate` checks a missing test's note against the attention-point body cap, since the note is
