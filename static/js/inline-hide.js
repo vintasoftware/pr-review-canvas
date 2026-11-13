@@ -108,17 +108,15 @@ export function inlineHideHint(hide) {
     return ''
   }
   const where = []
-  if (kinds.includes('points')) where.push('points are still in the layer summary and on ]')
+  if (kinds.includes('points')) where.push('points stay in the summary')
   if (kinds.includes('pending')) where.push('drafts in the review panel')
-  const inlineOnly = listOf(kinds, { comments: 'comments', annotations: 'annotations' })
-  if (inlineOnly !== '') where.push(`${inlineOnly} come back when you show them`)
   const hidden = listOf(kinds, {
     points: 'points',
     comments: 'comments',
     pending: 'drafts',
     annotations: 'annotations',
   })
-  return `${hidden} hidden from the diff · ${where.join('; ')}`
+  return where.length === 0 ? `${hidden} hidden` : `${hidden} hidden · ${where.join(', ')}`
 }
 
 /**

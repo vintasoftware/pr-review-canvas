@@ -13,9 +13,9 @@ export const FOLD_LEVEL_SELECT_ID = 'fold-level'
 
 /** What each level adds to the one below it, said in the reader's terms. */
 const FOLD_LEVEL_WHAT = {
-  light: 'the diff as always: imports, whitespace, moved blocks, and generated files',
-  moderate: 'also test bodies, helpers, wiring, templates, and boilerplate',
-  aggressive: 'only the code you have to judge stays open',
+  light: 'hides imports, whitespace, moved and generated code',
+  moderate: 'also hides tests, helpers, wiring, and boilerplate',
+  aggressive: 'shows only the code to judge',
 }
 
 /**
@@ -46,9 +46,8 @@ export function foldCountText(counts) {
  */
 export function foldLevelHint(level, counts) {
   // The renderer's own folds (imports, whitespace, moved blocks) hide at every level and are not
-  // counted, so an empty count says the level hides nothing beyond them.
-  const amount = counts.hidden === 0 ? 'nothing else hidden' : `${hiddenLabel(counts)} of the diff`
-  return `${FOLD_LEVEL_WHAT[level]} · ${amount}`
+  // counted, so a level that hides nothing beyond them shows no count.
+  return `${FOLD_LEVEL_WHAT[level]}${foldCountText(counts)}`
 }
 
 /**

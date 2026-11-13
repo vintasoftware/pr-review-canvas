@@ -57,7 +57,7 @@ test('hides and shows every inline item, keeps the layer summary as it was, and 
   await saved(page, () => toggle.click())
   await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await expect(toggle).toHaveAccessibleName('Hide comments')
-  await expect(page.locator('.inline-hint')).toContainText('still in the layer summary')
+  await expect(page.locator('.inline-hint')).toContainText('points stay in the summary')
   for (const row of Object.values(rows)) await expect(row).toBeHidden()
   // Only the code is left: the rows are still in the page, and the code lines are where they were.
   await expect(rows.point).toHaveCount(1)

@@ -31,15 +31,15 @@ test('switches how much code is hidden from the control and from the keyboard', 
   // The canvas opens at the level saved in settings.yml, light until changed; a change from the
   // control is page state and is not saved.
   await expect(select).toHaveValue('light')
-  await expect(hint).toContainText('imports, whitespace, moved blocks, and generated files')
+  await expect(hint).toContainText('imports, whitespace, moved and generated code')
 
   await select.selectOption('moderate')
   await expect(page.locator('.toast')).toHaveText('hiding code: moderate')
-  await expect(hint).toContainText('also test bodies, helpers, wiring, templates')
+  await expect(hint).toContainText('also hides tests, helpers, wiring, and boilerplate')
 
   await page.locator('body').press('f')
   await expect(select).toHaveValue('aggressive')
-  await expect(hint).toContainText('only the code you have to judge')
+  await expect(hint).toContainText('only the code to judge')
   await page.locator('body').press('f')
   await expect(select).toHaveValue('light')
 

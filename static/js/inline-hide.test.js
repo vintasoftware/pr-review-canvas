@@ -97,7 +97,7 @@ describe('setInlineHide', () => {
     setInlineHide(ON, el, still)
     expect(the(el, '#inline-toggle').getAttribute('aria-checked')).toBe('true')
     expect(the(el, '#inline-toggle').textContent).toBe('Hide comments')
-    expect(the(el, '.inline-hint').textContent).toMatch(/hidden from the diff/)
+    expect(the(el, '.inline-hint').textContent).toMatch(/hidden/)
     setInlineHide(OFF, el, still)
     expect(the(el, '#inline-toggle').getAttribute('aria-checked')).toBe('false')
     expect(the(el, '.inline-hint').textContent).toBe('')
@@ -186,14 +186,11 @@ describe('the hint', () => {
   it('says what is hidden and where each kind can still be found', () => {
     expect(inlineHideHint(OFF)).toBe('')
     expect(inlineHideHint(ON)).toBe(
-      'points, comments, drafts and annotations hidden from the diff · points are still in the layer ' +
-        'summary and on ]; drafts in the review panel; comments and annotations come back when you show them'
+      'points, comments, drafts and annotations hidden · points stay in the summary, drafts in the review panel'
     )
-    expect(inlineHideHint({ ...ON, hideInlineKinds: ['comments'] })).toBe(
-      'comments hidden from the diff · comments come back when you show them'
-    )
+    expect(inlineHideHint({ ...ON, hideInlineKinds: ['comments'] })).toBe('comments hidden')
     expect(inlineHideHint({ ...ON, hideInlineKinds: ['pending', 'points'] })).toBe(
-      'points and drafts hidden from the diff · points are still in the layer summary and on ]; drafts in the review panel'
+      'points and drafts hidden · points stay in the summary, drafts in the review panel'
     )
   })
 
