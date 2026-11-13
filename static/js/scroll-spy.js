@@ -11,11 +11,31 @@ export function markRailCurrent(root, anchorId) {
     if (link.getAttribute('href') === `#${anchorId}`) {
       if (link.getAttribute('aria-current') !== 'location') {
         link.setAttribute('aria-current', 'location')
+        showRailCurrent(link)
       }
     } else {
       link.removeAttribute('aria-current')
     }
   }
+}
+
+/**
+ * On a narrow screen the rail is a strip of chips that scrolls sideways: it brings the current
+ * chip into the middle of the strip, so the reader sees where they are. The strip scrolls alone,
+ * never the page, and a rail that does not scroll sideways is left as it is.
+ * @param {Element | null | undefined} link the current rail link
+ */
+export function showRailCurrent(link) {
+  const strip = link?.closest('.tree')
+  if (
+    !(link instanceof HTMLElement && strip instanceof HTMLElement) ||
+    strip.scrollWidth <= strip.clientWidth
+  ) {
+    return
+  }
+  const box = strip.getBoundingClientRect()
+  const chip = link.getBoundingClientRect()
+  strip.scrollLeft += chip.left - box.left - (box.width - chip.width) / 2
 }
 
 /**

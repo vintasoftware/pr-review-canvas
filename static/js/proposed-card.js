@@ -7,7 +7,7 @@
 /** @typedef {import('./proposed-comment.js').AnchorError} AnchorError */
 import { isQueuedComment, postedAnchor, postedCommentUrl, sendCommandsHtml } from './comment-link.js'
 import { esc } from './dom.js'
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleHtml } from './markdown.js'
 import { pointStatus, resolvable } from './points.js'
 
 /**
@@ -103,7 +103,7 @@ function proposedPointHtml(id, send) {
     sentAs(send) === 'open'
       ? ` <button class="cmd" type="button" data-act="proposed-unlink" data-proposed="${esc(id)}">unlink</button>`
       : ''
-  return `<p class="proposed-point muted small">about the point “${esc(send.point.title)}”${unlink}</p>`
+  return `<p class="proposed-point muted small">about the point “${titleHtml(send.point.title)}”${unlink}</p>`
 }
 
 /**
@@ -236,7 +236,7 @@ export function proposedResolutionHtml(resolution, id, state) {
   return (
     `<div class="proposed resolution" data-proposed="${esc(id)}">` +
     '<div class="proposed-h"><span class="lbl">proposed resolution</span></div>' +
-    `<p class="proposed-point muted small">about the point “${esc(resolution.point.title)}”</p>` +
+    `<p class="proposed-point muted small">about the point “${titleHtml(resolution.point.title)}”</p>` +
     `<div class="prose">${renderMarkdown(resolution.reason)}</div>` +
     resolutionCommandsHtml(resolution, id, state) +
     '</div>'

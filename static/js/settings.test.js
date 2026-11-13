@@ -21,6 +21,7 @@ const SETTINGS = {
     theme: 'auto',
     foldLevel: 'light',
     layerView: 'all',
+    readByPoints: true,
     pointColors: 'classic',
     startCollapsed: false,
     compactPoints: false,
@@ -235,6 +236,7 @@ describe('readSettingsForm', () => {
     expect(readSettingsForm(holder)).toEqual({
       foldLevel: 'light',
       layerView: 'all',
+      readByPoints: true,
       pointColors: 'classic',
       startCollapsed: false,
       compactPoints: false,
@@ -358,6 +360,7 @@ describe('openSettingsDialog', () => {
     expect(saved[0]).toEqual({
       foldLevel: 'light',
       layerView: 'all',
+      readByPoints: true,
       pointColors: 'classic',
       startCollapsed: false,
       compactPoints: false,
@@ -459,6 +462,7 @@ describe('the dialog with parts missing', () => {
     expect(readSettingsForm(holder)).toEqual({
       foldLevel: 'light',
       layerView: 'all',
+      readByPoints: true,
       pointColors: 'classic',
       startCollapsed: true,
       compactPoints: true,

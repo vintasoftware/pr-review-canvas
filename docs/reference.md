@@ -498,7 +498,8 @@ Compare the rest of your templates with the new bundled ones when upgrading.
 ### Text limits
 
 Set any of these keys under `generation.caps`. Prose limits count visible characters, so Markdown
-link targets do not count. `diagram` counts raw Mermaid source characters.
+link targets, backticks, and asterisks do not count. Fold titles are plain text and count in full.
+`diagram` counts raw Mermaid source characters.
 
 | Key            | Default |
 | -------------- | ------- |
@@ -525,7 +526,8 @@ optional `anchor: { "path": "src/file.ts", "line": 42, "side": "new" }` places i
 assigned to its layer (`side` may also be `old`). Without an anchor, publish uses the first
 changed row of the source matched by `testPath`, then falls back to the layer's first changed row.
 It never defaults to context. Optional `title` uses the point-title cap; otherwise the title is
-shortened at a word boundary. Published entries retain their title, audience, and anchor when
+the behavior's name, shortened at a word boundary. The entry's `note` is the point's body and uses
+the `pointBody` cap; without a note, the body reads "No test covers this behavior." Published entries retain their title, audience, and anchor when
 carried, including older generated points and their resolutions. Author and
 reviewer counts include these generated points, including counts reported for refs runs.
 
@@ -554,6 +556,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `theme`                | `auto`    | `auto`, `light`, `dark`                                                          |
 | `foldLevel`            | `light`   | `light`, `moderate`, `aggressive`                                                |
 | `layerView`            | `all`     | `all`, `one`                                                                     |
+| `readByPoints`         | `false`   | `true`, `false`                                                                  |
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
 | `startCollapsed`       | `false`   | `true` opens only the first layer and no file; `false` opens them all            |
 | `compactPoints`        | `false`   | `true` lists each point as one line until opened; `false` draws them whole       |
@@ -717,6 +720,58 @@ returns to Overview. Landing on Other or a reviewed layer opens its body.
 Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
 
+### One point at a time
+
+With **Read by attention points** turned on in the settings dialog (`readByPoints`, off by default),
+a review opens on its attention points, one stop at a time. A stop is its layer's section seen
+through a lens, always open, with no chevron to fold it:
+
+- Each layer with points or tests opens with a stop of its own: its heading with the **reviewed**
+  mark and **ask about this layer**, its description, and its tests table.
+- Each point's stop shows the layer's heading, the point's card, and its file with only the chunk
+  that holds its lines. The file stays open there even when marked reviewed.
+- A layer's points come from the most severe: decide, then check, then fyi, a decide point's impact
+  worst first. A point you acted on keeps its stop, and dims in the rail. So does a point the author
+  resolved, which the layers hide until **show the N resolved**: its stop shows it folded under the
+  author's reason.
+- A layer's stop opens its tests table; leaving the stop closes it again when the layers had it
+  closed.
+- A bar over and under each stop leads back and on: to the previous point, to the opening of the
+  stop's own layer by its title, or to the previous layer, and on in the same words. After the last
+  point, **the rest of the diff, by layer** switches to **Layers**, on the first layer. On the
+  overview it leads to the first stop.
+- The step keys walk the stops: `j` and `k` the layers' opening stops, `n` and `p` every stop, and
+  `]` and `[` the stops of the open points. On a point you reached by the rail or a link, the first
+  `]` puts the focus on it, so `c`, `d` and `o` act on it.
+
+The view opens on its first stop. The rail lists the stops and marks the one that shows; on a narrow
+screen, where the rail is a strip of chips, the strip scrolls to that chip. A stop takes the place
+of the one before under a page that stays at the top, from its links and its keys alike, and the URL
+names it with the same fragment the layers use (`#layer-…`, `#point-…`), so a reload, back and
+forward, and a switch of view keep your place. Back or forward to a place you read as a stop, while
+**Layers** shows, goes to its layer or card there. Since a stop shows the layer's own cards,
+whatever you do there is what the layer has. Whatever leads to a line, a chunk, a file or a point (a
+link, **go to code**, `c`, a proposed comment) opens the stop that shows it; when none does, the
+page moves to your layers, goes there, and a note says so. On a canvas with no point the view shows
+the overview and the layers, one at a time.
+
+On a canvas with points, a switch at the head of the rail moves between **Attention points** and
+**Layers**, and keeps the keyboard on the button you pressed. **Layers** shows the layer view **Show
+layers** chooses, all at once or one at a time. The switch changes the open page only; a reload
+opens on what the settings say. Turning **Read by attention points** on or off in the settings
+dialog moves the open page the same way, and the URL names where it lands. With **Read by attention
+points** off, a review shows its layers alone, with no switch.
+
+### Notifications
+
+What a command did shows as a notification at the window's top right, over the header and the side
+pane at every width. Its tone has an icon and a color of its own: **done** (a check) for something
+you did that worked, **note** (an i) for news or a hint, such as the reading level `f` chose, and
+**failed** (an !) for something that did not happen. A notification stays up while the pointer is
+on it and for five seconds after it leaves. A click on it clears it, so the next click reaches what
+it covered; a click on its link opens the link and clears it. While a dialog is open, the
+notification shows inside the dialog. Screen readers hear it as a polite status.
+
 ### Finding shared canvases
 
 Recent entries with no published canvas say **no canvas yet**.
@@ -786,8 +841,9 @@ deleting the draft. The point collapses again when its status changes. A reload 
 
 A layer's list draws each open point whole. With `compactPoints: true` in `settings.yml`
 (**Compact attention points** in the settings dialog), every point in the list starts as one line:
-its level, title, a `decide` point's impact, kind, audience, and location. Click the title or
-**show** to read it and use its commands. **show details** in the heading of a list shows every
+its level, title, a `decide` point's impact, kind, audience, and location, with **show** at the end
+of the line however far the rest wraps. Saving the setting applies to the open page at once. Click the
+title or **show** to read it and use its commands. **show details** in the heading of a list shows every
 open point whole, in every layer, and **compact** goes back; the browser remembers the choice. A
 point on its line in the diff is always drawn whole while it is open.
 
@@ -1012,9 +1068,10 @@ dialog previewing an editable review body summarizing reviewed layers, dismissed
 and comments posted from the canvas, so an approval or a rejection always carries a comment.
 With `sharing.mentionCanvas` off, the dialog opens with an empty body for you to write.
 
-Once the review is posted, the dialog closes and a message links to the review on the forge; the
-page already shows what it changed. When the forge answered with a warning, such as comments it
-could not load back, the dialog stays open with it.
+Once the review is posted, the dialog closes and a notification says what was posted, such as
+**review posted with 2 comments**, with a link to the review on the forge; the page already shows
+what it changed. When the forge answered with a warning, such as comments it could not load back,
+the dialog stays open and says the same thing, then the warning.
 
 Approval requires every layer except **Other changes** to be reviewed for the current head.
 Requesting changes and a comment-only review do not require that completion. On GitLab,

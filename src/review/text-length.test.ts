@@ -2,10 +2,11 @@
 import { visibleLength, visibleText } from './text-length.js'
 
 describe('visibleText', () => {
-  it('drops link targets, backticks, and fence lines, and keeps everything a reader sees', () => {
+  it('drops link targets, backticks, asterisks, and fence lines, and keeps everything a reader sees', () => {
     expect(visibleText('See [the store](#hunk:packages/x/store.ts#2) now.')).toBe('See the store now.')
     expect(visibleText('Bare #hunk:packages/x.ts#1 stays')).toBe('Bare #hunk:packages/x.ts#1 stays')
     expect(visibleText('Call `run()` twice')).toBe('Call run() twice')
+    expect(visibleText('Press **Show layers**, then *wait*')).toBe('Press Show layers, then wait')
     expect(visibleText('a\n```ts\nconst x = 1\n```\nb')).toBe('a\n\nconst x = 1\n\nb')
     expect(visibleText('  ````diff\n+x\n````')).toBe('\n+x\n')
     expect(visibleText('![alt](https://x/y.png) and [](#file:a.ts)')).toBe('alt and ')

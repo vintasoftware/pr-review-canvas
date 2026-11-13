@@ -532,7 +532,8 @@ it('keeps legacy generated-point identity and resolutions through two incrementa
       await publish(t.ctx, prepared.canvasDir, { agent: 'claude', harness: 'claude-code', allowStale: false })
       const next = await t.ctx.canvases.readArtifact(sha)
       expect(next?.basisCanvasSha).toBe(previous)
-      expect(next?.points).toEqual(legacy.points)
+      // Publish writes today's body for a generated point; its identity and resolution carry over.
+      expect(next?.points).toEqual(legacy.points.map(p => ({ ...p, body: 'No test covers this behavior.' })))
       expect(next?.settled).toEqual(resolved.settled)
       previous = sha
     }

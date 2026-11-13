@@ -350,9 +350,17 @@
   font-weight: 600;
   margin-bottom: 2px;
   display: flex;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+/* The title, its pills and its place wrap inside their own box, beside the toggle. */
+.f-head {
+  display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 4px 10px;
   align-items: baseline;
+  min-width: 0;
 }
 .f-title .loc {
   font-weight: 400;
@@ -415,9 +423,11 @@
   letter-spacing: normal;
 }
 .f-title .p-toggle {
+  flex: none;
   margin-left: auto;
   font-size: 12px;
   font-weight: 400;
+  white-space: nowrap;
 }
 .p-summary {
   margin: 0;
@@ -556,6 +566,8 @@ details[open] > summary .chev,
   padding: 5px 16px;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
+  /* A word too long for a phone breaks rather than widen the page. */
+  overflow-wrap: break-word;
 }
 .testmap tr:last-child td {
   border-bottom: 0;
@@ -663,4 +675,77 @@ pr-file + pr-file > .file {
 img.av {
   object-fit: cover;
   border-radius: 50%;
+}
+
+/* ---- The one-point view: a layer section through a lens (point-view.js) ---- */
+/* A layer's stop: its heading, description and tests. */
+[data-lens='layer'] :is(.layer-points, .layer-body > h3:has(.fold-count), .files, .layer-end, details > pr-file),
+/* A point's stop: the layer's heading, the point's card, and its chunk (the lens style sheet). */
+[data-lens='point'] :is(.layer-body > .body, .layer-body > h3, .test-map, .layer-points > h3, .layer-end, details > .body) {
+  /* Over every skin's own layout, as the hidden attribute is. */
+  display: none !important;
+}
+/* A stop hides the closing row that pads a layer's foot, so it pads its own; Other's too. */
+[data-lens] > :is(.layer-body, details) {
+  padding-bottom: 12px;
+}
+/* The sub-headings the lens hides spaced the point's card from the heading and from its file;
+   the stop spaces them, with padding, which no skin's margins undo. */
+[data-lens='point'] > .layer-body {
+  padding-top: 12px;
+}
+[data-lens='point'] .files {
+  margin-top: 12px;
+}
+/* A stop shows its layer, and a point's file, open, with no chevron to fold them, and a fold from
+   a key changes nothing. */
+[data-lens] > .layer-h > .chev,
+[data-lens] > details > summary .chev,
+[data-lens='point'] article.file > .file-h > .chev {
+  display: none;
+}
+[data-lens] > .layer-body[hidden] {
+  display: block !important;
+}
+[data-lens] > details::details-content {
+  content-visibility: visible;
+}
+[data-lens] > details > summary {
+  pointer-events: none;
+}
+/* The point's code stays in sight whatever its card's reviewed mark or the reading level say. */
+[data-lens='point'] article.file > .file-body[hidden] {
+  display: block !important;
+}
+/* The card above shows the point whole; its line in the diff keeps the title, until a handled
+   point's own show opens it. */
+section.layer[data-lens='point']
+  tr.ifind:not([data-expanded])
+  :is(.prose, .p-outcome, .tbtns, .settle-box, .p-summary) {
+  display: none;
+}
+.step-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block: 12px;
+  font-size: 13px;
+}
+.step-n {
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* On a phone the place goes over the two ways, so neither long label squeezes it. */
+@media (width <= 600px) {
+  .step-nav {
+    flex-wrap: wrap;
+  }
+  .step-n {
+    order: -1;
+    flex-basis: 100%;
+  }
+}
+.step-nav > :last-child {
+  margin-left: auto;
 }

@@ -6,6 +6,7 @@
 /** @typedef {import('./contract-types.js').ReviewBodyResponse} ReviewBodyResponse */
 import { previewControlsHtml, setDisabledReason, setMarkdownPreview } from './composer.js'
 import { esc, externalLink } from './dom.js'
+import { titleText } from './markdown.js'
 import { hostLabel } from './host.js'
 import { pendingLabel } from './pending.js'
 import { layerProgress } from './progress.js'
@@ -32,7 +33,7 @@ export function approveBlockedReason(artifact, state) {
     return null
   }
   return rest.length === 0
-    ? `1 layer is not reviewed yet: ${first.title}`
+    ? `1 layer is not reviewed yet: ${titleText(first.title)}`
     : `${rest.length + 1} layers are not reviewed yet`
 }
 
@@ -190,14 +191,15 @@ export function fillSignoffDialog(dialog, preview) {
 }
 
 /**
- * Shows the link to the review GitHub created.
+ * Shows what was posted and the link to the review the forge created.
  * @param {HTMLDialogElement} dialog
  * @param {import('./contract-types.js').ReviewSummary} review
+ * @param {string} receipt what was posted, such as `review posted with 2 comments`
  */
-export function showSignoffResult(dialog, review) {
+export function showSignoffResult(dialog, review, receipt) {
   const result = dialog.querySelector('.signoff-result')
   if (result !== null) {
-    result.textContent = 'Posted · '
+    result.textContent = `${receipt} · `
     result.append(externalLink(review.url, `see it on ${hostLabel()}`))
   }
   return result

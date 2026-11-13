@@ -92,7 +92,7 @@ describe('normalize', () => {
         path: 'src/app.ts',
         line: 1,
         side: 'new',
-        body: 'The layer "Run path" lists this behavior without a test. y is unused',
+        body: 'y is unused',
         fingerprint: fingerprint({ kind: 'tests', path: 'src/app.ts', title: 'other() returns x' }),
         origin: 'tests',
         layerId: 'run-path',

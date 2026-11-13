@@ -1,5 +1,5 @@
 // @ts-check
-// The rail, the layer sections, and the file cards. A layer section holds the judgment text
+// The layer sections and the file cards. A layer section holds the judgment text
 // (rationale, decisions, check by hand), its test map, its attention point cards, and its files.
 // A file card shows only the hunks of its layer; the diff is rendered lazily by <pr-file> from
 // the shared render context.
@@ -17,16 +17,15 @@ import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
-import { diffstatHtml, layerChanges } from './diffstat.js'
 import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
-import { fileAnchorId, layerAnchorId, reviewedId, sanitizeKey } from './keys.js'
-import { renderMarkdown } from './markdown.js'
+import { fileAnchorId, layerAnchorId, pointAnchorId, reviewedId, sanitizeKey } from './keys.js'
+import { renderMarkdown, titleHtml } from './markdown.js'
 import { writtenOn } from './diff-identity.js'
 import { pendingForPath } from './pending.js'
 import { openPoints, pointCardHtml, pointCountText, pointsDensityToggleHtml, postedUrls } from './points.js'
-import { filesReviewed, layerProgress } from './progress.js'
+import { layerProgress } from './progress.js'
 import { foldCountText } from './reading-level.js'
 import { anchorKey, buildThreads } from './threads.js'
 
@@ -151,83 +150,6 @@ export function hunkLayerIndex(artifact) {
 }
 
 /**
- * Stripe color for a layer position (cycles through the six bands).
- * @param {number} index
- */
-export function dotColor(index) {
-  return `var(--s${(index % 6) + 1})`
-}
-
-/**
- * With a render context, each layer shows the lines it adds and removes.
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- * @param {{ activeId?: string }} [opts]
- * @returns {string}
- */
-export function railInnerHtml(artifact, state, opts = {}) {
-  const active = opts.activeId ?? 'overview'
-  const ctx = renderContext
-  const current = /** @param {string} id */ id => (id === active ? ' aria-current="location"' : '')
-  const semantic = artifact.layers.filter(l => l.kind !== 'other')
-  const other = artifact.layers.find(l => l.kind === 'other')
-  const items = semantic
-    .map((layer, i) => {
-      const progress = layerProgress(layer, state)
-      const dotClass = progress === 'done' ? 'dot on' : progress === 'partial' ? 'dot half' : 'dot'
-      const dotLabel =
-        progress === 'done' ? 'reviewed' : progress === 'partial' ? 'in progress' : 'not started'
-      const reviewed = filesReviewed(layer, state)
-      const files = layer.files.length
-      const meta = reviewed > 0 && reviewed < files ? `${reviewed} of ${files} files` : fileCount(files)
-      const changes = ctx === null ? null : layerChanges(layer, ctx.files, ctx.patches)
-      const stat = changes === null ? '' : ` · ${diffstatHtml(changes.total, changes.tests)}`
-      const risk = layer.risk.length > 0 ? ` · ${layer.risk.map(r => esc(r.label)).join(' · ')}` : ''
-      const id = layerAnchorId(layer.key)
-      return (
-        `<li><a href="#${esc(id)}"${current(id)}><span class="${dotClass}" style="--dc:${dotColor(i)}" role="img" aria-label="${dotLabel}"></span>` +
-        `<span class="n">${i + 1}</span><span class="t">${esc(layer.title)}</span><span class="m">${meta}${stat}${risk}</span></a></li>`
-      )
-    })
-    .join('')
-  const points = openPoints(artifact.points, state).length
-  const otherItem = other
-    ? `<li class="other"><a href="#${esc(layerAnchorId(other.key))}"${current(layerAnchorId(other.key))}><span class="t">${esc(other.title)}</span><span class="m">${fileCount(other.files.length)}, ignored</span></a></li>`
-    : ''
-  return (
-    '<ul class="tree">' +
-    `<li><a href="#overview"${current('overview')}><span class="t">Overview</span><span class="m">${points} attention ${points === 1 ? 'point' : 'points'}</span></a></li>` +
-    `<li class="grp"><span class="lbl grp-lbl">Layers</span><ul class="layers">${items}</ul></li>${otherItem}</ul>`
-  )
-}
-
-/**
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- * @param {{ activeId?: string }} [opts]
- * @returns {string}
- */
-export function renderRail(artifact, state, opts = {}) {
-  return `<nav class="rail" aria-label="Review layers">${railInnerHtml(artifact, state, opts)}</nav>`
-}
-
-/**
- * Draws the rail again from the current state, keeping the item the scrollspy marked.
- * @param {ParentNode} root
- * @param {ReviewArtifact} artifact
- * @param {PrState} state
- */
-export function refreshRail(root, artifact, state) {
-  const rail = root.querySelector('nav.rail')
-  if (!(rail instanceof HTMLElement)) {
-    return false
-  }
-  const active = rail.querySelector('a[aria-current]')?.getAttribute('href')?.slice(1)
-  rail.innerHTML = railInnerHtml(artifact, state, active === undefined ? {} : { activeId: active })
-  return true
-}
-
-/**
  * "1 file" / "3 files".
  * @param {number} n
  */
@@ -236,18 +158,47 @@ export function fileCount(n) {
 }
 
 /**
+ * The attention point publish made for a missing behavior: in the behavior's layer, on its anchor's
+ * file, under its title, the fields that name the point (`testPoints` in `src/review/normalize.ts`).
+ * None for a canvas written before entries kept their anchor and title.
+ * @param {Layer['tests'][number]} t
  * @param {Layer} layer
+ * @param {ReadonlyArray<Point>} points
+ */
+function missingTestPoint(t, layer, points) {
+  const { anchor, title } = t
+  if (t.status !== 'missing' || anchor === undefined || title === undefined) {
+    return undefined
+  }
+  return points.find(
+    p => p.origin === 'tests' && p.layerId === layer.id && p.path === anchor.path && p.title === title
+  )
+}
+
+/**
+ * @param {Layer} layer
+ * @param {ReadonlyArray<Point>} points the canvas's points; a missing behavior's row links to its own
  * @param {ReadonlySet<string>} paths
  */
-export function testMapHtml(layer, paths) {
+export function testMapHtml(layer, points, paths) {
   if (layer.tests.length === 0) {
     return ''
   }
   const rows = layer.tests
     .map(t => {
-      const where = t.testPath ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath)}</a>` : ''
-      const note = t.note ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>` : ''
-      return `<tr><td>${esc(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
+      // A path breaks only after a slash, so the table fits a phone without splitting names.
+      const where = t.testPath
+        ? `<a class="loc" href="#file:${esc(t.testPath)}">${esc(t.testPath).replaceAll('/', '/<wbr>')}</a>`
+        : ''
+      // A missing behavior's note is the body of its attention point, so the row links to the
+      // point, whose stop shows it in the one-point view, instead of repeating the note.
+      const point = missingTestPoint(t, layer, points)
+      const note = point
+        ? `<div class="muted small"><a href="#${esc(pointAnchorId(point.id))}">See its attention point</a></div>`
+        : t.note
+          ? `<div class="muted small">${renderMarkdown(t.note, { paths })}</div>`
+          : ''
+      return `<tr><td>${titleHtml(t.behavior)}${note}</td><td class="st ${t.status}">${esc(t.status)}</td><td>${where}</td></tr>`
     })
     .join('')
   const coverage = testCoverage(layer.tests)
@@ -438,7 +389,20 @@ export function setCardCollapsed(el, collapsed) {
   const next = collapsed ?? !parts.body.hidden
   parts.body.toggleAttribute('hidden', next)
   parts.chevron?.setAttribute('aria-expanded', next ? 'false' : 'true')
+  parts.chevron?.setAttribute(
+    'aria-label',
+    chevronLabel(parts.card.matches('section.layer') ? 'layer' : 'file', next)
+  )
   return next
+}
+
+/**
+ * What a card's chevron does when pressed, which changes with the card: a closed one expands.
+ * @param {'layer' | 'file'} kind
+ * @param {boolean} collapsed
+ */
+function chevronLabel(kind, collapsed) {
+  return `${collapsed ? 'Expand' : 'Collapse'} ${kind}`
 }
 
 /**
@@ -506,7 +470,7 @@ export function renderFileCard(lf, entry, layer, ctx) {
   const elsewhere = elsewhereHtml(lf, entry, layer, ctx.hunkIndex)
   return (
     `<pr-file><article class="file${lf.isTest ? ' test' : ''}${cardReviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-key="${esc(key)}" data-path="${esc(lf.path)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
-    `<div class="file-h">${chevronHtml('Collapse file', !collapsed, { act: 'toggle-card' })}<h3 id="${esc(id)}-h" class="path" data-act="toggle-card">${path}${testTag}</h3>${status}${pills}` +
+    `<div class="file-h">${chevronHtml(chevronLabel('file', collapsed), !collapsed, { act: 'toggle-card' })}<h3 id="${esc(id)}-h" class="path" data-act="toggle-card">${path}${testTag}</h3>${status}${pills}` +
     `<label class="chk"><input type="checkbox" data-reviewed-id="${esc(cardReviewedId)}"${cardReviewed ? ' checked' : ''}> reviewed</label>` +
     `<span class="tbtns">${askButtonHtml({ kind: 'file', path: lf.path }, { title: 'Ask AI Chat about this file' })}</span></div>` +
     `<div class="file-body"${collapsed ? ' hidden' : ''}>${note}<div class="diff-host" data-key="${esc(key)}" data-hunks="${esc(lf.hunks.join(','))}"><div class="loading">Loading diff…</div></div>${elsewhere}</div></article></pr-file>`
@@ -543,7 +507,7 @@ export function elsewhereHtml(lf, entry, layer, hunkIndex) {
   }
   const parts = [...others.values()].map(
     o =>
-      `${o.n} more ${o.n === 1 ? 'chunk' : 'chunks'} in <a href="#${esc(layerAnchorId(o.layer.key))}">${o.layer.kind === 'other' ? esc(o.layer.title) : `layer ${o.index + 1} · ${esc(o.layer.title)}`}</a>`
+      `${o.n} more ${o.n === 1 ? 'chunk' : 'chunks'} in <a href="#${esc(layerAnchorId(o.layer.key))}">${o.layer.kind === 'other' ? titleHtml(o.layer.title) : `layer ${o.index + 1} · ${titleHtml(o.layer.title)}`}</a>`
   )
   return `<div class="more-hunks">${parts.join(' · ')}</div>`
 }
@@ -571,7 +535,7 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
   const id = layerAnchorId(layer.key)
   if (layer.kind === 'other') {
     return (
-      `<pr-layer><section class="panel" id="${esc(id)}" aria-labelledby="${esc(id)}-h"><details>${detailsSummaryHtml(`<h2 id="${esc(id)}-h">${esc(layer.title)} <span class="muted">&mdash; ${fileCount(layer.files.length)}, ignored</span></h2>`, 'Toggle other changes')}` +
+      `<pr-layer><section class="panel" id="${esc(id)}" aria-labelledby="${esc(id)}-h"><details>${detailsSummaryHtml(`<h2 id="${esc(id)}-h">${titleHtml(layer.title)} <span class="muted">&mdash; ${fileCount(layer.files.length)}, ignored</span></h2>`, 'Toggle other changes')}` +
       `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}</div>${cards}</details></section></pr-layer>`
     )
   }
@@ -592,12 +556,12 @@ export function renderLayerSection(layer, index, artifact, files, state, ctx) {
   const layerReviewedId = reviewedId(layer.key)
   return (
     `<pr-layer><section class="layer${reviewed ? ' is-reviewed' : ''}" id="${esc(id)}" data-layer="${esc(layer.id)}" aria-labelledby="${esc(id)}-h">` +
-    `<div class="panel-h layer-h">${chevronHtml('Collapse layer', !collapsed, { act: 'toggle-card' })}<h2 id="${esc(id)}-h"><span class="lbl">Layer ${semanticIndex + 1} of ${total}</span>${esc(layer.title)}${risks}</h2>` +
+    `<div class="panel-h layer-h">${chevronHtml(chevronLabel('layer', collapsed), !collapsed, { act: 'toggle-card' })}<h2 id="${esc(id)}-h"><span class="lbl">Layer ${semanticIndex + 1} of ${total}</span>${titleHtml(layer.title)}${risks}</h2>` +
     `<div class="layer-ctl"><label class="chk"><input type="checkbox" data-reviewed-id="${esc(layerReviewedId)}"${reviewed ? ' checked' : ''}> reviewed</label>` +
     `${askButtonHtml({ kind: 'layer', layerId: layer.id }, { label: 'ask about this layer', title: 'Ask AI Chat about this layer' })}</div></div>` +
     `<div class="layer-body"${collapsed ? ' hidden' : ''}>` +
     `<div class="body"><div class="rationale prose">${renderMarkdown(layer.rationale, { paths: ctx.paths, diagrams: true })}</div>${layerDiagramHtml(layer)}${judgmentHtml(layer, ctx.paths)}</div>` +
-    testMapHtml(layer, ctx.paths) +
+    testMapHtml(layer, artifact.points, ctx.paths) +
     layerPointsHtml(layer, artifact.points, ctx.paths, state, ctx.posted) +
     `<h3 class="lbl sub">Files · ${layer.files.length}<span class="fold-count" data-layer="${esc(layer.id)}">${esc(foldCountText(layerHiddenLines(layer, { artifact, files, comments: ctx.comments, state, headSha: ctx.headSha, mergeBaseSha: ctx.mergeBaseSha }, foldLevel)))}</span></h3><div class="files">${cards}</div>` +
     `<div class="layer-end"><button class="cmd" type="button" data-act="mark-layer" data-reviewed-id="${esc(layerReviewedId)}">mark layer as reviewed</button></div>` +
@@ -887,6 +851,27 @@ export function defineLayerElements() {
   if (!customElements.get('pr-layer')) {
     customElements.define('pr-layer', PrLayerElement)
   }
+}
+
+/**
+ * Draws now every card on screen that still waits to be seen, and says how many it drew. A scroll
+ * calls it before the browser paints: a card left to draw after the scroll grows under the reader
+ * and pushes what the scroll brought into view off the screen.
+ * @param {ParentNode} root
+ * @returns {number}
+ */
+export function drawCardsOnScreen(root) {
+  let drawn = 0
+  for (const el of Array.from(root.querySelectorAll('pr-file'))) {
+    if (!(el instanceof PrFileElement) || el.rendered) {
+      continue
+    }
+    const box = el.getBoundingClientRect()
+    if (box.bottom > 0 && box.top < window.innerHeight && el.renderNow()) {
+      drawn++
+    }
+  }
+  return drawn
 }
 
 /**

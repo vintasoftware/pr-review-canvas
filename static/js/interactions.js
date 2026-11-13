@@ -24,6 +24,7 @@ import {
   concealForComposer,
   focusComposer,
   revealConcealed,
+  setDisabledReason,
   refreshComposerCommands,
 } from './composer.js'
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
@@ -37,6 +38,7 @@ import { pointAnchorId, reviewedId } from './keys.js'
 import {
   canvasHiddenLines,
   cardOf,
+  drawCardsOnScreen,
   getFoldLevel,
   getRenderContext,
   getStartCollapsed,
@@ -87,6 +89,8 @@ const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
 
 /** Pixels left above a card the keys scroll to, so its focus ring shows. */
 const FOCUS_GAP = 8
+/** How many times a key's scroll repeats while it brings undrawn cards on screen. */
+const MAX_DRAW_ROUNDS = 10
 /** The card kind and direction each step key moves by. */
 /** @type {Record<'next-layer' | 'prev-layer' | 'next-file' | 'prev-file', ['layer' | 'file', 1 | -1]>} */
 const STEPS = {
@@ -189,7 +193,8 @@ export function nextUnreviewedTarget(root, session, fromId, kind) {
     const id = item.kind === 'file' ? reviewedId(item.layerKey, item.path) : reviewedId(item.layerKey)
     if (!session.isReviewed(id)) {
       const card = root.querySelector(`#${cssEscape(item.id)}`)
-      return card !== null && inHiddenSection(card) ? null : card
+      // The one-point view's lens shows no other card than the one marked.
+      return card !== null && (inHiddenSection(card) || card.closest('[data-lens]') !== null) ? null : card
     }
   }
   return null
@@ -252,6 +257,8 @@ export function padUnderStickyBar(doc, bar) {
  *   fetchReviewBody?: typeof fetchReviewBody,
  *   chat?: () => ChatHandle | null,
  *   openSettings?: (el: HTMLElement) => void,
+ *   setLayerView?: (view: string, place?: string) => void,
+ *   stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined,
  *   openReview?: () => void,
  *   uncover?: () => void,
  * }} [opts]
@@ -421,7 +428,8 @@ export function wireReview(root, session, opts = {}) {
 
   /**
    * @param {Element | null} el
-   * @param {ScrollLogicalPosition} [block] `start` for a card, `center` for a point
+   * @param {ScrollLogicalPosition | null} [block] `start` for a card, `center` for a point, and
+   *   null for what a stop of the one-point view shows, which the stop already put on screen
    */
   const focusItem = (el, block = 'start') => {
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
@@ -433,9 +441,16 @@ export function wireReview(root, session, opts = {}) {
       el.classList.add('is-focused')
       // The page's scroll padding already clears the outdated bar; this is the gap under it.
       el.style.scrollMarginTop = `${FOCUS_GAP}px`
-      // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around the
-      // element: a hidden element cannot take the focus.
-      scrollIntoViewSafe(el, block)
+      if (block !== null) {
+        // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around
+        // the element: a hidden element cannot take the focus.
+        scrollIntoViewSafe(el, block)
+        // A card this scroll brought on screen draws its diff and grows, which would push the
+        // element away again: the cards draw now and the scroll repeats until none is left.
+        for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
+          el.scrollIntoView({ block })
+        }
+      }
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.
       el.tabIndex = -1
@@ -666,6 +681,8 @@ export function wireReview(root, session, opts = {}) {
           const node = nodeFrom(doc, issueCommentHtml(answer.comment, renderNow()))
           if (node !== null) {
             root.querySelector('.conversation .pr-composer-host')?.before(node)
+            const count = root.querySelector('.pr-conversation .conversation-count')
+            if (count !== null) count.textContent = String(Number(count.textContent) + 1)
           }
           // Only the box that posted goes away; a draft the reader started meanwhile stays.
           box.remove()
@@ -808,7 +825,7 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /** @param {HTMLElement} button */
-  const postSignoff = button => {
+  const postSignoff = async button => {
     const dialog = button.closest('dialog')
     if (!(dialog instanceof HTMLDialogElement)) {
       return
@@ -817,7 +834,7 @@ export function wireReview(root, session, opts = {}) {
     const body = signoffBody(dialog)
     const editor = dialog.querySelector('textarea')
     const submittedText = editor?.value ?? ''
-    void runCommand(
+    const posted = await runCommand(
       button,
       async () => {
         const { review, submitted, warnings } = await session.postReview(
@@ -831,26 +848,28 @@ export function wireReview(root, session, opts = {}) {
             : review.state === 'CHANGES_REQUESTED'
               ? 'changes requested'
               : 'review posted'
-        toast(
-          root,
-          `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`,
-          { link: { url: review.url, text: `see it on ${hostLabel()}` } }
-        )
+        const receipt = `${verdict}${submitted > 0 ? ` with ${submitted} comment${submitted === 1 ? '' : 's'}` : ''}`
+        // A warning is the one thing still to read in the dialog, which shows the receipt with it.
+        if (warnings.length > 0) {
+          showSignoffResult(dialog, review, receipt)
+          for (const warning of warnings) {
+            dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
+          }
+          return true
+        }
         // The page behind already shows what the review changed, so the dialog gets out of the way,
-        // and so does a pane floating over the page, which would cover the receipt. A warning is the
-        // one thing still to read there.
-        if (warnings.length === 0) {
-          dialog.close()
-          opts.uncover?.()
-          return
-        }
-        showSignoffResult(dialog, review)
-        for (const warning of warnings) {
-          dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
-        }
+        // and so does a pane floating over the page, which would cover the receipt.
+        dialog.close()
+        opts.uncover?.()
+        toast(root, receipt, { link: { url: review.url, text: `see it on ${hostLabel()}` } })
+        return true
       },
       { pendingLabel: 'posting…' }
     )
+    if (posted === true) {
+      setDisabledReason(button, 'This review has already been posted')
+      button.textContent = 'posted'
+    }
   }
 
   /**
@@ -864,7 +883,7 @@ export function wireReview(root, session, opts = {}) {
     }
     setFoldLevel(root, value)
     refreshFoldLevel(root, value, hiddenAt(value))
-    toast(root, `hiding code: ${value}`)
+    toast(root, `hiding code: ${value}`, { tone: 'note' })
   }
 
   /**
@@ -1214,7 +1233,7 @@ export function wireReview(root, session, opts = {}) {
     ask: el => {
       const chat = opts.chat?.() ?? null
       if (chat === null) {
-        toast(root, NO_CHAT_NOTE)
+        toast(root, NO_CHAT_NOTE, { tone: 'note' })
         return
       }
       chat.ask(chatContextFromElement(el))
@@ -1241,6 +1260,12 @@ export function wireReview(root, session, opts = {}) {
     },
     settings: el => {
       opts.openSettings?.(el)
+    },
+    'layer-view': el => {
+      // A link names the place to open on; the rail's switch keeps the reader's.
+      if (el.getAttribute('aria-pressed') !== 'true') {
+        opts.setLayerView?.(el.getAttribute('data-view') ?? '', el.getAttribute('href') ?? undefined)
+      }
     },
     help: () => {
       openHelpDialog(root)
@@ -1326,6 +1351,7 @@ export function wireReview(root, session, opts = {}) {
     if (doc.querySelector('dialog[open]') !== null) {
       return
     }
+    event.preventDefault()
     const order = buildNavOrder(session.artifact)
     const points = openPoints(session.artifact.points, session.state)
     switch (decided.action) {
@@ -1334,6 +1360,12 @@ export function wireReview(root, session, opts = {}) {
       case 'next-file':
       case 'prev-file': {
         const [kind, direction] = STEPS[decided.action]
+        // The one-point view walks its stops: j and k the layers' openings, n and p every stop.
+        const stop = opts.stepStop?.(direction, s => kind !== 'layer' || s.kind === 'layer')
+        if (stop !== undefined) {
+          if (stop !== null) focusItem(stop, null)
+          break
+        }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
         if (item !== null) {
           if (kind === 'layer') window.history.pushState(null, '', `#${item.id}`)
@@ -1342,9 +1374,20 @@ export function wireReview(root, session, opts = {}) {
         break
       }
       case 'next-point':
-      case 'prev-point':
-        stepPoint(order, points, decided.action === 'next-point' ? 1 : -1)
+      case 'prev-point': {
+        const direction = decided.action === 'next-point' ? 1 : -1
+        // The open points' stops, the one on screen first while nothing shown in it has the focus.
+        const open = new Set(points.map(p => p.id))
+        const at = focused()
+        const onStop = at !== null && at.closest('[data-lens]') !== null && at.getClientRects().length > 0
+        const stop = opts.stepStop?.(direction, s => s.kind === 'point' && open.has(s.point.id), !onStop)
+        if (stop === undefined) {
+          stepPoint(order, points, direction)
+        } else if (stop !== null) {
+          focusItem(stop, null)
+        }
         break
+      }
       case 'toggle': {
         // A point drawn as its title line opens or collapses itself.
         const collapsible = focused()?.closest('[data-point]')
@@ -1362,8 +1405,13 @@ export function wireReview(root, session, opts = {}) {
       }
       case 'reviewed-file':
       case 'reviewed-layer': {
-        // A point in focus stands for the card that holds it.
-        const itemId = itemAround(order, focused())
+        // A point in focus stands for the file card that holds its line, as with `o`, also once it
+        // was acted on and left the open points.
+        const point = focusedPoint(session.artifact.points)
+        const itemId = itemAround(
+          order,
+          point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
+        )
         const item = order.find(i => i.id === itemId)
         const wanted = decided.action === 'reviewed-file' ? 'file' : 'layer'
         const found =
@@ -1384,8 +1432,8 @@ export function wireReview(root, session, opts = {}) {
           openLineComposer({ ...selection, line: selection.end, startLine: selection.start })
           break
         }
-        // With nothing selected, c comments on the line of the attention point in focus.
-        const point = focusedPoint(points)
+        // With nothing selected, c comments on the line of the attention point in focus, open or not.
+        const point = focusedPoint(session.artifact.points)
         const key = point === undefined ? null : keyForPath(point.path)
         if (point !== undefined && key !== null) {
           const target = { key, path: point.path, side: point.side ?? 'new', line: point.line }
@@ -1425,7 +1473,7 @@ export function wireReview(root, session, opts = {}) {
         const chat = opts.chat?.() ?? null
         const target = askTargetFor(focused(), selection)
         if (chat === null) {
-          toast(root, NO_CHAT_NOTE)
+          toast(root, NO_CHAT_NOTE, { tone: 'note' })
           break
         }
         chat.ask(target)
@@ -1533,6 +1581,8 @@ export function wireReview(root, session, opts = {}) {
           return
         }
         opts.uncover?.()
+        // Brings the line on screen: its layer, or the stop that shows it.
+        scrollIntoViewSafe(row)
         openComposer(row, options, 'row')
         return
       }

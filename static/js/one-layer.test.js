@@ -59,11 +59,22 @@ const click = el => el?.dispatchEvent(new MouseEvent('click', { bubbles: true, c
 /** @param {Element | null} el */
 const reveal = el => el?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
 
+/**
+ * Gives an element a box on screen, or one far below it: the test DOM lays nothing out.
+ * @param {HTMLElement} el
+ * @param {boolean} shown
+ */
+const onScreen = (el, shown) => {
+  const top = shown ? 10 : window.innerHeight + 5000
+  vi.spyOn(el, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, top, 100, 100))
+}
+
 describe('the layer views', () => {
   it('names two views, all by default, each with a label', () => {
     expect(LAYER_VIEWS).toEqual(['all', 'one'])
     expect(DEFAULT_LAYER_VIEW).toBe('all')
     expect(isLayerView('one')).toBe(true)
+    expect(isLayerView('points')).toBe(false)
     expect(isLayerView('some')).toBe(false)
     expect(isLayerView(1)).toBe(false)
     expect(Object.keys(LAYER_VIEW_LABELS)).toEqual(['all', 'one'])
@@ -193,6 +204,21 @@ describe('initOneLayer', () => {
     window.dispatchEvent(new Event('hashchange'))
     expect(revealed).toHaveLength(3)
     expect(shownIds()).toHaveLength(4)
+  })
+
+  it('goes to what back or forward names in the all view only for an entry a stop showed, whose scroll was the stop’s', () => {
+    oneLayer = initOneLayer(root, { view: 'all' })
+    const scrolled = vi.fn()
+    section('layer-other').scrollIntoView = scrolled
+    // An entry of the layers, the section far off screen: the browser's own scroll stays.
+    onScreen(section('layer-other'), false)
+    window.history.replaceState(null, '', '#layer-other')
+    window.dispatchEvent(new Event('hashchange'))
+    expect(scrolled).not.toHaveBeenCalled()
+    // The entry of a stop brought back the top of the page, far from the layer.
+    window.history.replaceState({ stop: true }, '', '#layer-other')
+    window.dispatchEvent(new Event('hashchange'))
+    expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
   })
 
   it('switches views on the open page, keeping the section the rail marks as being read', () => {

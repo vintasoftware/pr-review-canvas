@@ -45,7 +45,7 @@ import { cssEscape } from './anchors.js'
 import { applyCapabilityGating } from './composer.js'
 import { getRenderContext } from './layers.js'
 import { lineLink } from './links.js'
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleText } from './markdown.js'
 import { pendingComments } from './pending.js'
 import {
   isResolution,
@@ -530,9 +530,17 @@ export function wireChat(options) {
   }
   applyWidth(readChatWidth(storage))
 
-  const layerTitle = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)?.title
-  const pointTitle = /** @param {string} fp */ fp =>
-    session.artifact.points.find(p => p.fingerprint === fp)?.title
+  const layerOf = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)
+  const pointOf = /** @param {string} fp */ fp => session.artifact.points.find(p => p.fingerprint === fp)
+  // The chat names places in plain text: its head, chips and thread names are not Markdown.
+  const layerTitle = /** @param {string} id */ id => {
+    const layer = layerOf(id)
+    return layer === undefined ? undefined : titleText(layer.title)
+  }
+  const pointTitle = /** @param {string} fp */ fp => {
+    const point = pointOf(fp)
+    return point === undefined ? undefined : titleText(point.title)
+  }
   const currentThread = () => threads.find(t => t.name === activeThread)
   /**
    * Whether a place is on the canvas on screen. A thread outlives the canvas it was made on, and a
@@ -542,9 +550,9 @@ export function wireChat(options) {
   const onCanvas = place => {
     switch (place.kind) {
       case 'point':
-        return pointTitle(place.fingerprint) !== undefined
+        return pointOf(place.fingerprint) !== undefined
       case 'layer':
-        return layerTitle(place.layerId) !== undefined
+        return layerOf(place.layerId) !== undefined
       case 'file':
       case 'lines':
         return paths.has(place.path)
@@ -579,12 +587,22 @@ export function wireChat(options) {
   const placeName = anchor =>
     anchor.kind === 'pr' ? 'whole PR' : chatContextName(anchor, layerTitle, pointTitle)
   /**
+   * The title a thread was saved with. A thread about a layer or a point was named after its title
+   * as written, Markdown and all, so it shows in words. One about a file or lines was named after a
+   * path, and a general thread keeps the reader's own words: both show as saved.
+   * @param {(typeof threads)[number]} thread
+   */
+  const savedTitle = thread =>
+    thread.anchor?.kind === 'point' || thread.anchor?.kind === 'layer'
+      ? titleText(thread.title)
+      : thread.title
+  /**
    * A thread as the head and the index name it: by its place while the canvas has it, by the title
    * it was saved with otherwise.
    * @param {(typeof threads)[number]} thread
    */
   const shownTitle = thread =>
-    thread.anchor !== undefined && onCanvas(thread.anchor) ? placeName(thread.anchor) : thread.title
+    thread.anchor !== undefined && onCanvas(thread.anchor) ? placeName(thread.anchor) : savedTitle(thread)
 
   const drawHead = () => {
     const thread = currentThread()
@@ -622,7 +640,7 @@ export function wireChat(options) {
     if (place !== undefined && onCanvas(place)) {
       return chatContextLabel(place, layerTitle, pointTitle)
     }
-    return thread !== undefined ? thread.title : 'New thread'
+    return thread !== undefined ? savedTitle(thread) : 'New thread'
   }
 
   /**
@@ -1295,7 +1313,9 @@ export function wireChat(options) {
         // is marked as having a new answer below.
         if (!current.shown && !agentTookTurn) {
           refused.push(current)
-          toast(root, `Your question in “${threadLabel(current)}” was not sent: ${reason}`, { failed: true })
+          toast(root, `Your question in “${threadLabel(current)}” was not sent: ${reason}`, {
+            tone: 'failed',
+          })
         }
       }
     } finally {
@@ -1793,7 +1813,8 @@ export function wireChat(options) {
             root,
             live?.shown === true
               ? 'An answer is coming in here. Ask this once it ends.'
-              : `A question already waits for the answer in “${answeringName()}”. Ask this once it is sent.`
+              : `A question already waits for the answer in “${answeringName()}”. Ask this once it is sent.`,
+            { tone: 'failed' }
           )
           return
         }

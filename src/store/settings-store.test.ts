@@ -46,6 +46,7 @@ describe('createSettingsStore', () => {
       theme: 'auto',
       foldLevel: 'light',
       layerView: 'all',
+      readByPoints: false,
       pointColors: 'classic',
       startCollapsed: false,
       compactPoints: false,
@@ -78,6 +79,7 @@ describe('createSettingsStore', () => {
       theme: 'auto',
       foldLevel: 'light',
       layerView: 'all',
+      readByPoints: false,
       pointColors: 'classic',
       startCollapsed: false,
       compactPoints: false,
@@ -233,6 +235,15 @@ describe('applySettings', () => {
     expect(parseSettings('layerView: some\n')).toEqual(DEFAULT_SETTINGS)
   })
 
+  it('reads the layers alone unless the file turns reading by points on, and saves the choice under its comment', () => {
+    expect(parseSettings('layerView: one\n').readByPoints).toBe(false)
+    const { text, settings } = applySettings(SETTINGS_TEMPLATE, { readByPoints: true })
+    expect(settings.readByPoints).toBe(true)
+    expect(text).toContain('# Whether a review opens on its attention points')
+    expect(text).toContain('readByPoints: true')
+    expect(parseSettings(text).readByPoints).toBe(true)
+  })
+
   it('saves the point colors under their comment, reads a file without them as classic, and refuses one it does not know', () => {
     const { text, settings } = applySettings(SETTINGS_TEMPLATE, { pointColors: 'action' })
     expect(settings.pointColors).toBe('action')
@@ -283,6 +294,7 @@ describe('two saves that arrive together', () => {
       theme: 'auto',
       foldLevel: 'light',
       layerView: 'all',
+      readByPoints: false,
       pointColors: 'classic',
       startCollapsed: false,
       compactPoints: false,

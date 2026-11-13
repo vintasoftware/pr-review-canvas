@@ -276,6 +276,8 @@ export interface ReviewBootstrap {
   foldLevel: FoldLevel
   /** Whether the canvas shows every layer, or one at a time, from the settings file. */
   layerView: LayerView
+  /** Whether the canvas opens on its attention points, one at a time, from the settings file. */
+  readByPoints: boolean
   /** The palette of the point level icons, from the settings file. */
   pointColors: PointColors
   /** Whether the canvas opens with only its first layer open and every file closed. */

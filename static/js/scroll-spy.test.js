@@ -1,7 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { initScrollSpy } from './scroll-spy.js'
+import { initScrollSpy, markRailCurrent, showRailCurrent } from './scroll-spy.js'
 
 /** @type {{ stop: () => void } | undefined} */
 let spy
@@ -143,6 +143,27 @@ describe('initScrollSpy', () => {
     window.dispatchEvent(new Event('resize'))
     vi.advanceTimersByTime(20)
     expect(selected()).toEqual(['#overview'])
+  })
+
+  it('brings the current chip into the middle of a strip that scrolls sideways, and leaves a rail that does not', () => {
+    document.body.innerHTML = `<nav class="rail"><ul class="tree">
+      <li><a href="#overview">Overview</a></li><li><a href="#layer-auth">Auth</a></li></ul></nav>`
+    const strip = document.querySelector('.tree')
+    const chip = document.querySelector('a[href="#layer-auth"]')
+    if (!(strip instanceof HTMLElement && chip instanceof HTMLElement)) {
+      throw new Error('missing strip')
+    }
+    vi.spyOn(strip, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 400, 40))
+    vi.spyOn(chip, 'getBoundingClientRect').mockReturnValue(new DOMRect(900, 0, 200, 40))
+    // A rail that fits its box is a column: nothing scrolls.
+    markRailCurrent(document, 'layer-auth')
+    expect(strip.scrollLeft).toBe(0)
+    Object.defineProperty(strip, 'scrollWidth', { value: 1400 })
+    Object.defineProperty(strip, 'clientWidth', { value: 400 })
+    showRailCurrent(chip)
+    expect(strip.scrollLeft).toBe(800)
+    showRailCurrent(null)
+    expect(strip.scrollLeft).toBe(800)
   })
 
   it('handles a screen without review sections', () => {

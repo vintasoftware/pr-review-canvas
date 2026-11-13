@@ -190,6 +190,9 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<div class="field"><label for="set-layer-view">Show layers</label>' +
       `<select id="set-layer-view">${optionsHtml(LAYER_VIEWS, settings.layerView, LAYER_VIEW_LABELS)}</select></div>` +
       '<p class="muted small">One at a time shows the overview or a single layer. The rail and the <span class="mono">j</span> and <span class="mono">k</span> keys move between them.</p>' +
+      '<div class="field field-check"><label for="set-read-by-points">Read by attention points</label>' +
+      `<input id="set-read-by-points" type="checkbox"${settings.readByPoints ? ' checked' : ''}></div>` +
+      '<p class="muted small">A review opens on its attention points, one at a time: each layer opens with its description and tests, then shows its points with their code. The switch at the head of the rail moves to the layers, shown as above. Off, a review shows its layers alone.</p>' +
       '<div class="field field-check"><label for="set-start-collapsed">Start collapsed</label>' +
       `<input id="set-start-collapsed" type="checkbox"${settings.startCollapsed ? ' checked' : ''}></div>` +
       '<p class="muted small">A review opens with only its first layer open and every file closed under its name. The rail, the keys, and links open what they land on.</p>' +
@@ -325,6 +328,7 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const timeout = qs('#set-timeout', dialog)
   const turns = qs('#set-turns', dialog)
   const threadPerPlace = qs('#set-thread-per-place', dialog)
+  const readByPoints = qs('#set-read-by-points', dialog)
   const chatStartMinimized = qs('#set-chat-start-minimized', dialog)
   const startCollapsed = qs('#set-start-collapsed', dialog)
   const compactPoints = qs('#set-compact-points', dialog)
@@ -339,6 +343,9 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   }
   if (layerView instanceof HTMLSelectElement && isLayerView(layerView.value)) {
     input.layerView = layerView.value
+  }
+  if (readByPoints instanceof HTMLInputElement) {
+    input.readByPoints = readByPoints.checked
   }
   if (pointColors instanceof HTMLSelectElement && isPointColors(pointColors.value)) {
     input.pointColors = pointColors.value
