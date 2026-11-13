@@ -275,6 +275,9 @@ tr.folded[data-code-fold] {
 /* The summary of a moved block: the one place a move is painted, so neither end reads as new code. */
 tr.more.fold.move td {
   background: var(--mv-bg);
+}
+/* One stripe at the row's left edge, not one per cell. */
+tr.more.fold.move td:first-child {
   box-shadow: inset 4px 0 0 var(--purple);
 }
 tr.move-from .ln,
