@@ -85,6 +85,9 @@
   reads as points the overview holds.
 - Changing reading modes in settings updates the URL to match the stop on screen, so a reload
   returns to that stop.
+- **Attention points** in the rail's switch goes back to the point you came from, also when you
+  scroll up past the overview to reach the switch on a narrow screen. Before, it opened the first
+  layer's description.
 
 ### Fixes
 

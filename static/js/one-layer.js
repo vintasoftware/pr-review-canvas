@@ -290,9 +290,11 @@ export function initOneLayer(root, opts) {
       return
     }
     const here = placeNow()
-    // The points open on their first stop from the top of the page, not on the overview.
-    shownHash =
-      place ?? (next === 'points' && here === '#overview' ? `#${stops()[0]?.id ?? 'overview'}` : here)
+    // From the overview the points open on the stop the URL names, else on the first stop. On a
+    // narrow screen a reader scrolls up past the overview to reach the switch.
+    const all = stops()
+    const top = stopNamed(all, win.location.hash) ?? all[0]
+    shownHash = place ?? (next === 'points' && here === '#overview' ? `#${top?.id ?? 'overview'}` : here)
     view = next
     // The rail is drawn for the new view first, so the stop the redraw shows is the one it marks.
     opts.onView?.(view)
