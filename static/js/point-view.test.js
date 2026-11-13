@@ -303,6 +303,11 @@ describe('the one-point view on a rendered page', () => {
     view?.switchView('points')
     expect(window.location.hash).toBe('#point-p-1')
     expect(lensed()?.getAttribute('data-lens')).toBe('point')
+    // Only the points follow the URL from there: one layer at a time opens on the overview.
+    view?.switchView('all')
+    markRailCurrent(document, 'overview')
+    view?.switchView('one')
+    expect(shown()).toEqual(['overview'])
   })
 
   it('switches to the layers on the place being read, and back to its stop', () => {

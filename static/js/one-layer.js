@@ -269,9 +269,7 @@ export function initOneLayer(root, opts) {
 
   /**
    * Where the reader is: the stop on screen, or in the layers the section being read (the rail's
-   * mark while all show), or the stop the URL names in it, for a reader back from that stop. The
-   * overview marked while all show also gives way to the URL's stop: on a narrow screen the rail,
-   * and its switch, sit above the overview, so a reader scrolls up to it to tap the switch.
+   * mark while all show), or the stop the URL names in it, for a reader back from that stop.
    */
   const placeNow = () => {
     const at =
@@ -279,10 +277,7 @@ export function initOneLayer(root, opts) {
         ? (root.querySelector('nav.rail a[aria-current]')?.getAttribute('href') ?? '')
         : shownHash
     const named = view === 'points' ? undefined : stopNamed(stops(), win.location.hash)
-    const holds =
-      named !== undefined &&
-      (`#${layerAnchorId(named.layer.key)}` === at || (view === 'all' && at === '#overview'))
-    return holds ? `#${named.id}` : at
+    return named !== undefined && `#${layerAnchorId(named.layer.key)}` === at ? `#${named.id}` : at
   }
 
   /**
@@ -295,9 +290,12 @@ export function initOneLayer(root, opts) {
       return
     }
     const here = placeNow()
-    // The points open on their first stop from the top of the page, not on the overview.
-    shownHash =
-      place ?? (next === 'points' && here === '#overview' ? `#${stops()[0]?.id ?? 'overview'}` : here)
+    // From the top of the page the points open on the stop the URL names, else on their first,
+    // not on the overview. On a narrow screen the switch sits above the overview, so a reader
+    // back from a stop scrolls up past it to tap the switch.
+    const all = stops()
+    const top = stopNamed(all, win.location.hash) ?? all[0]
+    shownHash = place ?? (next === 'points' && here === '#overview' ? `#${top?.id ?? 'overview'}` : here)
     view = next
     // The rail is drawn for the new view first, so the stop the redraw shows is the one it marks.
     opts.onView?.(view)
