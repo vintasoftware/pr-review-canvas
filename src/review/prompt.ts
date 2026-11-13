@@ -10,7 +10,7 @@ import {
   type SettledDecision,
   statedDecision,
 } from '../contract/generation-context.js'
-import { type FileEntry, modelOutputSchema } from '../contract/review-artifact.js'
+import { type FileEntry, modelOutputSchema, type Pr } from '../contract/review-artifact.js'
 import { labelPatch } from '../git/patch-lines.js'
 import { loadPromptFile, type ProjectPrompts } from '../prompt-files.js'
 import { PROMPTS_DIR } from '../paths.js'
@@ -94,10 +94,23 @@ export function patchLineCount(patches: Record<string, string>): number {
   return Object.values(patches).reduce((n, p) => n + (p === '' ? 0 : p.split('\n').length), 0)
 }
 
+/** A fence no line of the text closes: one backtick longer than the longest run in it, four at least. */
+export function diffFence(text: string): string {
+  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map(m => m[0].length))
+  return '`'.repeat(Math.max(4, longest + 1))
+}
+
+/** One file's labeled patch, fenced as a diff. */
+export function fencedPatch(file: FileEntry, patch: string): string {
+  const labeled = labelPatch(file.key, patch)
+  const fence = diffFence(labeled)
+  return `#### \`${file.path}\`\n\n${fence}diff\n${labeled}\n${fence}`
+}
+
 function inlineDiffs(files: readonly FileEntry[], patches: Record<string, string>): string {
   return files
     .filter(f => (patches[f.key] ?? '') !== '')
-    .map(f => `#### \`${f.path}\`\n\n\`\`\`\`diff\n${labelPatch(f.key, patches[f.key] ?? '')}\n\`\`\`\``)
+    .map(f => fencedPatch(f, patches[f.key] ?? ''))
     .join('\n\n')
 }
 
@@ -140,7 +153,10 @@ function highRiskMarkdown(ctx: GenerationContext): string {
   return ctx.highRisk.map(r => `- \`${r.pattern}\` → **${r.label}**`).join('\n')
 }
 
-function metaMarkdown(ctx: GenerationContext): string {
+/** The pull request's facts, as the review and the tour prompts both list them. */
+export function metaMarkdown(
+  ctx: Pick<GenerationContext, 'repo' | 'target' | 'pr' | 'headSha' | 'mergeBaseSha'>
+): string {
   const pr = ctx.pr
   const number = pr.number === null ? 'no pull request yet' : `#${pr.number}`
   return [
@@ -157,12 +173,16 @@ function metaMarkdown(ctx: GenerationContext): string {
   ].join('\n')
 }
 
-function bodyMarkdown(ctx: GenerationContext): string {
-  const body = ctx.pr.body.trim()
+/** The description, quoted. A change set with no pull request has its commit messages instead. */
+export function bodyMarkdown(pr: Pr): string {
+  const body = pr.body.trim()
   if (body === '') {
-    return '_No description._'
+    return pr.number === null ? '_No pull request yet, and no commit messages._' : '_No description._'
   }
-  return `> ${body.replace(/\n/g, '\n> ')}`
+  const quoted = `> ${body.replace(/\n/g, '\n> ')}`
+  return pr.number === null
+    ? `_No pull request yet. The commit messages stand in for a description, oldest first:_\n\n${quoted}`
+    : quoted
 }
 
 function rulebookMarkdown(ctx: GenerationContext): string {
@@ -391,7 +411,7 @@ export function renderPrompt(
     META: metaMarkdown(ctx),
     HEAD_SHA: ctx.headSha,
     MERGE_BASE_SHA: ctx.mergeBaseSha,
-    BODY: bodyMarkdown(ctx),
+    BODY: bodyMarkdown(ctx.pr),
     PATHS: pathsMarkdown(ctx),
     MODEL_PATH: ctx.paths.model,
     MANIFEST: manifestMarkdown(ctx.files),

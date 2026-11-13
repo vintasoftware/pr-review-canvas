@@ -1,6 +1,6 @@
 // @ts-check
-// The drop zone of the empty and stale screens: pick or drop a zip, POST it, and show what
-// happened next to the zone instead of in the console.
+// The drop zone of the empty and stale screens, of a canvas or a tour: pick or drop a zip, POST
+// it, and show what happened next to the zone instead of in the console.
 /** @typedef {import('./contract-types.js').ImportResult} ImportResult */
 /** @typedef {import('./empty-state.js').DropState} DropState */
 /** @typedef {typeof import('./api.js').importCanvas} ImportCanvas */
@@ -20,10 +20,14 @@ export function dropStatusText(state) {
 }
 
 /**
+ * The canvas's by default; the tour page passes its own upload, its own name check, and a result
+ * of its own.
+ * @template [R=ImportResult]
  * @typedef {{
  *   prNumber: number,
- *   importImpl: ImportCanvas,
- *   onImported: (result: ImportResult) => void,
+ *   importImpl: (prNumber: number, file: File, opts: { onProgress: (fraction: number) => void }) => Promise<R>,
+ *   onImported: (result: R) => void,
+ *   validate?: (filename: string, prNumber: number) => string | null,
  * }} DropZoneOptions
  */
 
@@ -33,8 +37,9 @@ export function dropStatusText(state) {
 
 /**
  * Wires the zone under `root`. Returns null when the screen has no drop zone.
+ * @template [R=ImportResult]
  * @param {HTMLElement} root
- * @param {DropZoneOptions} opts
+ * @param {DropZoneOptions<R>} opts
  * @returns {DropZone | null}
  */
 export function wireDropZone(root, opts) {
@@ -56,7 +61,7 @@ export function wireDropZone(root, opts) {
     }
   }
   const send = async (/** @type {File} */ file) => {
-    const problem = validateCanvasFilename(file.name, opts.prNumber)
+    const problem = (opts.validate ?? validateCanvasFilename)(file.name, opts.prNumber)
     if (problem !== null) {
       apply({ type: 'fail', message: problem })
       return

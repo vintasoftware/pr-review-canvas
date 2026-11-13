@@ -1,0 +1,237 @@
+// One import path for the ways a tour arrives from elsewhere: the tour page's drop zone, its look
+// for a shared tour, and `pr-review tour import`. Everything is checked here, so no caller can skip
+// a step. The tour page decides afresh whether a stored tour is current or stale, so an import only
+// stores it.
+import { readZipOrThrow, sameRepo } from '../canvas/import.js'
+import type { CommentsPayload } from '../contract/comments.js'
+import type { Pr } from '../contract/review-artifact.js'
+import type { SharedTourFetchResponse, TourImportResult } from '../contract/tour-api.js'
+import type { TourArtifact, TouredBy, TourRecord } from '../contract/tour.js'
+import {
+  collectCandidates,
+  type DiscoverySources,
+  downloadAttachment,
+  type DownloadFailure,
+  MAX_CANDIDATES_TRIED,
+  namesAnotherPr,
+  rankCandidates,
+} from '../host/attachments.js'
+import type { AppContext } from '../server/context.js'
+import { AppError } from '../server/errors.js'
+import { TOUR_ZIP } from './comment.js'
+
+export interface TourImportOptions {
+  bytes: Uint8Array
+  /** The pull request the tour is imported for; it files the tour under that number. */
+  prNumber?: number | undefined
+  /** Accepts a tour exported from another repository. */
+  force?: boolean | undefined
+  /**
+   * Who shared this copy on the pull request, and who wrote the change, when the copy was found
+   * there rather than handed over: its record is trusted as far as its poster may speak.
+   */
+  shared?: { postedBy: string | null; prAuthor: string } | undefined
+}
+
+/**
+ * The part of a shared copy's record its poster may speak for. The author's copy speaks for the
+ * whole record: their picks, and the finishes they folded in. Anyone else's speaks only for
+ * their own finish: a commenter cannot settle the author's decisions, nor sign off for others.
+ */
+export function trustedRecord(record: TourRecord, postedBy: string | null, prAuthor: string): TourRecord {
+  if (postedBy !== null && postedBy.toLowerCase() === prAuthor.toLowerCase()) return record
+  return { touredBy: record.touredBy.filter(t => postedBy !== null && t.login === postedBy) }
+}
+
+/** When a tour last changed: its author revises it by finishing, which keeps its generation time. */
+function revision(tour: Pick<TourArtifact, 'generatedAt' | 'revisedAt'>): string {
+  return tour.revisedAt ?? tour.generatedAt
+}
+
+/**
+ * Two copies' records of one tour as one: everyone who finished either copy, each by their latest
+ * finish, and the author's picks from the copy the author finished last. Every reader who finishes
+ * posts a copy of their own, so the record is whole only once the copies are read together.
+ */
+export function mergedRecord(
+  stored: TourRecord,
+  incoming: TourRecord
+): { record: TourRecord; changed: boolean } {
+  const byLogin = new Map<string, TouredBy>(stored.touredBy.map(t => [t.login, t]))
+  let changed = false
+  for (const t of incoming.touredBy) {
+    const seen = byLogin.get(t.login)
+    if (seen === undefined || seen.at < t.at) {
+      byLogin.set(t.login, t)
+      changed = true
+    }
+  }
+  const record: TourRecord = { touredBy: [...byLogin.values()].sort((a, b) => a.at.localeCompare(b.at)) }
+  const author =
+    incoming.author !== undefined &&
+    (stored.author === undefined || stored.author.finishedAt < incoming.author.finishedAt)
+      ? incoming.author
+      : stored.author
+  if (author !== undefined) record.author = author
+  if (author !== stored.author) changed = true
+  return { record, changed }
+}
+
+/**
+ * Validates the zip and stores the tour under its head sha. A tour already on disk keeps its
+ * content unless the incoming one was generated or revised later, and takes the incoming record's
+ * finishes either way, so no copy loses a reader's sign-off or the author's picks.
+ */
+export async function importTour(ctx: AppContext, opts: TourImportOptions): Promise<TourImportResult> {
+  const { manifest, artifact: copy, prNumber: named } = readZipOrThrow(opts.bytes, TOUR_ZIP)
+  const artifact =
+    opts.shared === undefined
+      ? copy
+      : { ...copy, record: trustedRecord(copy.record, opts.shared.postedBy, opts.shared.prAuthor) }
+  const warnings: string[] = []
+  if (!sameRepo(manifest.repo, ctx.config.repo)) {
+    const from = `${manifest.repo.owner}/${manifest.repo.name}`
+    if (opts.force !== true) {
+      throw new AppError(
+        'CANVAS_REPO_MISMATCH',
+        `this tour was exported from ${from}, and origin here is ${ctx.config.repo.owner}/${ctx.config.repo.name}`,
+        400,
+        'import it with --force to use it anyway'
+      )
+    }
+    warnings.push(`imported a tour exported from ${from}`)
+  }
+  // As for the canvas, the one check --force cannot lift: the tour may only be filed under the
+  // pull request its zip names.
+  if (opts.prNumber !== undefined && named !== undefined && named !== opts.prNumber) {
+    throw new AppError(
+      'CANVAS_PR_MISMATCH',
+      `this tour was exported for #${named}, and it is being imported for #${opts.prNumber}`,
+      400,
+      `import it without --pr to store it under #${named}, or generate a tour for #${opts.prNumber}`
+    )
+  }
+  const headSha = manifest.headSha
+  const stored = await ctx.tours.read(headSha)
+  const number = opts.prNumber ?? artifact.pr.number
+  if (stored === null) {
+    await ctx.tours.write(headSha, { ...artifact, pr: { ...artifact.pr, number }, source: 'import' })
+    return { status: 'imported', headSha, warnings }
+  }
+  const { record, changed } = mergedRecord(stored.record, artifact.record)
+  if (revision(stored) < revision(artifact)) {
+    await ctx.tours.write(headSha, { ...artifact, pr: { ...artifact.pr, number }, source: 'import', record })
+    return { status: 'imported', headSha, warnings }
+  }
+  if (!changed) return { status: 'exists', headSha, warnings }
+  await ctx.tours.revise(headSha, { ...stored, record, revisedAt: ctx.now().toISOString() })
+  return { status: 'imported', headSha, warnings }
+}
+
+/**
+ * Every tour of this commit shared on the pull request, in a comment's hidden block or attached,
+ * folded into the stored tour's record: each reader who finished posts a copy of their own, so
+ * the record is whole only once every copy is read. The content of the stored tour stays as it
+ * is; only the record changes. A copy that cannot be read is named in the warnings and skipped.
+ */
+export async function mergeSharedRecords(
+  ctx: AppContext,
+  pr: Pr,
+  comments: CommentsPayload,
+  headSha: string
+): Promise<{ record: TourRecord; merged: number; warnings: string[] }> {
+  const stored = await ctx.tours.read(headSha)
+  if (stored === null) throw new AppError('CANVAS_NOT_FOUND', `no tour of ${headSha.slice(0, 7)}`, 404)
+  const number = pr.number
+  if (number === null) return { record: stored.record, merged: 0, warnings: [] }
+  const sources: DiscoverySources = {
+    body: pr.body,
+    bodyUpdatedAt: pr.updatedAt ?? '',
+    bodyAuthor: pr.author,
+    comments,
+  }
+  const copies = collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments, 'tour').filter(
+    c => headSha.startsWith(c.parsed.shaPrefix) && !namesAnotherPr(c, number)
+  )
+  const warnings: string[] = []
+  let record = stored.record
+  let merged = 0
+  for (const copy of copies) {
+    const download =
+      copy.bytes === undefined
+        ? await downloadAttachment(ctx, copy.url)
+        : { ok: true as const, bytes: copy.bytes }
+    if (!download.ok) {
+      warnings.push(`${copy.name} ${DOWNLOAD_FAILURES[download.reason]}`)
+      continue
+    }
+    try {
+      const { artifact } = readZipOrThrow(download.bytes, TOUR_ZIP)
+      if (artifact.headSha !== headSha) continue
+      const next = mergedRecord(record, trustedRecord(artifact.record, copy.postedBy, pr.author))
+      if (next.changed) merged += 1
+      record = next.record
+    } catch (err) {
+      warnings.push(`${copy.name}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  if (merged > 0) await ctx.tours.revise(headSha, { ...stored, record, revisedAt: ctx.now().toISOString() })
+  return { record, merged, warnings }
+}
+
+/** What the reader is told about an attachment the import could not use, after its name. */
+const DOWNLOAD_FAILURES: Record<DownloadFailure, string> = {
+  'auth-required': 'was refused by the host; check that you are logged in',
+  'not-zip': 'is not a zip file',
+  'too-large': 'is too large to import',
+  network: 'could not be downloaded',
+  'name-mismatch': 'was exported from another repository',
+  'pr-mismatch': 'was exported for another pull request',
+}
+
+/**
+ * Looks on the pull request for a tour someone shared, in a comment's hidden block or attached as
+ * a zip the comment did not fit, and imports the best one: of the head first, then this pull
+ * request's, then the newest, as the canvas's discovery ranks them.
+ */
+export async function fetchSharedTour(
+  ctx: AppContext,
+  pr: Pr,
+  comments: CommentsPayload
+): Promise<SharedTourFetchResponse> {
+  const number = pr.number
+  if (number === null) return { outcome: 'none', warnings: [] }
+  const sources: DiscoverySources = {
+    body: pr.body,
+    bodyUpdatedAt: pr.updatedAt ?? '',
+    bodyAuthor: pr.author,
+    comments,
+  }
+  const ranked = rankCandidates(
+    collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments, 'tour'),
+    { headSha: pr.headSha, prNumber: number }
+  ).filter(c => !namesAnotherPr(c, number))
+  const warnings: string[] = []
+  // A broken attachment must not hide a good one behind it, so the next ones are tried too.
+  for (const candidate of ranked.slice(0, MAX_CANDIDATES_TRIED)) {
+    const download =
+      candidate.bytes === undefined
+        ? await downloadAttachment(ctx, candidate.url)
+        : { ok: true as const, bytes: candidate.bytes }
+    if (!download.ok) {
+      warnings.push(`${candidate.name} ${DOWNLOAD_FAILURES[download.reason]}`)
+      continue
+    }
+    try {
+      const result = await importTour(ctx, {
+        bytes: download.bytes,
+        prNumber: number,
+        shared: { postedBy: candidate.postedBy, prAuthor: pr.author },
+      })
+      return { outcome: result.status, warnings }
+    } catch (err) {
+      warnings.push(`${candidate.name}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+  return { outcome: ranked.length > 0 ? 'unreadable' : 'none', warnings }
+}

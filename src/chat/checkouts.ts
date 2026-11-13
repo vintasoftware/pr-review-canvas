@@ -11,11 +11,12 @@ import type { CodeSource } from './seed.js'
 export const STALE_LOCK_MS = 2 * 60 * 60 * 1000
 
 /** Who in this process reads code from a review checkout: a chat turn, or a canvas generation. */
-export type CheckoutHolder = 'chat' | 'generation'
+export type CheckoutHolder = 'chat' | 'generation' | 'tour'
 
 const HOLDER_WORDS: Record<CheckoutHolder, string> = {
   chat: 'a chat answer',
   generation: 'a canvas generation',
+  tour: 'a tour generation',
 }
 
 export class CheckoutBusyError extends Error {
@@ -177,11 +178,18 @@ export interface CheckoutStore extends CheckoutsCommon {
    * when a holder in this process or another process has it.
    */
   lease(folder: string, holder: CheckoutHolder): Promise<CheckoutLease>
+  /**
+   * Removes the checkout named `folder` now; false when there was none. Throws CheckoutBusyError
+   * while someone holds it.
+   */
+  remove(folder: string): Promise<boolean>
 }
 
 /** The clone's checkouts as one checkout sees them: a local review's is that checkout's own. */
 export interface ReviewCheckouts extends CheckoutsCommon {
   lease(key: ReviewKey, holder: CheckoutHolder): Promise<CheckoutLease>
+  /** Removes the checkout of `key` now; false when there was none. */
+  remove(key: ReviewKey): Promise<boolean>
 }
 
 /** `worktree` is the checkout's linked-worktree label; null for the clone's main checkout. */
@@ -192,6 +200,7 @@ export function checkoutsFor(store: CheckoutStore, worktree: string | null): Rev
     sweep: options => store.sweep(options),
     size: dir => store.size(dir),
     lease: (key, holder) => store.lease(reviewFolder(key, worktree), holder),
+    remove: key => store.remove(reviewFolder(key, worktree)),
   }
 }
 
@@ -381,6 +390,24 @@ export function createReviewCheckouts(opts: {
     },
     list,
     size,
+    async remove(folder) {
+      const current = holders.get(folder)
+      if (current !== undefined) {
+        throw new CheckoutBusyError(folder, current)
+      }
+      if (!(await tryLock(folder))) {
+        throw new CheckoutBusyError(folder, null)
+      }
+      try {
+        const had = (await exists(metaOf(folder))) || (await exists(dirOf(folder)))
+        if (had) {
+          await removeCheckout(folder)
+        }
+        return had
+      } finally {
+        await unlock(folder)
+      }
+    },
     async sweep(options) {
       const cutoff =
         options.olderThanDays === undefined
@@ -410,6 +437,31 @@ export function createReviewCheckouts(opts: {
         }
       }
       return { removed, skipped }
+    },
+  }
+}
+
+/**
+ * One view over several checkout folders: a lease goes to the first, while listing and sweeping
+ * cover them all, so `clean`, the idle sweep, and the settings dialog see every checkout.
+ */
+export function combineCheckouts(primary: ReviewCheckouts, ...others: ReviewCheckouts[]): ReviewCheckouts {
+  const all = [primary, ...others]
+  return {
+    root: primary.root,
+    lease: (key, holder) => primary.lease(key, holder),
+    async list() {
+      const lists = await Promise.all(all.map(c => c.list()))
+      return lists.flat().sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))
+    },
+    async sweep(options) {
+      const results = await Promise.all(all.map(c => c.sweep(options)))
+      return { removed: results.flatMap(r => r.removed), skipped: results.flatMap(r => r.skipped) }
+    },
+    size: dir => primary.size(dir),
+    async remove(key) {
+      const results = await Promise.all(all.map(c => c.remove(key)))
+      return results.some(Boolean)
     },
   }
 }

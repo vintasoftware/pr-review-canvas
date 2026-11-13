@@ -1,4 +1,12 @@
-import { basePathOf, pathSegments, PROJECTS_PREFIX, projectSlug, slugParts, worktreeOf } from './slug.js'
+import {
+  basePathOf,
+  pathSegments,
+  PROJECTS_PREFIX,
+  projectName,
+  projectSlug,
+  slugParts,
+  worktreeOf,
+} from './slug.js'
 
 const repo = { owner: 'acme', name: 'widgets' }
 
@@ -29,6 +37,14 @@ describe('projectSlug', () => {
 
   it("adds a linked worktree's label", () => {
     expect(projectSlug(repo, 'feature-x')).toBe('acme/widgets~feature-x')
+  })
+})
+
+describe('projectName', () => {
+  it('is owner/repo for the main checkout, and names a linked worktree by its folder', () => {
+    expect(projectName(repo, null, '/src/widgets')).toBe('acme/widgets')
+    // A tool may name the worktree by an id; the folder is what the person chose.
+    expect(projectName(repo, '713858-2e80b4cc', '/trees/fix-login')).toBe('acme/widgets · fix-login')
   })
 })
 

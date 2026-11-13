@@ -1,0 +1,56 @@
+<div class="scene" data-technique="storyboard">
+  <div class="sb">
+    <section class="good">
+      <h4><b>1</b>Add the column</h4>
+      <div class="sb-o"><span class="sb-col">number_of_orders</span></div>
+      <span class="sb-n">0</span>
+      <code>default=0</code>
+    </section>
+    <span class="arrow"></span>
+    <section class="good">
+      <h4><b>2</b>Backfill after migrate</h4>
+      <div class="sb-o"><span>order_1</span></div>
+      <span class="sb-n">1</span>
+      <code>Celery task</code>
+    </section>
+    <span class="arrow"></span>
+    <section class="warn">
+      <h4><b>3</b>Count new orders</h4>
+      <div class="sb-o"><span>order_1</span><span class="sb-new">order_2</span></div>
+      <span class="sb-n sb-hero">2<em>+1</em></span>
+      <code>order_created()</code>
+    </section>
+    <span class="arrow"></span>
+    <section class="warn">
+      <h4><b>4</b>Uncount expired</h4>
+      <div class="sb-o"><span>order_1</span><span class="sb-gone">order_2</span></div>
+      <span class="sb-n">1<em>−1</em></span>
+      <code>delete_expired_<wbr>orders_task</code>
+    </section>
+  </div>
+  <p class="small">e.g. <code>customer_user.number_of_orders</code></p>
+  <style>
+    .sb { width: 100%; display: grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; align-items: center; gap: 0.8rem; }
+    .sb .arrow { --len: 2rem; }
+    .sb section { display: flex; flex-direction: column; align-items: center; gap: 0.7rem; padding: 0.9rem 0.6rem 1rem; border: 0.08rem solid var(--line); border-top: 0.25rem solid var(--c); border-radius: 0.6rem; background: var(--paper); }
+    .sb h4 { display: flex; align-items: center; gap: 0.45rem; margin: 0; font-size: 1rem; }
+    .sb h4 b { display: grid; place-items: center; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: var(--c); color: var(--paper); font-size: 0.8rem; }
+    .sb code { font-family: ui-monospace, monospace; font-size: 0.8rem; color: var(--muted); text-align: center; }
+    .sb-o { display: flex; gap: 0.4rem; min-height: 1.9rem; align-items: center; }
+    .sb-o span { padding: 0.2rem 0.5rem; border: 0.08rem solid var(--line); border-radius: 0.35rem; font: 600 0.8rem ui-monospace, monospace; color: var(--muted); }
+    .sb-o .sb-col { border: 0.12rem solid var(--good); background: color-mix(in srgb, var(--good) 10%, var(--paper)); color: var(--good); }
+    .sb-o .sb-new { border: 0.12rem solid var(--good); color: var(--good); }
+    .sb-o .sb-gone { border: 0.12rem dashed var(--bad); color: var(--bad); text-decoration: line-through; opacity: 0.7; }
+    .sb-n { position: relative; display: grid; place-items: center; width: 4.2rem; height: 4.2rem; border-radius: 50%; font-size: 2.2rem; font-weight: 800; font-variant-numeric: tabular-nums; border: 0.12rem solid var(--c); }
+    .sb-n.sb-hero { border-width: 0.22rem; box-shadow: 0 0 1rem color-mix(in srgb, var(--c) 55%, transparent); }
+    .sb-n em { position: absolute; top: -0.4rem; right: -1.4rem; font-style: normal; font-size: 0.95rem; color: var(--c); }
+    .scene > .small { margin: 0; }
+    @media (max-width: 40rem) {
+      .sb { grid-template-columns: 1fr; gap: 0.4rem; justify-items: center; }
+      .sb .arrow { rotate: 90deg; --len: 1.4rem; margin: 0.4rem 0; }
+      .sb section { width: 100%; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "h n" "o n" "c n"; justify-items: start; gap: 0.35rem 1rem; padding: 0.6rem 1.6rem 0.6rem 0.8rem; }
+      .sb h4 { grid-area: h; } .sb-o { grid-area: o; } .sb code { grid-area: c; }
+      .sb-n { grid-area: n; width: 3.2rem; height: 3.2rem; font-size: 1.7rem; align-self: center; }
+    }
+  </style>
+</div>

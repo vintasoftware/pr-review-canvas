@@ -5,7 +5,7 @@ import { canvasRevision } from '../contract/canvas-manifest.js'
 import { type DiffedCommit, staleRelation, standsForHead } from '../review/carry-over.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { type CanvasZipContents, CanvasZipError, readCanvasZip } from './zip.js'
+import { CANVAS_ZIP, CanvasZipError, readZip, type ZipContents, type ZipFormat } from './zip.js'
 
 export interface ImportOptions {
   bytes: Uint8Array
@@ -20,7 +20,7 @@ export interface ImportOptions {
   force?: boolean | undefined
 }
 
-function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
+export function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
   return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
 }
 
@@ -30,6 +30,15 @@ export function toAppErrorFromZip(err: CanvasZipError): AppError {
     return new AppError('CANVAS_TOO_LARGE', err.message, 413, 'a review canvas is a few hundred kilobytes')
   }
   return new AppError('CANVAS_INVALID', err.message, 400, err.issues[0], err.issues)
+}
+
+/** The zip read as `format`, or the HTTP envelope of why it cannot be. */
+export function readZipOrThrow<A>(bytes: Uint8Array, format: ZipFormat<A>): ZipContents<A> {
+  try {
+    return readZip(bytes, format)
+  } catch (err) {
+    throw err instanceof CanvasZipError ? toAppErrorFromZip(err) : err
+  }
 }
 
 /**
@@ -71,13 +80,7 @@ function errorText(err: unknown): string {
  * canvas already on disk is kept unless the incoming one was generated or revised later.
  */
 export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promise<ImportResult> {
-  let contents: CanvasZipContents
-  try {
-    contents = readCanvasZip(opts.bytes)
-  } catch (err) {
-    throw err instanceof CanvasZipError ? toAppErrorFromZip(err) : err
-  }
-  const { manifest, artifact, prNumber: canvasPr } = contents
+  const { manifest, artifact, prNumber: canvasPr } = readZipOrThrow(opts.bytes, CANVAS_ZIP)
   const warnings: string[] = []
   if (!sameRepo(manifest.repo, ctx.config.repo)) {
     const from = `${manifest.repo.owner}/${manifest.repo.name}`

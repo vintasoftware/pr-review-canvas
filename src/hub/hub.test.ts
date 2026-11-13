@@ -176,14 +176,18 @@ function chatTurn(ctx: AppContext, key: ReviewKey): Promise<ChatEvent[]> {
     {
       key,
       headSha: HEAD_SHA,
-      artifact: syntheticArtifact(),
+      subject: {
+        kind: 'canvas',
+        artifact: syntheticArtifact(),
+        readerResolves: false,
+        context: { kind: 'pr' },
+      },
       files: SYNTHETIC_FILES.map(toFileEntry),
       patches: toPatchMap(SYNTHETIC_FILES),
       derivedDir: path.join(root, 'derived'),
       readLines: async () => [],
-      readerResolves: false,
     },
-    { message: 'is this covered?', context: { kind: 'pr' } }
+    'is this covered?'
   )
   return (async () => {
     const events: ChatEvent[] = []

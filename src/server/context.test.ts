@@ -207,12 +207,12 @@ describe('context', () => {
       const [a, b] = contexts as [AppContext, AppContext]
       expect(a.clone).toBe(clone)
       expect(b.checkouts.root).toBe(a.checkouts.root)
-      const first = a.chat.send(target(), { message: 'x', context: { kind: 'pr' } })
+      const first = a.chat.send(target(), 'x')
       const turn = first[Symbol.asyncIterator]()
       await turn.next()
       // The shared turns go by review folder: a pull request's is its number.
       expect([...clone.chatTurns.keys()]).toEqual(['42'])
-      const second = b.chat.send(target(), { message: 'y', context: { kind: 'pr' } })
+      const second = b.chat.send(target(), 'y')
       await expect(second[Symbol.asyncIterator]().next()).rejects.toBeInstanceOf(ChatBusyError)
       expect(b.chat.running()).toEqual([42])
       await turn.return?.(undefined)
@@ -239,12 +239,16 @@ describe('context', () => {
       return {
         key: 42,
         headSha: HEAD_SHA,
-        artifact: syntheticArtifact(),
+        subject: {
+          kind: 'canvas',
+          artifact: syntheticArtifact(),
+          readerResolves: false,
+          context: { kind: 'pr' },
+        },
         files: SYNTHETIC_FILES.map(toFileEntry),
         patches: toPatchMap(SYNTHETIC_FILES),
         derivedDir: path.join(dir, 'derived'),
         readLines: async () => [],
-        readerResolves: false,
       }
     }
   })

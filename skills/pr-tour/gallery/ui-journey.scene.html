@@ -1,0 +1,46 @@
+<div class="scene" data-technique="ui-journey">
+  <div class="uj">
+    <span class="chip muted uj-tag">before</span>
+    <div class="uj-s" data-t="canvas"><span class="uj-on"><b class="uj-n">1</b>☰</span><i class="uj-tools"></i><span class="uj-ico"><i data-icon="users"></i></span></div>
+    <span class="arrow uj-a"></span>
+    <div class="uj-s uj-col" data-t="☰ main menu"><span>Open</span><span class="uj-on"><b class="uj-n">2</b>Save to...</span><span>Export image...</span></div>
+    <span class="arrow uj-a"></span>
+    <div class="uj-s uj-col" data-t="Save to..."><span>Save to disk</span><span class="uj-on"><b class="uj-n">3</b>Export to Link</span></div>
+    <span class="arrow uj-a"></span>
+    <span class="uj-out"><i data-icon="link"></i>read-only link</span>
+
+    <span class="chip good uj-tag">after</span>
+    <div class="uj-s" data-t="canvas"><span>☰</span><i class="uj-tools"></i><span class="btn solid sm warn uj-hero"><b class="uj-n">1</b>Share</span></div>
+    <span class="arrow uj-a"></span>
+    <div class="uj-s uj-col uj-new" data-t="Share dialog"><span class="uj-mute">Live collaboration</span><span class="uj-on good"><b class="uj-n">2</b>Export to Link</span></div>
+    <span class="arrow uj-a uj-long"></span>
+    <span class="uj-out"><i data-icon="link"></i>read-only link</span>
+  </div>
+  <style>
+    .uj { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) 3rem minmax(0, 1fr) 3rem minmax(0, 1fr) 3rem auto; align-items: center; gap: 2.4rem 0.6rem; padding-top: 1.3rem; }
+    .uj-tag { justify-self: start; }
+    .uj-a { --len: 100%; }
+    .uj-long { grid-column: 5 / 8; }
+    .uj-s { position: relative; display: flex; align-items: center; gap: 0.45rem; padding: 0.5rem 0.6rem; border: 0.08rem solid var(--line); border-radius: 0.5rem; background: var(--paper); box-shadow: 0 0.15rem 0.6rem color-mix(in srgb, var(--fg) 10%, transparent); font-size: 0.85rem; }
+    .uj-s::before { content: attr(data-t); position: absolute; left: 0.2rem; bottom: calc(100% + 0.3rem); font-size: 0.75rem; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+    .uj-col { flex-direction: column; align-items: stretch; gap: 0.15rem; }
+    .uj-s > span { padding: 0.15rem 0.4rem; border-radius: 0.3rem; color: var(--muted); white-space: nowrap; }
+    .uj-s > .uj-on { background: color-mix(in srgb, var(--c, var(--fg)) 10%, var(--paper)); color: var(--c, var(--fg)); font-weight: 650; }
+    .uj-s > .uj-mute { color: var(--muted); }
+    .uj-new { border: 0.14rem solid var(--good); }
+    .uj-tools { flex: 1; min-width: 2rem; height: 1.3rem; border-radius: 0.35rem; background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--fg) 12%, var(--paper)) 0 1rem, transparent 1rem 1.3rem); }
+    .uj-ico { display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; padding: 0 !important; background: var(--muted); }
+    .uj-ico .icon { color: var(--paper); }
+    .uj-n { display: inline-grid; place-items: center; width: 1.1rem; height: 1.1rem; margin-right: 0.3rem; border-radius: 50%; background: var(--fg); color: var(--paper); font-size: 0.75rem; }
+    .uj-s > .btn.uj-hero { color: var(--paper); box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--warn) 30%, transparent), 0 0 1rem var(--warn); }
+    .uj-hero .uj-n { background: var(--paper); color: var(--warn); }
+    .uj-out { display: flex; align-items: center; gap: 0.35rem; font-weight: 650; white-space: nowrap; }
+    @media (max-width: 40rem) {
+      .uj { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; justify-items: center; padding-top: 0; }
+      .uj-tag { margin-top: 0.6rem; }
+      .uj-s { width: 100%; margin-top: 1.3rem; }
+      .uj-a, .uj-long { grid-column: auto; --len: 0.16rem; width: 0.16rem; height: 1.3rem; }
+      .uj-a::after { inset: auto auto -0.1rem 50%; border: 0.32rem solid transparent; border-top: 0.5rem solid var(--c, var(--muted)); border-bottom: 0; transform: translateX(-50%); }
+    }
+  </style>
+</div>

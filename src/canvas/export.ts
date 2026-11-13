@@ -6,8 +6,8 @@ import type { CanvasManifest } from '../contract/canvas-manifest.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { buildCanvasZipName } from './name.js'
-import { buildCanvasZip } from './zip.js'
+import { buildZipName } from './name.js'
+import { buildZip, CANVAS_ZIP } from './zip.js'
 
 export interface CanvasZip {
   name: string
@@ -47,13 +47,13 @@ export async function zipStoredCanvas(
   const number = prNumber ?? stored.prNumber
   const manifest: CanvasManifest = number === undefined ? stored : { ...stored, prNumber: number }
   const zip: CanvasZip = {
-    name: buildCanvasZipName({
+    name: buildZipName('canvas', {
       repo: manifest.repo,
       headSha,
       prNumber: number,
       generatedAt: manifest.generatedAt,
     }),
-    bytes: buildCanvasZip(manifest, artifact),
+    bytes: buildZip(CANVAS_ZIP, manifest, artifact),
     headSha,
   }
   if (number !== undefined) {

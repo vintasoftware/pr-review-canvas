@@ -13,7 +13,7 @@ import { isLocalKey, parseReviewKey, type ReviewKey } from '../../contract/revie
 import { AppearanceInputSchema, type AppearanceResponse } from '../../contract/settings.js'
 import { publicHost } from '../../host/host.js'
 import { lookupCanvas } from '../../review/carry-over.js'
-import { createPrLoader, resolveBundle, resolveLocalBundle, runDiscovery } from '../bundle.js'
+import { type PrLoader, resolveBundle, resolveLocalBundle, runDiscovery } from '../bundle.js'
 import { BodyTooLargeError, readCappedBody } from '../capped-body.js'
 import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
@@ -21,6 +21,7 @@ import { chatRoutes } from './chat-routes.js'
 import { generateRoutes } from './generate-routes.js'
 import { selfReviewRoutes } from './self-review-routes.js'
 import { reviewRoutes } from './review-routes.js'
+import { tourRoutes } from './tour-routes.js'
 
 /** The target a route's `:n` names: a pull request number, or `local` for work with no PR yet. */
 export function parseTargetKey(raw: string): ReviewKey {
@@ -70,7 +71,7 @@ export const MAX_UPLOAD_BYTES = CANVAS_ZIP_MAX_BYTES + 64 * 1024
  * The multipart form of an upload, read under the cap first. Parsing is done on the bytes we
  * already hold, so a request that never declares its length cannot buffer without limit.
  */
-async function readUpload(request: Request): Promise<{ file: unknown; force: unknown }> {
+export async function readUpload(request: Request): Promise<{ file: unknown; force: unknown }> {
   let body: Uint8Array<ArrayBuffer>
   try {
     body = await readCappedBody(request, MAX_UPLOAD_BYTES)
@@ -96,11 +97,7 @@ export function parseHeadShaQuery(raw: string | undefined): string | undefined {
 }
 
 /** The canvas the page is showing: the one for the head, else the stale one it fell back to. */
-async function currentCanvasSha(
-  ctx: AppContext,
-  loader: ReturnType<typeof createPrLoader>,
-  key: ReviewKey
-): Promise<string> {
+async function currentCanvasSha(ctx: AppContext, loader: PrLoader, key: ReviewKey): Promise<string> {
   const pr = await loader.currentTarget(key)
   const found = isLocalKey(key)
     ? await ctx.canvases.findForLocal(key, pr.headSha)
@@ -111,13 +108,13 @@ async function currentCanvasSha(
   return found.headSha
 }
 
-export function apiRoutes(ctx: AppContext): Hono {
+export function apiRoutes(ctx: AppContext, loader: PrLoader): Hono {
   const api = new Hono()
-  const loader = createPrLoader(ctx)
   api.route('/', reviewRoutes(ctx, loader))
   api.route('/', chatRoutes(ctx, loader))
-  api.route('/', generateRoutes(ctx))
+  api.route('/', generateRoutes(ctx, loader))
   api.route('/', selfReviewRoutes(ctx, loader))
+  api.route('/', tourRoutes(ctx, loader))
 
   // How the page is painted. It lives in the same settings file the chat settings do, but on its
   // own route, because a repository with chat off still has a page to paint.

@@ -2,13 +2,16 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatContext } from '../contract/chat.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
+import { freshReaderState } from '../contract/tour-api.js'
 import { SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
+import { syntheticTour } from '../testing/synthetic-tour.js'
 import {
   ChatContextError,
   type ContextSources,
   enclosingHunk,
   INLINE_PATCH_MAX_LINES,
   renderChatContext,
+  renderTourContext,
 } from './context.js'
 
 const artifact = syntheticArtifact()
@@ -157,5 +160,161 @@ describe('enclosingHunk', () => {
     expect(enclosingHunk(entry, 'new', 12)?.id).toBe('src_app_ts#2')
     expect(enclosingHunk(entry, 'old', 1)?.id).toBe('src_app_ts#1')
     expect(enclosingHunk(entry, 'new', 900)).toBeUndefined()
+  })
+})
+
+describe('renderTourContext', () => {
+  const tour = syntheticTour()
+
+  it('gives a decision both sides, the recommendation, and where the reader stands', async () => {
+    const reader = freshReaderState()
+    const fresh = renderTourContext(
+      { kind: 'tour-decision', key: 'sum-over-product' },
+      { artifact: tour, reader }
+    )
+    expect(fresh).toContain('## Context: decision `sum-over-product` — Sum over product?')
+    expect(fresh).toContain('trade-off · from the landmark "Sum, not product" · `src/app.ts:4`')
+    expect(fresh).toContain('- keep: Sum. What the spec says')
+    expect(fresh).toContain('- the tour recommended: keep\n')
+    expect(fresh).toContain('The reader has not answered yet.')
+    reader.notes['sum'] = 'hm'
+    reader.picks['sum-over-product'] = { pick: 'keep', approved: false }
+    const keeping = renderTourContext(
+      { kind: 'tour-decision', key: 'sum-over-product' },
+      { artifact: tour, reader }
+    )
+    expect(keeping).toContain('The reader keeps it so far.')
+    expect(keeping).toContain("The reader's note on that landmark: hm")
+    reader.picks['sum-over-product'] = { pick: 'keep', approved: true }
+    expect(
+      renderTourContext({ kind: 'tour-decision', key: 'sum-over-product' }, { artifact: tour, reader })
+    ).toContain('The reader keeps it.')
+    reader.picks['sum-over-product'] = { pick: 'other', approved: false }
+    expect(
+      renderTourContext({ kind: 'tour-decision', key: 'sum-over-product' }, { artifact: tour, reader })
+    ).toContain('wants something else and has not said what yet')
+    reader.picks['sum-over-product'] = { pick: 'change', approved: true }
+    expect(
+      renderTourContext({ kind: 'tour-decision', key: 'sum-over-product' }, { artifact: tour, reader })
+    ).toContain("The reader picks the tour's alternative.")
+    reader.picks['sum-over-product'] = {
+      pick: 'other',
+      approved: true,
+      restatement: { what: 'Multiply.', where: ['src/app.ts'], unchanged: 'Callers.' },
+    }
+    expect(
+      renderTourContext({ kind: 'tour-decision', key: 'sum-over-product' }, { artifact: tour, reader })
+    ).toContain('the restatement so far: Multiply. (where: src/app.ts; unchanged: Callers.)')
+    const [decision] = tour.decisions
+    if (decision === undefined) throw new Error('synthetic tour')
+    expect(
+      renderTourContext(
+        { kind: 'tour-decision', key: 'sum-over-product' },
+        { artifact: { ...tour, decisions: [{ ...decision, landmark: 'nope' }] }, reader }
+      )
+    ).not.toContain('from the landmark')
+  })
+
+  it('lays the plan out as kept, approved, and still open', async () => {
+    const [decision] = tour.decisions
+    if (decision === undefined) throw new Error('synthetic tour')
+    const three = {
+      ...tour,
+      decisions: [decision, { ...decision, key: 'second', title: 'Second?' }, { ...decision, key: 'third' }],
+    }
+    const reader = freshReaderState()
+    reader.picks['sum-over-product'] = { pick: 'keep', approved: true }
+    reader.picks['second'] = {
+      pick: 'other',
+      approved: true,
+      restatement: { what: 'w', where: ['x'], unchanged: 'u' },
+    }
+    const block = renderTourContext({ kind: 'tour-plan' }, { artifact: three, reader })
+    expect(block).toBe(
+      [
+        '## Context: the plan',
+        '',
+        'Kept:',
+        '- `sum-over-product`: Sum',
+        '',
+        'Approved changes:',
+        '- `second`: w (where: x; unchanged: u)',
+        '',
+        'Still open:',
+        '- `third`: Sum over product?',
+      ].join('\n')
+    )
+    expect(
+      renderTourContext({ kind: 'tour-plan' }, { artifact: tour, reader: freshReaderState() })
+    ).toContain('Kept:\n_none_')
+  })
+
+  it('refuses an unknown decision, landmark, or question', () => {
+    const at = { artifact: tour, reader: freshReaderState() }
+    expect(() => renderTourContext({ kind: 'tour-decision', key: 'nope' }, at)).toThrow(
+      'this tour has no decision nope'
+    )
+    expect(() => renderTourContext({ kind: 'tour-landmark', id: 'nope' }, at)).toThrow(
+      'this tour has no landmark nope'
+    )
+    expect(() => renderTourContext({ kind: 'tour-question', id: 'nope' }, at)).toThrow(
+      'this tour has no question nope'
+    )
+  })
+
+  it('says so plainly when the reader asks about the whole tour', () => {
+    expect(renderTourContext({ kind: 'tour' }, { artifact: tour, reader: freshReaderState() })).toBe(
+      '## Context: the whole tour\n\nThe reader asks about the tour as a whole, or the change it explains.'
+    )
+  })
+
+  it('gives a landmark its story, the files of its code, and the reader’s note', () => {
+    const reader = freshReaderState()
+    const world = renderTourContext({ kind: 'tour-landmark', id: 'world' }, { artifact: tour, reader })
+    expect(world).toBe(
+      [
+        '## Context: landmark "run() now adds b()"',
+        '',
+        'world · A caller of run() gets a() plus b(); the test expects 3.',
+        '',
+        'The sum replaces the single value, and `other()` gains `y`.',
+        '',
+        'Its code: `src/app.ts`',
+      ].join('\n')
+    )
+    reader.notes['before'] = ' why a()? '
+    const [first] = tour.landmarks
+    if (first === undefined) throw new Error('synthetic tour')
+    const state = renderTourContext(
+      { kind: 'tour-landmark', id: 'before' },
+      { artifact: { ...tour, landmarks: [{ ...first, state: true }] }, reader }
+    )
+    expect(state).toContain('background, the state landmark · ')
+    expect(state).toContain("Its code: none quoted.\n\nThe reader's note on it: why a()?")
+  })
+
+  it('keeps a quiz answer from the agent until the reader has it right', () => {
+    const reader = freshReaderState()
+    const at = () => renderTourContext({ kind: 'tour-question', id: 'q-run' }, { artifact: tour, reader })
+    const fresh = at()
+    expect(fresh).toContain('## Context: quiz question — What does run() return now?')
+    expect(fresh).toContain('From the landmark ')
+    expect(fresh).toContain('1. ')
+    expect(fresh).toContain('The reader has not answered yet.')
+    expect(fresh).toContain('Do not say which option is right')
+    reader.quiz['q-run'] = { answered: 0, right: false }
+    expect(at()).toContain('The reader answered 1, which is wrong.')
+    expect(at()).toContain('Do not say which option is right')
+    reader.quiz['q-run'] = { answered: 1, right: true }
+    expect(at()).toContain('The reader answered right. Why: ')
+    expect(at()).not.toContain('Do not say')
+    const [question] = tour.quiz
+    if (question === undefined) throw new Error('synthetic tour')
+    expect(
+      renderTourContext(
+        { kind: 'tour-question', id: 'q-run' },
+        { artifact: { ...tour, quiz: [{ ...question, landmark: 'nope' }] }, reader }
+      )
+    ).not.toContain('From the landmark')
   })
 })

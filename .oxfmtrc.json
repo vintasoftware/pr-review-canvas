@@ -15,7 +15,8 @@
     ".agents/**",
     ".claude/skills/**",
     ".codex/**",
-    "prompts/**"
+    "prompts/**",
+    "skills/pr-tour/gallery/*.html"
   ],
   "embeddedLanguageFormatting": "off",
   "proseWrap": "preserve"

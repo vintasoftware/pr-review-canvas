@@ -21,6 +21,21 @@ The pre-commit hook runs `pnpm precommit`: lint, formatting, strict type checks,
 Run `pnpm hooks:install` once per clone to enable it. Use `pnpm lint:fix` and `pnpm format` to apply automatic fixes.
 CI runs the same checks through `pnpm verify`, with coverage executing the unit tests once.
 
+The formatter is oxfmt, through `pnpm format`. Do not run Prettier: it expands one-line objects
+across whole files, and `pnpm format:check` still passes, so the noise stays in the diff.
+
+Commit subjects follow `type(scope): what changed`, for example `fix(tour): ...`. The body gives
+each change, the behavior it alters, and why. Write for a reader of `git log` who never saw the
+review: no "review loop iteration 2", pass numbers, or reviewer finding numbers.
+
+The ADRs in `docs/adr/` record decisions already made. Leave them out of doc cleanups; edit one
+only when that decision changes.
+
+To test by hand on a real project's review, first copy its `state.json` (under `prs/<n>/` in the
+project's review data). Undo only the drafts, dismissals, and marks your test made, by id, never
+"every dismissed point": the reviewer's own work has no other copy. Ask AI Chat test questions in
+a new thread, not the reviewer's.
+
 Run `pnpm verify` before pushing. When changing behavior, test failure and boundary cases and
 keep branch coverage at least 96%, above CI's 95% minimum. Each CI job uploads
 `coverage-node-<version>` with branch locations and a summary. Local reports are in

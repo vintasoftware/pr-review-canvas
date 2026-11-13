@@ -189,7 +189,9 @@ test.describe('reading by attention points', () => {
     // All the layers at once, on the point's card.
     await expect(page.locator('#layer-other')).toBeVisible()
     await expect(page.locator('#point-p-1')).toBeInViewport()
-    await page.locator('nav.rail .rail-view [data-view="points"]').click()
+    // Pressed where the reader is: on a narrow screen the rail stays at the top of the page, and
+    // a click that scrolls up to it first moves the reader to the overview.
+    await page.locator('nav.rail .rail-view [data-view="points"]').dispatchEvent('click')
     // Back on the point's stop, which the rail marks.
     await expect(page.locator('#layer-run-path')).toHaveAttribute('data-lens', 'point')
     await expect(page.locator('nav.rail a[aria-current]')).toHaveAttribute('href', '#point-p-1')

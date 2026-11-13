@@ -15,7 +15,7 @@ import {
 } from '../testing/synthetic.js'
 import { defaultExportDir, exportCanvas, resolveOutPath } from './export.js'
 import { importCanvas } from './import.js'
-import { buildCanvasZipName, parseCanvasZipName, repoSlug } from './name.js'
+import { buildZipName, parseZipName, repoSlug } from './name.js'
 import { buildCanvasZip, CANVAS_ZIP_MAX_BYTES, CanvasZipError, readCanvasZip } from './zip.js'
 
 const OTHER_SHA = 'c'.repeat(40)
@@ -55,30 +55,30 @@ function prWithoutNumber(): ReviewArtifact['pr'] {
 
 describe('canvas zip name', () => {
   it('builds and parses the PR form and the pre-PR form', () => {
-    const withPr = buildCanvasZipName({
+    const withPr = buildZipName('canvas', {
       repo: TEST_REPO,
       generatedAt: manifest().generatedAt,
       headSha: HEAD_SHA,
       prNumber: 42,
     })
-    const withoutPr = buildCanvasZipName({
+    const withoutPr = buildZipName('canvas', {
       repo: TEST_REPO,
       generatedAt: manifest().generatedAt,
       headSha: HEAD_SHA,
     })
     expect(withPr).toBe('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     expect(withoutPr).toBe('ref-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
-    expect(parseCanvasZipName(withPr, TEST_REPO)).toEqual({ prNumber: 42, shaPrefix: 'aaaaaaaa' })
-    expect(parseCanvasZipName(withoutPr, TEST_REPO)).toEqual({ shaPrefix: 'aaaaaaaa' })
+    expect(parseZipName('canvas', withPr, TEST_REPO)).toEqual({ prNumber: 42, shaPrefix: 'aaaaaaaa' })
+    expect(parseZipName('canvas', withoutPr, TEST_REPO)).toEqual({ shaPrefix: 'aaaaaaaa' })
   })
 
   it('normalizes generation time to UTC seconds and sorts by time before commit hash', () => {
     const opts = { repo: TEST_REPO, headSha: HEAD_SHA, prNumber: 42 }
-    const normalized = buildCanvasZipName({ ...opts, generatedAt: '2026-09-10T08:00:00.987-03:00' })
+    const normalized = buildZipName('canvas', { ...opts, generatedAt: '2026-09-10T08:00:00.987-03:00' })
     expect(normalized).toBe('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip')
     const times = ['2027-01-01T00:00:00Z', '2026-12-31T23:59:59Z', '2026-09-10T11:00:01Z']
     const names = times.map((generatedAt, i) =>
-      buildCanvasZipName({
+      buildZipName('canvas', {
         ...opts,
         generatedAt,
         headSha: String(i).repeat(40),
@@ -90,26 +90,30 @@ describe('canvas zip name', () => {
   it('slugs characters a file name should not carry', () => {
     const repo = { owner: 'Vinta.Software', name: 'building_blocks' }
     expect(repoSlug(repo)).toBe('vinta-software-building-blocks')
-    const name = buildCanvasZipName({
+    const name = buildZipName('canvas', {
       repo,
       generatedAt: manifest().generatedAt,
       headSha: HEAD_SHA,
       prNumber: 7,
     })
     expect(name).toBe('pr-7-20260910T110000Z-aaaaaaaa-vinta-software-building-blocks-canvas.zip')
-    expect(parseCanvasZipName(name, repo)).toEqual({ prNumber: 7, shaPrefix: 'aaaaaaaa' })
+    expect(parseZipName('canvas', name, repo)).toEqual({ prNumber: 7, shaPrefix: 'aaaaaaaa' })
   })
 
   it('refuses a name for another repo, another tool, a bad sha, or another extension', () => {
-    expect(parseCanvasZipName('pr-42-20260910T110000Z-aaaaaaaa-other-repo-canvas.zip', TEST_REPO)).toBeNull()
-    expect(parseCanvasZipName('logs-acme-widgets-pr42-aaaaaaa.zip', TEST_REPO)).toBeNull()
     expect(
-      parseCanvasZipName('pr-42-20260910T110000Z-zzzzzzzz-acme-widgets-canvas.zip', TEST_REPO)
+      parseZipName('canvas', 'pr-42-20260910T110000Z-aaaaaaaa-other-repo-canvas.zip', TEST_REPO)
+    ).toBeNull()
+    expect(parseZipName('canvas', 'logs-acme-widgets-pr42-aaaaaaa.zip', TEST_REPO)).toBeNull()
+    expect(
+      parseZipName('canvas', 'pr-42-20260910T110000Z-zzzzzzzz-acme-widgets-canvas.zip', TEST_REPO)
     ).toBeNull()
     expect(
-      parseCanvasZipName('pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.tar', TEST_REPO)
+      parseZipName('canvas', 'pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.tar', TEST_REPO)
     ).toBeNull()
-    expect(parseCanvasZipName('ref-20260910T110000Z-aaaaaaaaa-acme-widgets-canvas.zip', TEST_REPO)).toBeNull()
+    expect(
+      parseZipName('canvas', 'ref-20260910T110000Z-aaaaaaaaa-acme-widgets-canvas.zip', TEST_REPO)
+    ).toBeNull()
   })
 })
 

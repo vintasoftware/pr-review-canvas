@@ -1,9 +1,11 @@
 // @ts-check
-// Generating the canvas from the page: the dialog that starts a run and shows where it is. The
-// server runs the job and keeps it across reloads; the page only polls it, and loads the new
-// canvas once the job publishes one. While a job runs, the header's generate command shows it and
-// opens its dialog.
+// Generating the canvas or the tour from its page: the dialog that starts a run and shows where it
+// is. The server runs the job and keeps it across reloads; the page only polls it, and loads the
+// new canvas or tour once the job publishes one. While a job runs, the header's generate command
+// shows it and opens its dialog.
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
+/** @typedef {import('./contract-types.js').TourBundle} TourBundle */
+/** @typedef {import('./contract-types.js').GenerationKind} GenerationKind */
 /** @typedef {import('./contract-types.js').ReviewKey} ReviewKey */
 /** @typedef {import('./contract-types.js').GenerationJob} GenerationJob */
 /** @typedef {import('./contract-types.js').GenerationResponse} GenerationResponse */
@@ -11,7 +13,7 @@
 /** @typedef {import('./contract-types.js').GenerationSkill} GenerationSkill */
 import { ApiError, fetchJson } from './api.js'
 import { esc } from './dom.js'
-import { isRunning, PHASE_LABELS } from './generation-phases.js'
+import { isRunning, phaseLabel } from './generation-phases.js'
 import { hostLabel } from './host.js'
 
 export const GENERATE_DIALOG_ID = 'generate-dialog'
@@ -184,22 +186,92 @@ export function generationStartHtml(bundle, refused = null, skill = null) {
 }
 
 /**
- * What publish did with the canvas of a done job, in a sentence. A failed share keeps the warning
+ * What generating does on the tour page: the first tour, an update of an outdated one, or this
+ * head's written again. Updating starts from the earlier tour, so the reader may pick a blank page
+ * instead; a head that has its own tour is always written again from one.
+ * @param {TourBundle} bundle
+ * @returns {{ label: string, title: string, heading: string, text: string, choice: boolean }}
+ */
+export function tourGenerationMode(bundle) {
+  const what = bundle.local ? 'this local work' : 'this PR'
+  if (bundle.status === 'stale') {
+    return {
+      label: 'update',
+      title: `Update the tour of ${what} for its current head`,
+      heading: 'Update the tour',
+      text: 'The agent updates the tour of the earlier commit for the current head: what the new commits left untouched is carried over, the rest is judged again, and your picks carry by decision key. The earlier tour stays until the new one is published.',
+      choice: true,
+    }
+  }
+  if (bundle.status === 'ready') {
+    return {
+      label: 'regenerate',
+      title: `Generate the tour of ${what} again`,
+      heading: 'Regenerate the tour',
+      text: 'The agent writes the tour of the current head again. The current tour stays until the new one is published.',
+      choice: false,
+    }
+  }
+  return {
+    label: 'generate',
+    title: `Generate a tour of ${what}`,
+    heading: 'Generate the tour',
+    text: 'The agent reads the diff, draws a picture for each landmark, looks at them, and writes the tour. It usually takes ten minutes or more.',
+    choice: false,
+  }
+}
+
+/**
+ * The tour page's start screen. Unlike the canvas's, the tour's agent writes files and runs
+ * commands, and the screen says so before the reader starts it.
+ * @param {TourBundle} bundle
+ * @param {{ message: string, hint?: string } | null} [refused]
+ * @param {GenerationSkill | null} [skill]
+ * @returns {string}
+ */
+export function tourGenerationStartHtml(bundle, refused = null, skill = null) {
+  const mode = tourGenerationMode(bundle)
+  const agent = bundle.chat.agent ? `<strong>${esc(bundle.chat.agent)}</strong>` : 'the chat agent'
+  const sharing =
+    bundle.local === undefined && bundle.shares
+      ? `Publishing shares the tour as a comment on the pull request, with your ${esc(hostLabel())} login.`
+      : 'The tour stays on this machine; nothing is posted.'
+  return (
+    `<h2 id="gen-h">${mode.heading}</h2>` +
+    (refused === null
+      ? ''
+      : `<div class="callout warn" role="alert">${esc(refused.message)}${refused.hint ? ` — ${esc(refused.hint)}` : ''}</div>`) +
+    `<p class="hint">${esc(mode.text)}</p>` +
+    `<p class="hint">It runs ${agent} through acpx with every permission approved, from this repository's folder: it writes the tour's files, runs pr-review's tour commands, and runs the project's try-it recipes in a checkout of its own. The model is the one the project config names for it. ${sharing}</p>` +
+    (skill === null ? '' : skillHtml(skill)) +
+    (mode.choice
+      ? '<label class="gen-force"><input type="checkbox" name="force"> Start from a blank page instead of updating the earlier tour</label>'
+      : '') +
+    skillFallbackHtml(bundle.skillCommand) +
+    '<div class="dialog-actions">' +
+    '<button class="cmd" type="submit" value="close">cancel</button>' +
+    '<button class="cmd fill" type="button" data-gen="start">start</button>' +
+    '</div>'
+  )
+}
+
+/**
+ * What publish did with the canvas or tour of a done job, in a sentence. A failed share keeps the warning
  * publish wrote, which already says to upload the ZIP, and adds where the ZIP is.
  * @param {GenerationJob} job
  */
 function outcomeHtml(job) {
   const sharing = job.sharing
   if (sharing?.status === 'shared') {
-    return `<p class="hint">The canvas is published and <a href="${esc(sharing.url)}" target="_blank" rel="noopener noreferrer">shared on ${esc(hostLabel())}</a>.</p>`
+    return `<p class="hint">The ${job.kind} is published and <a href="${esc(sharing.url)}" target="_blank" rel="noopener noreferrer">shared on ${esc(hostLabel())}</a>.</p>`
   }
   if (sharing?.status === 'failed') {
     return `<div class="callout warn" role="status">${esc(sharing.warning)} The ZIP: <code>${esc(sharing.zipPath)}</code></div>`
   }
   if (sharing?.status === 'off') {
-    return '<p class="hint">The canvas is published. Sharing is off, so nothing was posted.</p>'
+    return `<p class="hint">The ${job.kind} is published. Sharing is off, so nothing was posted.</p>`
   }
-  return '<p class="hint">The canvas is published.</p>'
+  return `<p class="hint">The ${job.kind} is published.</p>`
 }
 
 /**
@@ -213,7 +285,7 @@ export function generationStatusHtml(job, now) {
   const running = isRunning(job)
   const attempt = job.round > 1 ? ` · attempt ${job.round} of ${job.maxRounds}` : ''
   const model = job.model === null ? '' : ` (${esc(job.model)})`
-  const label = job.stopping && running ? 'Stopping…' : PHASE_LABELS[job.phase]
+  const label = job.stopping && running ? 'Stopping…' : phaseLabel(job)
   const activity =
     job.activity.length === 0
       ? ''
@@ -233,7 +305,7 @@ export function generationStatusHtml(job, now) {
     `<h2 id="gen-h">${esc(label)}</h2>` +
     `<p class="gen-meta mono" aria-live="polite">${esc(job.agent)}${model} · ${elapsedText(job, now)}${attempt}</p>` +
     (running
-      ? '<p class="hint">You can close this dialog; the run goes on. The page loads the canvas when it is published.</p>'
+      ? `<p class="hint">You can close this dialog; the run goes on. The page loads the ${job.kind} when it is published.</p>`
       : '') +
     skillHtml(job.skill) +
     error +
@@ -260,32 +332,45 @@ export function runningLabel(job, now) {
   return `${job.stopping ? 'stopping' : 'generating'} · ${elapsedText(job, now)}`
 }
 
+/** @typedef {{ fetchImpl?: typeof fetch | undefined, kind?: GenerationKind | undefined }} GenerationApi */
+
+/**
+ * Where a review's job of this kind lives: the canvas's under `prs`, the tour's under `tours`.
+ * @param {ReviewKey} prNumber
+ * @param {GenerationKind | undefined} kind
+ */
+function jobPath(prNumber, kind) {
+  return `/api/${kind === 'tour' ? 'tours' : 'prs'}/${prNumber}/generate`
+}
+
 /**
  * @param {ReviewKey} prNumber
- * @param {{ fetchImpl?: typeof fetch | undefined }} [opts]
+ * @param {GenerationApi} [opts]
  * @returns {Promise<GenerationResponse>}
  */
 export function fetchGeneration(prNumber, opts = {}) {
-  return fetchJson(`/api/prs/${prNumber}/generate`, { fetchImpl: opts.fetchImpl })
+  return fetchJson(jobPath(prNumber, opts.kind), { fetchImpl: opts.fetchImpl })
 }
 
 /**
  * The skill a run started now would follow.
- * @param {{ fetchImpl?: typeof fetch | undefined }} [opts]
+ * @param {GenerationApi} [opts]
  * @returns {Promise<import('./contract-types.js').GenerationSkillResponse>}
  */
 export function fetchGenerationSkill(opts = {}) {
-  return fetchJson('/api/generate/skill', { fetchImpl: opts.fetchImpl })
+  return fetchJson(`/api/generate/skill${opts.kind === 'tour' ? '?kind=tour' : ''}`, {
+    fetchImpl: opts.fetchImpl,
+  })
 }
 
 /**
  * @param {ReviewKey} prNumber
  * @param {boolean} force
- * @param {{ fetchImpl?: typeof fetch | undefined }} [opts]
+ * @param {GenerationApi} [opts]
  * @returns {Promise<GenerationResponse>}
  */
 export function startGeneration(prNumber, force, opts = {}) {
-  return fetchJson(`/api/prs/${prNumber}/generate`, {
+  return fetchJson(jobPath(prNumber, opts.kind), {
     method: 'POST',
     body: { force },
     fetchImpl: opts.fetchImpl,
@@ -294,11 +379,11 @@ export function startGeneration(prNumber, force, opts = {}) {
 
 /**
  * @param {ReviewKey} prNumber
- * @param {{ fetchImpl?: typeof fetch | undefined }} [opts]
+ * @param {GenerationApi} [opts]
  * @returns {Promise<{ cancelled: boolean, job: GenerationJob | null }>}
  */
 export function stopGeneration(prNumber, opts = {}) {
-  return fetchJson(`/api/prs/${prNumber}/generate`, { method: 'DELETE', fetchImpl: opts.fetchImpl })
+  return fetchJson(jobPath(prNumber, opts.kind), { method: 'DELETE', fetchImpl: opts.fetchImpl })
 }
 
 /**
@@ -334,12 +419,16 @@ function showDialog(dialog) {
 }
 
 /**
- * The page's side of generation: one per review page, kept across renders.
+ * The page's side of generation: one per review or tour page, kept across renders. A tour page
+ * passes `kind: 'tour'` and its own start screen; the review page's are the defaults.
+ * @template [B=PrBundle]
  * @param {HTMLElement} root
  * @param {{
  *   prNumber: ReviewKey,
  *   onEnded: (job: GenerationJob) => void | Promise<void>,
  *   onError?: (message: string) => void,
+ *   kind?: GenerationKind,
+ *   startHtml?: (bundle: B, refused: { message: string, hint?: string } | null, skill: GenerationSkill | null) => string,
  *   fetchImpl?: typeof fetch,
  *   now?: () => Date,
  *   pollMs?: number,
@@ -348,10 +437,15 @@ function showDialog(dialog) {
 export function createGeneration(root, opts) {
   const now = opts.now ?? (() => new Date())
   const pollMs = opts.pollMs ?? GENERATION_POLL_MS
-  const api = { fetchImpl: opts.fetchImpl }
+  const kind = opts.kind ?? 'canvas'
+  // Without its own start screen, B is the review page's PrBundle.
+  const startHtml =
+    opts.startHtml ??
+    /** @type {NonNullable<typeof opts.startHtml>} */ (/** @type {unknown} */ (generationStartHtml))
+  const api = { fetchImpl: opts.fetchImpl, kind }
   /** @type {GenerationJob | null} */
   let job = null
-  /** @type {PrBundle | null} */
+  /** @type {B | null} */
   let bundle = null
   /** The dialog shows the start screen rather than a job. */
   let starting = false
@@ -398,7 +492,7 @@ export function createGeneration(root, opts) {
     const title = (button.dataset['title'] ??= button.title)
     const running = job !== null && isRunning(job) ? job : null
     button.textContent = running === null ? label : runningLabel(running, now())
-    button.title = running === null ? title : 'Show the canvas generation'
+    button.title = running === null ? title : `Show the ${kind} generation`
     button.classList.toggle('gen-running', running !== null)
   }
 
@@ -407,7 +501,7 @@ export function createGeneration(root, opts) {
     const form = /** @type {HTMLFormElement} */ (ensureDialog(root).querySelector('form'))
     if (starting || job === null) {
       if (bundle !== null) {
-        form.innerHTML = generationStartHtml(bundle, startError, skill)
+        form.innerHTML = startHtml(bundle, startError, skill)
       }
       return
     }
@@ -441,6 +535,10 @@ export function createGeneration(root, opts) {
   }
 
   const poll = async () => {
+    // A page that stopped following the job asks nothing more, even for a poll already queued.
+    if (stopped) {
+      return
+    }
     try {
       update((await fetchGeneration(opts.prNumber, api)).job)
     } catch {
@@ -476,21 +574,21 @@ export function createGeneration(root, opts) {
     if (!(action instanceof HTMLButtonElement)) {
       return
     }
-    const kind = action.dataset['gen']
-    if (kind === 'start') {
+    const act = action.dataset['gen']
+    if (act === 'start') {
       // Only the blank-page box is the reader's to decide; with none on screen there is no earlier
       // canvas to update, and a head that has its own canvas the server writes again anyway.
       const box = root.querySelector(`#${GENERATE_DIALOG_ID} input[name="force"]`)
       const force = box instanceof HTMLInputElement && box.checked
       action.disabled = true
       void start(force)
-    } else if (kind === 'stop') {
+    } else if (act === 'stop') {
       action.disabled = true
       void stopGeneration(opts.prNumber, api).then(
         res => update(res.job),
         err => opts.onError?.(err instanceof Error ? err.message : String(err))
       )
-    } else if (kind === 'again') {
+    } else if (act === 'again') {
       startError = null
       starting = true
       drawDialog()
@@ -501,7 +599,7 @@ export function createGeneration(root, opts) {
   return {
     /**
      * Opens the dialog: the running job when there is one, else the start screen for `next`.
-     * @param {PrBundle} next
+     * @param {B} next
      */
     open(next) {
       bundle = next
@@ -518,7 +616,7 @@ export function createGeneration(root, opts) {
     /**
      * Called after every render: the bundle the screen shows, and the running job put back on the
      * header the render replaced. The first call reads the job the server has, if any.
-     * @param {PrBundle} next
+     * @param {B} next
      */
     attach(next) {
       bundle = next

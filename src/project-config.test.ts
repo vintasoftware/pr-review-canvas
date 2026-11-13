@@ -4,6 +4,7 @@ import path from 'node:path'
 import { TEXT_CAPS } from './contract/review-artifact.js'
 import {
   DEFAULT_PROJECT_CONFIG,
+  DEFAULT_TOUR_CONFIG,
   loadProjectConfig,
   mergeProjectConfig,
   ProjectConfigSchema,
@@ -51,6 +52,7 @@ describe('mergeProjectConfig', () => {
       chat: { enabled: false },
       canvas: { keepForIdenticalDiff: true, incremental: true },
       sharing: { canvasComment: true, mentionCanvas: true },
+      tour: DEFAULT_TOUR_CONFIG,
     })
     expect(ProjectConfigSchema.parse(config)).toEqual(config)
     const allCaps = Object.fromEntries(Object.keys(TEXT_CAPS).map(k => [k, 1]))

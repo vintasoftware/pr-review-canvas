@@ -274,7 +274,9 @@ test.describe('with collapsed files and compact points', () => {
     await expect(page.locator('.chat')).toBeHidden()
     await page.locator('nav.rail .rail-view [data-view="layers"]').click()
     await expect(page.locator('#point-p-1')).toBeInViewport()
-    await page.locator('nav.rail .rail-view [data-view="points"]').click()
+    // Pressed where the reader is: on a narrow screen the rail stays at the top of the page, and
+    // a click that scrolls up to it first moves the reader to the overview.
+    await page.locator('nav.rail .rail-view [data-view="points"]').dispatchEvent('click')
     await expect(layer).toHaveAttribute('data-lens', 'point')
     await page.reload()
     await expect(layer.locator('#point-p-1 .prose')).toBeVisible()

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readCanvasComment } from '../canvas/comment.js'
+import { CANVAS_COMMENT_MARKER, readZipEnvelope } from '../canvas/comment.js'
 import { readCanvasZip } from '../canvas/zip.js'
 import { cp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -163,7 +163,9 @@ describe('publish', () => {
       status: 'shared',
       url: 'https://github.com/acme/widgets/pull/42#issuecomment-1',
     })
-    expect(readCanvasZip(readCanvasComment(bodies[0]!)!.bytes).manifest.headSha).toBe(HEAD_SHA)
+    expect(readCanvasZip(readZipEnvelope(CANVAS_COMMENT_MARKER, bodies[0]!)!.bytes).manifest.headSha).toBe(
+      HEAD_SHA
+    )
 
     expect((await t.ctx.prs.readComments(42))?.issueComments).toContainEqual(
       expect.objectContaining({ id: 1, body: bodies[0] })

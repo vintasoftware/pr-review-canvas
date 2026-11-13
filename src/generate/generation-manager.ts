@@ -1,9 +1,11 @@
-// The canvas generation the review page starts: the same prepare, validate, and publish the skill
-// runs, with the agent kept to reading: it runs under the chat's flags, which deny every write, and
-// answers with the model JSON, which this file writes, publishes, and hands the problems back on.
+// The generations the review and tour pages start: one job loop (the lane, the agent's turns, the
+// status, the stop) over a pipeline per kind. The canvas pipeline runs the same prepare, validate,
+// and publish the skill runs, with the agent kept to reading: it runs under the chat's flags, which
+// deny every write, and answers with the model JSON, which this file writes, publishes, and hands
+// the problems back on. The tour pipeline is in tour-pipeline.ts.
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { AgentRun, AgentRunner } from '../acpx/acpx.js'
+import type { AgentAccess, AgentRun, AgentRunner } from '../acpx/acpx.js'
 import { latestModel } from '../acpx/models.js'
 import { CheckoutBusyError, type CheckoutLease, readCodeAt, type ReviewCheckouts } from '../chat/checkouts.js'
 import type { CodeSource } from '../chat/seed.js'
@@ -14,6 +16,8 @@ import {
   type AgentPulse,
   type GenerateInput,
   type GenerationJob,
+  type GenerationKind,
+  type GenerationSharing,
   type GenerationSkill,
   isRunning,
 } from '../contract/generation.js'
@@ -42,14 +46,14 @@ export class GenerationBusyError extends Error {
   /** The review whose generation is running. */
   readonly key: ReviewKey
 
-  constructor(key: ReviewKey) {
-    super(`a canvas is already being generated for ${keyLabel(key)}, and one runs at a time`)
+  constructor(key: ReviewKey, kind: GenerationKind) {
+    super(`a ${kind} is already being generated for ${keyLabel(key)}, and one runs at a time`)
     this.name = 'GenerationBusyError'
     this.key = key
   }
 }
 
-/** The pipeline steps, injected so tests can run the job without git, a forge, or an agent. */
+/** The canvas pipeline's steps, injected so tests can run the job without git, a forge, or an agent. */
 export interface GenerationSteps {
   prepare(input: PrepareTargetInput, opts: PrepareOptions): Promise<PrepareResult>
   publish(canvasDir: string, opts: PublishOptions): Promise<PublishResult>
@@ -60,10 +64,52 @@ export interface GenerationSteps {
   fix(canvasDir: string, modelPath: string, text: string): Promise<string[]>
 }
 
+/** What a pipeline asks of the job loop while it begins a job. */
+export interface PipelineTools {
+  /** Records the head prepare settled on; throws when the job was stopped meanwhile. */
+  prepared(headSha: string): void
+  /**
+   * Where the agent reads code: the chat's rule (`readCodeAt`). The job holds the review checkout
+   * to its end, so a chat turn on that review is refused until then.
+   */
+  codeSource(headSha: string): Promise<CodeSource>
+}
+
+/** What publish made of the agent's work: published, or the problems to send the agent back with. */
+export type PipelinePublish = { sharing: GenerationSharing } | { problems: string[] }
+
+/** One job's way from the agent's first turn to a published artifact. */
+export interface PipelineRun {
+  headSha: string
+  /** The agent's working directory. */
+  cwd: string
+  /** Folders a tool title is shown relative to. */
+  shortPaths: string[]
+  access: AgentAccess
+  /** The first turn's prompt. */
+  prompt: string
+  /** Takes the agent's answer before publish; returns each fix the server made to it, in words. */
+  take(answer: string): Promise<string[]>
+  publish(opts: { agent: string; model: string | null; share: boolean }): Promise<PipelinePublish>
+  /** The turn that sends the problems of a rejected publish back. */
+  repairPrompt(problems: string[], fixed: string[], round: number, maxRounds: number): string
+}
+
+/** How one kind of artifact is generated: prepared, handed to the agent, and published. */
+export interface GenerationPipeline {
+  kind: GenerationKind
+  begin(
+    target: PrepareTargetInput,
+    force: boolean,
+    skill: LoadedSkill,
+    tools: PipelineTools
+  ): Promise<PipelineRun>
+}
+
 export interface GenerationManagerDeps {
   runner: AgentRunner
   checkouts: ReviewCheckouts
-  steps: GenerationSteps
+  pipeline: GenerationPipeline
   /** The chat settings with the `serve` flags applied: the agent, and whether checkouts are on. */
   settings: () => Promise<Settings>
   /** The skill the agent follows: the project's copy for that agent, or the shipped one. */
@@ -77,9 +123,10 @@ export interface GenerationManagerDeps {
   log: (line: string) => void
   now: () => Date
   /**
-   * The generations of this data dir. The worktrees of one clone write the same canvas folders,
-   * so their managers share one lane: one job runs at a time across them, and each manager sees
-   * and stops the job in it, whichever started it. A manager of its own has a lane of its own.
+   * The generations of this data dir. The worktrees of one clone write the same canvas and tour
+   * folders, so their managers, of either kind, share one lane: one job runs at a time across
+   * them, and each manager sees and stops the job of its kind in it, whichever started it. A
+   * manager of its own has a lane of its own.
    */
   lane?: GenerationLane | undefined
   /** The linked worktree the manager's checkout is, null for the main checkout: it names which local reviews are its own. */
@@ -87,8 +134,8 @@ export interface GenerationManagerDeps {
 }
 
 /**
- * The generations of one data dir: the last job of each review folder, running or ended. At most
- * one of them has not settled, and that one holds the lane.
+ * The generations of one data dir: the last job of each kind and review folder, running or ended.
+ * At most one of them has not settled, and that one holds the lane.
  */
 export interface GenerationLane {
   jobs: Map<string, GenerationSlot>
@@ -131,7 +178,7 @@ export interface GenerationSlot {
   stopped: boolean
   /** The tool call id behind each line of `job.activity`, in the same order. */
   activityIds: string[]
-  /** Folders a tool title is shown relative to: the agent's working directory and the canvas's. */
+  /** Folders a tool title is shown relative to: the agent's working directory and the artifact's. */
   shortPaths: string[]
   /** The skill the first turn sends; `job.skill` is its `info`. */
   skill: LoadedSkill
@@ -295,14 +342,70 @@ export function jobError(err: unknown): ErrorEnvelope['error'] {
   return toAppError(err).toEnvelope().error
 }
 
+/**
+ * The canvas: prepare, a read-only agent answering with the model JSON, which the server writes,
+ * fixes what `validate --fix` would, and publishes.
+ */
+export function canvasPipeline(steps: GenerationSteps): GenerationPipeline {
+  return {
+    kind: 'canvas',
+    async begin(target, force, skill, tools) {
+      // `force` is the reader's "start from a blank page". A canvas that already exists for the
+      // head can only be written again from one, so prepare says so and is asked again with force.
+      const first = await steps.prepare(target, { force, log: () => undefined })
+      const prepared =
+        first.status === 'exists' ? await steps.prepare(target, { force: true, log: () => undefined }) : first
+      tools.prepared(prepared.headSha)
+      const code = await tools.codeSource(prepared.headSha)
+      const modelPath = path.join(prepared.canvasDir, 'model.json')
+      const task = await readFile(prepared.promptPath, 'utf8')
+      return {
+        headSha: prepared.headSha,
+        cwd: code.cwd,
+        // The canvas dir first: it may sit inside the working directory.
+        shortPaths: [prepared.canvasDir, code.cwd],
+        access: 'read',
+        prompt: generationPrompt(code, prepared.headSha, modelPath, skill, task),
+        async take(answer) {
+          // An answer with no object in it is written as it is, so the validator names the problem.
+          const text = extractModelJson(answer) ?? answer
+          await writeTextAtomic(modelPath, `${text.trimEnd()}\n`)
+          return steps.fix(prepared.canvasDir, modelPath, text)
+        },
+        async publish({ agent, model, share }) {
+          try {
+            const result = await steps.publish(prepared.canvasDir, {
+              agent,
+              model: model ?? undefined,
+              harness: 'other',
+              allowStale: false,
+              share,
+            })
+            return { sharing: result.sharing }
+          } catch (err) {
+            if (!(err instanceof ModelInvalidError)) {
+              throw err
+            }
+            return { problems: err.report.errors.map(formatValidationError) }
+          }
+        },
+        repairPrompt,
+      }
+    },
+  }
+}
+
 export function createGenerationManager(deps: GenerationManagerDeps): GenerationManager {
   const lane = deps.lane ?? createGenerationLane()
   const worktree = deps.worktree ?? null
+  const { pipeline } = deps
   const folderOf = (key: ReviewKey): string => reviewFolder(key, worktree)
-  /** The job holding the lane: started, and not done letting go of its checkout. */
+  /** Each kind keeps its own last job of a review. */
+  const laneKey = (key: ReviewKey): string => `${pipeline.kind}:${folderOf(key)}`
+  /** The job holding the lane, of either kind: started, and not done letting go of its checkout. */
   const holding = (): Slot | null => [...lane.jobs.values()].find(slot => !slot.settled) ?? null
-  /** The last job of `key`'s review in this checkout. */
-  const of = (key: ReviewKey): Slot | null => lane.jobs.get(folderOf(key)) ?? null
+  /** The last job of this kind of `key`'s review in this checkout. */
+  const of = (key: ReviewKey): Slot | null => lane.jobs.get(laneKey(key)) ?? null
   const maxRounds = deps.generation.maxRepairRounds + 1
 
   const label = (key: ReviewKey): string => (isLocalKey(key) ? key : `#${key}`)
@@ -355,19 +458,20 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
   }
 
   /** One agent turn, to its end. Returns what the agent answered. */
-  const turn = async (slot: Slot, session: string, prompt: string, cwd: string): Promise<string> => {
+  const turn = async (slot: Slot, session: string, prompt: string, run: PipelineRun): Promise<string> => {
     throwIfStopped(slot)
     const { job } = slot
-    const run = deps.runner.run({
+    const handle = deps.runner.run({
       agent: job.agent,
       session,
       prompt,
-      cwd,
+      cwd: run.cwd,
       timeoutSec: GENERATION_TURN_TIMEOUT_SEC,
       model: job.model ?? undefined,
+      access: run.access,
     })
     // `run` spawns without waiting, so a stop arriving from here on finds the handle.
-    slot.run = run
+    slot.run = handle
     let answer = ''
     let doing: AgentPulse['doing'] = 'starting'
     const runningTools = new Set<string>()
@@ -377,7 +481,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
     }
     beat('starting')
     try {
-      for await (const event of run.events) {
+      for await (const event of handle.events) {
         if (event.type === 'chunk') {
           answer += event.text
           beat('writing')
@@ -420,71 +524,49 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
 
   const runJob = async (slot: Slot, key: ReviewKey): Promise<void> => {
     const { job } = slot
-    // `force` is the reader's "start from a blank page". A canvas that already exists for the
-    // head can only be written again from one, so prepare says so and is asked again with force.
-    const target = targetOf(key, slot.base)
-    const first = await deps.steps.prepare(target, { force: job.force, log: () => undefined })
-    const prepared =
-      first.status === 'exists'
-        ? await deps.steps.prepare(target, { force: true, log: () => undefined })
-        : first
-    job.headSha = prepared.headSha
-    throwIfStopped(slot)
-    const settings = await deps.settings()
-    const code = await codeSource(slot, key, prepared.headSha, settings)
-    // The canvas dir first: it may sit inside the working directory.
-    slot.shortPaths = [prepared.canvasDir, code.cwd]
+    const run = await pipeline.begin(targetOf(key, slot.base), job.force, slot.skill, {
+      prepared: headSha => {
+        job.headSha = headSha
+        throwIfStopped(slot)
+      },
+      codeSource: async headSha => codeSource(slot, key, headSha, await deps.settings()),
+    })
+    slot.shortPaths = run.shortPaths
     throwIfStopped(slot)
 
-    const modelPath = path.join(prepared.canvasDir, 'model.json')
-    const task = await readFile(prepared.promptPath, 'utf8')
-    const session = `pr-review-${slug(deps.repo.owner)}-${slug(deps.repo.name)}-${keyToString(key)}-${slug(job.agent)}-gen${deps.now().getTime()}`
+    const session = `pr-review-${slug(deps.repo.owner)}-${slug(deps.repo.name)}-${keyToString(key)}-${slug(job.agent)}-${pipeline.kind === 'canvas' ? 'gen' : 'tour'}${deps.now().getTime()}`
     await deps.runner.ensureSession({
       agent: job.agent,
       session,
-      cwd: code.cwd,
+      cwd: run.cwd,
       timeoutSec: GENERATION_TURN_TIMEOUT_SEC,
     })
 
-    let prompt = generationPrompt(code, prepared.headSha, modelPath, slot.skill, task)
+    let prompt = run.prompt
     for (;;) {
       job.phase = job.round === 1 ? 'generating' : 'repairing'
-      const answer = await turn(slot, session, prompt, code.cwd)
-      // An answer with no object in it is written as it is, so the validator names the problem.
-      const text = extractModelJson(answer) ?? answer
-      await writeTextAtomic(modelPath, `${text.trimEnd()}\n`)
-      const fixed = await deps.steps.fix(prepared.canvasDir, modelPath, text)
+      const fixed = await run.take(await turn(slot, session, prompt, run))
       throwIfStopped(slot)
       job.phase = 'publishing'
-      try {
-        const result = await deps.steps.publish(prepared.canvasDir, {
-          agent: job.agent,
-          model: job.model ?? undefined,
-          harness: 'other',
-          allowStale: false,
-          share: slot.share,
-        })
+      const result = await run.publish({ agent: job.agent, model: job.model, share: slot.share })
+      if ('sharing' in result) {
         end(slot, 'done', { sharing: result.sharing })
-        deps.log(`generation ${label(key)}: published ${prepared.headSha.slice(0, 7)}`)
+        deps.log(`generation ${label(key)}: published ${run.headSha.slice(0, 7)}`)
         return
-      } catch (err) {
-        if (!(err instanceof ModelInvalidError)) {
-          throw err
-        }
-        job.problems = err.report.errors.map(formatValidationError)
-        if (job.round >= maxRounds) {
-          end(slot, 'failed', {
-            error: {
-              code: 'MODEL_INVALID',
-              message: `publish rejected the model ${job.round} times`,
-              hint: 'run the skill from Claude Code or Codex to finish this canvas by hand',
-            },
-          })
-          return
-        }
-        job.round += 1
-        prompt = repairPrompt(job.problems, fixed, job.round, maxRounds)
       }
+      job.problems = result.problems
+      if (job.round >= maxRounds) {
+        end(slot, 'failed', {
+          error: {
+            code: 'MODEL_INVALID',
+            message: `publish rejected the model ${job.round} times`,
+            hint: `run the skill from Claude Code or Codex to finish this ${pipeline.kind} by hand`,
+          },
+        })
+        return
+      }
+      job.round += 1
+      prompt = run.repairPrompt(job.problems, fixed, job.round, maxRounds)
     }
   }
 
@@ -507,7 +589,7 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
     async start(key, opts) {
       const busy = holding()
       if (busy !== null) {
-        throw new GenerationBusyError(busy.job.key)
+        throw new GenerationBusyError(busy.job.key, busy.job.kind)
       }
       const settings = await deps.settings()
       const agent = opts.agent ?? settings.chatAgent
@@ -519,10 +601,11 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
       // Checked again after the awaits: two clicks that both got past the first check start one job.
       const started = holding()
       if (started !== null) {
-        throw new GenerationBusyError(started.job.key)
+        throw new GenerationBusyError(started.job.key, started.job.kind)
       }
       const slot: Slot = {
         job: {
+          kind: pipeline.kind,
           key,
           force: opts.force,
           agent,
@@ -545,8 +628,10 @@ export function createGenerationManager(deps: GenerationManagerDeps): Generation
         share: opts.share !== false,
         base: opts.base,
       }
-      lane.jobs.set(slot.folder, slot)
-      deps.log(`generation ${label(key)}: started with ${agent}${model === null ? '' : ` (${model})`}`)
+      lane.jobs.set(laneKey(key), slot)
+      deps.log(
+        `generation ${label(key)}: started the ${pipeline.kind} with ${agent}${model === null ? '' : ` (${model})`}`
+      )
       void runJob(slot, key).then(
         () => finish(slot, key, undefined),
         err => finish(slot, key, err)

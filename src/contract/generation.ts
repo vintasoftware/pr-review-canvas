@@ -59,7 +59,7 @@ export interface AgentPulse {
 export type SkillState = 'current' | 'other-version' | 'edited'
 
 /**
- * The pr-review-canvas skill a generation follows: the project's own copy, by its path from the
+ * The skill a generation follows (pr-review-canvas, or pr-tour for a tour): the project's own copy, by its path from the
  * repository root, or the one the server's pr-review ships when the project has none. A project
  * copy's state is the one `doctor` and `upgrade` go by.
  */
@@ -75,7 +75,12 @@ export interface GenerationSkillResponse {
 /** What publish did with the canvas: shared it on the pull request, or kept it local. */
 export type GenerationSharing = CanvasSharing | { status: 'local' }
 
+/** What a generation writes: the review page's canvas, or the tour page's tour. */
+export const GENERATION_KINDS = ['canvas', 'tour'] as const
+export type GenerationKind = (typeof GENERATION_KINDS)[number]
+
 export interface GenerationJob {
+  kind: GenerationKind
   key: ReviewKey
   force: boolean
   agent: string
@@ -114,4 +119,4 @@ export interface GenerationResponse {
 }
 
 // The page's dialog and `pr-review generate` name the phases in the same words.
-export { isRunning, PHASE_LABELS } from '../../static/js/generation-phases.js'
+export { isRunning, PHASE_LABELS, phaseLabel } from '../../static/js/generation-phases.js'

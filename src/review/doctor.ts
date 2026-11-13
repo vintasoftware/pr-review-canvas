@@ -92,18 +92,24 @@ export async function checkSkill(repoRoot: string | null, readSkill?: ReadSkill)
   if (stale.length > 0) {
     return {
       ok: false,
-      detail: `outdated or modified skill: ${stale.join(', ')}`,
+      detail: `outdated, modified, or missing skill: ${stale.join(', ')}`,
       hint: 'run `pr-review upgrade` or `pr-review install-skill`',
     }
   }
-  if (copies.length === 0) {
+  if (copies.every(copy => copy.skill !== SKILL_NAME)) {
     return {
       ok: false,
       detail: `${SKILL_NAME} is in neither ${CLAUDE_SKILLS_DIR} nor ${CODEX_SKILLS_DIR}`,
       hint: 'run `pr-review install-skill`',
     }
   }
-  return { ok: true, detail: copies.map(copy => copy.path).join(', ') }
+  return {
+    ok: true,
+    detail: copies
+      .filter(copy => copy.skill === SKILL_NAME)
+      .map(copy => copy.path)
+      .join(', '),
+  }
 }
 
 /**

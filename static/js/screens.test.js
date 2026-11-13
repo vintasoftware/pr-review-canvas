@@ -155,7 +155,7 @@ describe('header', () => {
       theme: 'auto',
       skin: 'terminal',
       now: NOW,
-      project: { slug: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' },
+      project: { slug: 'acme/widgets~fix', name: 'acme/widgets~fix', home: '/r/acme/widgets~fix/' },
     })
     const wordmark = document.querySelector('a.brand-wordmark')
     expect(wordmark?.getAttribute('href')).toBe('/')
@@ -186,7 +186,7 @@ describe('header', () => {
       theme: 'auto',
       skin: 'terminal',
       now: NOW,
-      project: { slug: 'acme/<b>"x', home: '/r/acme/<b>"x/' },
+      project: { slug: 'acme/<b>"x', name: 'acme/<b>"x', home: '/r/acme/<b>"x/' },
     })
     const project = document.querySelector('.brand a.mono.muted')
     expect(project?.textContent).toBe('acme/<b>"x')
@@ -197,7 +197,7 @@ describe('header', () => {
   it('keeps the wordmark and the project link on a page whose review did not load', () => {
     document.body.innerHTML = bareHeaderHtml({
       host: 'localhost:3010',
-      project: { slug: 'acme/widgets', home: '/r/acme/widgets/' },
+      project: { slug: 'acme/widgets', name: 'acme/widgets', home: '/r/acme/widgets/' },
       theme: 'dark',
       skin: 'olive',
     })
@@ -220,6 +220,7 @@ describe('header', () => {
     expect(hdr?.querySelector('.brand-wordmark')?.textContent).toBe('PR review canvas')
     expect(hdr?.querySelector('a.brand-wordmark')?.getAttribute('href')).toBe('/')
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd') ?? [])].map(b => b.textContent)).toEqual([
+      'tour',
       'regenerate',
       'export zip',
       'refresh',
@@ -228,6 +229,9 @@ describe('header', () => {
       'skin: terminal',
       'theme: auto',
     ])
+    expect(hdr?.querySelector('#tour-link')?.getAttribute('href')).toBe(
+      '/review/42'.replace('review', 'tour')
+    )
     // Every header command works on a ready bundle with acpx installed.
     expect([...(hdr?.querySelectorAll('.hdr-actions .cmd:disabled') ?? [])].map(b => b.textContent)).toEqual(
       []

@@ -14,7 +14,12 @@ import {
 } from '../contract/generation-context.js'
 import { effectiveCaps, LIMITS, type Pr } from '../contract/review-artifact.js'
 import type { LocalKey } from '../contract/review-key.js'
-import { describeLocalWork, resolveLocalBase, UNCOMMITTED_STATE } from '../git/local-target.js'
+import {
+  commitLogDescription,
+  describeLocalWork,
+  resolveLocalBase,
+  UNCOMMITTED_STATE,
+} from '../git/local-target.js'
 import { fetchPrRefs } from '../git/pr-refs.js'
 
 import { toPr } from '../host/pr.js'
@@ -22,7 +27,7 @@ import type { GenerationModels } from '../project-config.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 import type { Derived } from '../store/derived-store.js'
-import { fileDelta, findBasisCanvas, findResolutionSource, splitBasis } from './incremental.js'
+import { fileDelta, findBasis, findResolutionSource, splitBasis } from './incremental.js'
 import { carriedPointLines } from './point-carry.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
 import { isAuthor } from './self-review.js'
@@ -159,7 +164,12 @@ async function resolveBasis(
   head: Derived
 ): Promise<BasisSplit | null> {
   const prNumber = target.kind === 'pr' ? target.number : undefined
-  const sha = await findBasisCanvas(ctx.canvases, ctx.git, prNumber, pr.headSha)
+  const sha = await findBasis(
+    ctx.git,
+    pr.headSha,
+    (await ctx.canvases.readIndex()).canvases,
+    entry => entry.prNumber === undefined || entry.prNumber === prNumber
+  )
   if (sha === null) {
     return null
   }
@@ -236,18 +246,54 @@ async function resolveTarget(ctx: AppContext, input: PrepareTargetInput): Promis
   return { kind: 'local', source: input.source, base: await resolveLocalBase(ctx.git, input.base) }
 }
 
+/**
+ * The target as the context records it, and the change it names, fetched or snapshotted. The
+ * canvas and the tour prepare the same way; only what they write afterwards differs.
+ */
+export async function resolveTargetPr(
+  ctx: AppContext,
+  input: PrepareTargetInput,
+  log: PrepareOptions['log']
+): Promise<{ target: PrepareTarget; pr: Pr }> {
+  const target = await resolveTarget(ctx, input)
+  const pr =
+    target.kind === 'pr'
+      ? await resolvePr(ctx, target.number, log)
+      : target.kind === 'local'
+        ? await resolveLocal(ctx, target, log)
+        : await resolveRefs(ctx, target.base, target.head, log)
+  return { target, pr }
+}
+
+/**
+ * The PR meta a prompt records. A pull request's counts and description are the forge's. A change
+ * set counts its own from the diff (the page derives its own from the files it shows, so this is
+ * only what the canvas or tour records) and takes its commit messages as its description.
+ */
+export async function completeTargetPr(
+  ctx: AppContext,
+  target: PrepareTarget,
+  pr: Pr,
+  derived: Derived
+): Promise<Pr> {
+  if (target.kind === 'pr') {
+    return pr
+  }
+  return {
+    ...pr,
+    body: await commitLogDescription(ctx.git, pr),
+    additions: derived.files.reduce((n, f) => n + f.additions, 0),
+    deletions: derived.files.reduce((n, f) => n + f.deletions, 0),
+    changedFiles: derived.files.length,
+  }
+}
+
 export async function prepare(
   ctx: AppContext,
   input: PrepareTargetInput,
   opts: PrepareOptions
 ): Promise<PrepareResult> {
-  const target = await resolveTarget(ctx, input)
-  const pr =
-    target.kind === 'pr'
-      ? await resolvePr(ctx, target.number, opts.log)
-      : target.kind === 'local'
-        ? await resolveLocal(ctx, target, opts.log)
-        : await resolveRefs(ctx, target.base, target.head, opts.log)
+  const { target, pr } = await resolveTargetPr(ctx, input, opts.log)
   const canvasDir = ctx.canvases.canvasDir(pr.headSha)
   const promptPath = path.join(canvasDir, 'prompt.md')
   const contextPath = path.join(canvasDir, 'context.json')
@@ -280,10 +326,9 @@ export async function prepare(
   const derived = await ctx.derived.ensure(pr)
   const additions = derived.files.reduce((n, f) => n + f.additions, 0)
   const deletions = derived.files.reduce((n, f) => n + f.deletions, 0)
-  // A pull request's counts are the forge's; anything else is counted from the diff itself. The
-  // page derives its own from the files it shows, so this is only what the canvas records.
-  const fullPr: Pr =
-    target.kind === 'pr' ? pr : { ...pr, additions, deletions, changedFiles: derived.files.length }
+  // A pull request's counts are the forge's; a change set's come from the diff, with its commit
+  // messages for a description.
+  const fullPr = await completeTargetPr(ctx, target, pr, derived)
   const derivedDir = ctx.derived.derivedDir(pr)
   const config = ctx.projectConfig.config
 

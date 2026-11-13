@@ -304,16 +304,21 @@ Relative custom paths resolve from the command's working directory. For example:
 pr-review install-skill --codex-dir ~/.codex/skills
 ```
 
-Installation copies the bundled skill on every platform. The copies and their `.pr-review-install`
-marker files can be committed to Git. Re-running the command refreshes managed copies and replaces
-legacy symlinks. An unmanaged directory requires `--force` to replace it.
+Installation copies every bundled skill on every platform: each directory under the package's
+`skills/` that has a `SKILL.md`, the canvas skill `pr-review-canvas` first, into the same skills
+directories. The copies and their `.pr-review-install` marker files can be committed to Git.
+Re-running the command refreshes managed copies and replaces legacy symlinks. An unmanaged
+directory requires `--force` to replace it.
 
 Each installed `SKILL.md` records `metadata.body-sha256` in its YAML frontmatter. The SHA-256 hash
 covers the body after the closing frontmatter delimiter, with CRLF normalized to LF. `doctor`
-compares the recorded hash and actual body against the skill bundled with the running CLI. Any
-outdated or modified copy in `.claude/skills` or `.agents/skills` fails the skill check, even if the
-other copy is current. Refresh copies with `pr-review upgrade` or `pr-review install-skill` (repeat
-any custom directory flags used during installation). Automatic discovery checks the two default directories.
+compares the recorded hash and actual body against the skill bundled with the running CLI, and the
+files a skill ships beside its `SKILL.md` against the bundled ones. Any outdated or modified copy
+in `.claude/skills` or `.agents/skills` fails the skill check, even if the other copy is current;
+so does a bundled skill missing from a directory that has the canvas skill, since an install that
+predates it is behind in the same way. Refresh copies with
+`pr-review upgrade` or `pr-review install-skill` (repeat any custom directory flags used during
+installation). Automatic discovery checks the two default directories.
 
 `doctor`'s `prompts` check fails when one of the project's own prompt templates lacks a token any
 release up to the running one added to the bundled template, and its hint says where to add it.
@@ -331,14 +336,14 @@ pr-review upgrade [--yes] [--only package,acpx,skill] [--repo <dir>]
 
 `upgrade` checks three things, prints a plan to stderr, and asks `Proceed? [y/N]`:
 
-| What              | When it changes                                                             | How                                                        |
-| ----------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| pr-review         | npm has a newer version, and this copy is the global npm install            | `npm install -g @vintasoftware/pr-review-canvas@<version>` |
-| acpx              | npm has a newer version, and the acpx on PATH is the global npm install     | `npm install -g acpx@<version>`                            |
-| The project skill | A copy in `.claude/skills` or `.agents/skills` differs from the bundled one | The same copy `install-skill` makes                        |
+| What               | When it changes                                                                                                                    | How                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| pr-review          | npm has a newer version, and this copy is the global npm install                                                                   | `npm install -g @vintasoftware/pr-review-canvas@<version>` |
+| acpx               | npm has a newer version, and the acpx on PATH is the global npm install                                                            | `npm install -g acpx@<version>`                            |
+| The project skills | A copy in `.claude/skills` or `.agents/skills` differs from the bundled one, or a bundled skill is missing beside the canvas skill | The same copies `install-skill` makes                      |
 
 When pr-review itself upgrades, the skill step covers every copy, since the new version may ship
-a new skill. After installing, it runs the new version as
+a new skill, or a new one beside it. After installing, it runs the new version as
 `pr-review upgrade --yes --from <old version> --only <kinds>` with the confirmed steps, none when
 none are left, so the new version copies its own skill and takes only the steps the plan showed.
 If the install fails, the current version runs the remaining steps itself.
@@ -446,9 +451,9 @@ Set the `prompts` map in `pr-review.config.yml` to use your own templates:
 
 ```yaml
 prompts:
-    generation-format.md: review-prompts/generation-format.md
-    generation-surfacing.md: review-prompts/generation-surfacing.md
-    chat-seed.md: review-prompts/chat-seed.md
+  generation-format.md: review-prompts/generation-format.md
+  generation-surfacing.md: review-prompts/generation-surfacing.md
+  chat-seed.md: review-prompts/chat-seed.md
 ```
 
 For an npm global install, copy the bundled templates to start editing:
@@ -538,7 +543,7 @@ Custom patterns replace the JavaScript/TypeScript defaults. For example, a Pytho
 
 ```yaml
 tests:
-    patterns: ['**/test_*.py', '**/tests/**']
+  patterns: ["**/test_*.py", "**/tests/**"]
 ```
 
 Test recognition controls ordering, but matching a test to its source file currently follows
@@ -572,6 +577,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `checkoutSweepMinutes` | `60`      | Integer minutes, 5–1440, between `serve`'s idle sweeps                           |
 | `canvasComment`        | `null`    | `true`, `false`, or `null` to follow the project (3)                             |
 | `mentionCanvas`        | `null`    | `true`, `false`, or `null` to follow the project (3)                             |
+| `tourComment`          | `null`    | `true`, `false`, or `null` to follow the project's `tour.share` (3)              |
 
 (1) A model ID names a family; see [Model families](#model-families).
 (2) `chatAgent` also picks the agent that [generates canvases from the review
@@ -579,7 +585,7 @@ app](#generating-from-the-review-app). `chatModel` is AI Chat only: generation r
 `generation.models` in the project config instead. A file written before these keys were renamed
 keeps working: `agent` and `model` are read as
 `chatAgent` and `chatModel`, and the next save renames them in the file.
-(3) Overrides `sharing.canvasComment` or `sharing.mentionCanvas` in the project config for you; see
+(3) Overrides `sharing.canvasComment`, `sharing.mentionCanvas`, or `tour.share` in the project config for you; see
 [turning sharing off](#turning-sharing-off). Edit these in the file; the settings dialog does not
 show them.
 
@@ -1147,6 +1153,265 @@ The canvas you marked is compared directly with the one on screen, so marks surv
 regenerations in between. When a mark follows, the page names the canvas you made it on. If your
 machine lacks that canvas or cannot rebuild either diff, no marks follow.
 
+## The tour
+
+A tour is a guided pass over one change that builds the reader's theory of it: landmarks that
+explain, decisions the reader keeps or changes, and a quiz. It is generated once per head commit,
+stored beside the canvases, and shared as its own pull request comment; the author and every
+reviewer take the same tour. The design is [ADR 0005](adr/0005-the-tour.md); the words are the
+"Tour" section of [CONTEXT.md](../CONTEXT.md). The tour and the canvas never depend on each other.
+
+### Generating a tour
+
+The bundled [pr-tour skill](../skills/pr-tour/SKILL.md) runs the steps; `/pr-tour <n>`,
+`/pr-tour branch`, `/pr-tour uncommitted`, and `/pr-tour --base <ref> --head <ref>` name the
+same targets `prepare` takes. [pr-tour-setup](../skills/pr-tour-setup/SKILL.md) writes the guide
+the tour is generated with.
+
+```text
+pr-review tour open [<n>|branch|uncommitted] [--no-open] [--chat-agent <id>] [--chat-model <id>] [--json]
+pr-review tour generate [<n>|branch|uncommitted] [--force] [--base <ref>] [--agent claude|codex] [--model <id>] [--out <file|dir>] [--open] [--json]
+pr-review tour prepare (--pr <n> | --branch | --uncommitted | --base <ref> --head <ref>) [--force]
+pr-review tour validate <tour-model.json> --tour <dir> [--human]
+pr-review tour preview <tourDir> [--landmark <id>]
+pr-review tour publish <tourDir> --agent <id> [--model <id>] --harness claude-code|codex|other [--allow-stale]
+pr-review tour plan (--pr <n> | --branch | --uncommitted)
+pr-review tour gallery [<slug>…] [--out <dir>]
+pr-review tour hunk <tourDir> <hunk id> [--from <line> --to <line>]
+pr-review tour checkout <tourDir> head|base [--remove]
+pr-review tour export (--pr <n> | --branch | --uncommitted | --head <sha> [--pr <n>]) [--out <file|dir>]
+pr-review tour import <zip> [--pr <n>] [--force]
+```
+
+`tour open` is `open` for the tour: it adds the project to the running server and opens the
+tour page of the review it names; with none, the tour of the checked-out branch's open pull
+request, else the home page's tours tab.
+
+`tour generate` is `generate` for the tour: it runs the job in the running server, as the tour
+page's generate command does, and waits for it. `tour.generate` decides who may: `author`, the default, lets only
+the pull request's author (and anyone on their own local work) start one, because the agent runs
+with every permission while it reads a diff that could steer it; `on` lets every reader, and `off`
+nobody. A reader it leaves out still runs `/pr-tour` from their own agent. The server runs prepare and publish; between them
+the chat agent follows the pr-tour skill (the project's copy, else the shipped one) from the
+repository root, through acpx with every permission approved, because the skill writes scene files,
+runs `tour validate`, `preview`, and `checkout`, and runs try-it recipes. It calls this server's own
+`pr-review` over the server's data dir. A publish that rejects the tour sends the problems back,
+up to `generation.maxRepairRounds` times. One generation of either kind runs at a time in a clone
+(`GET|POST|DELETE /api/tours/<n>/generate`; the page reads the skill it will run and the target's head from `GET /api/generate/skill?kind=tour` and `GET /api/generate/target`).
+
+A tour of a later commit updates the newest tour of the same review whose head is an ancestor,
+as an incremental canvas updates its basis (`tour.incremental`, on by default; `--force` starts
+blank). A `--force` regeneration of the same commit keeps the reader's answers on this machine
+through prepare, so a publish that is refused loses nothing; the publish that stores the new tour
+carries them onto it: picks on the decisions that still stand, notes, answers, and marks on the
+landmarks and questions it still has, from the first step, with the plan to confirm again. Prepare copies that tour's model and pictures into `<tourDir>/basis/`, prints `basis`
+(`tourSha`, `modelPath`, `scenesDir`), and the prompt lists each file of the diff as unchanged,
+changed, new, or gone against it: what names only unchanged files carries, the rest is judged
+again, and a decision keeps its key while it still stands. Publishing such a tour carries the
+author's picks, once they confirmed the plan, onto the decisions that still stand: the same key,
+title, and anchored file; nobody has toured it yet. A tour whose head moved shows as
+outdated, with an update command.
+
+`tour prepare` returns `tourDir`, `headSha`, `mergeBaseSha`, `promptPath`, `contextPath`,
+`scenesDir`, `sceneGuidePath`, `models` (`tour.models` over `generation.models`), `sharing`,
+`blastRadius`, `budget`, `guide`, and `status`. The **blast radius** is the set of `highRisk`
+labels the changed paths touch. The **budget** counts why landmarks only, since the background,
+the world, and the respect landmark are one each: about one per `tour.budget.linesPerLandmark`
+changed lines, one more with a blast radius, at least one (`why`). The tour may write one more
+when its model says why in `overBudget`, and never more than `tour.budget.whyLandmarks`
+(`whyMax`). Decisions may number one more than the why landmarks written, and quiz questions one
+fewer than all landmarks (at least two), each under its own ceiling. A label that speaks of a schema, a migration, or
+stored data requires a **state landmark**, which the budget never counts, and so does a changed
+migration, SQL, or schema file.
+
+The generator writes `<tourDir>/tour-model.json` and one scene per landmark under `<scenesDir>`,
+as `<landmark id>.scene.html`, plus at most two `<landmark id>.micro.html`, the micro-worlds; a
+micro-world may stand in for its landmark's scene. Each scene names its technique with
+`data-technique` on its root. `tour validate` checks the model against the context: the schema,
+the landmark order (background, world, whys, respect), the budget, the caps measured on visible
+text, every path and anchor against the diff, that every code chunk's lines are the patch's, that
+every landmark has a picture, every scene against the frame's rules, that no technique (read from
+the scene's root element) draws more than two scenes, and the categories the project keeps. `tour preview` validates, then screenshots, through a quiet copy of the server, every
+landmark on a desktop and a phone, every scene and micro-world alone at its desktop and phone
+widths, and every decision and question, using Chrome, Chromium, or Edge from the PATH or
+`PR_REVIEW_BROWSER`; without one it prints a `previewUrl` to open in a browser tool.
+`tour publish` validates, stores `tours/<headSha>/tour.json`, and shares.
+
+`tour gallery` lists the scene gallery the skill ships beside its scene guide: real pull requests,
+each drawn with one technique. With slugs, it draws those entries as pictures with the same
+browser, into `--out` (by default `<data dir>/gallery`), and prints
+their paths.
+
+`tour hunk` prints one code chunk for the model, `{ "path", "diff" }`, read from the prepared
+patches: the whole hunk, or with `--from` and `--to` the lines of that new-side range and the
+deletions among them, under an `@@` header that counts them.
+
+`tour checkout` gives the generator a place to run things: a git worktree of its own at the
+tour's head, or one at its merge base, under `checkouts/tour/head/<key>` and
+`checkouts/tour/base/<key>`, apart from the [review checkout](#review-checkouts) AI Chat reads,
+which a run never writes into or moves. It prints `{ "side", "dir", "sha", "port", "scratch" }`: a
+port nothing listens on, and an empty folder in the tour directory, emptied on each call, for the
+run's state. Try-it recipes run in the head checkout on that port with their state in that folder,
+and a script the change touches runs in either checkout, so nothing runs in your own checkout or
+writes your review state. A ref comparison has no review, so it has no checkout. The checkout is
+locked only while the command moves it, so `CHECKOUT_BUSY` means another `tour checkout` of the
+same review is moving it at that moment; run it again. `--remove` takes the
+side's checkout away once the generator is done, and prints `{ "side", "removed" }`; what is left
+goes with the idle sweep (`checkoutIdleDays`, which covers them all), and as soon as the pull
+request is merged or closed.
+
+`tour plan` prints the plan a finished tour settled on, for the
+[pr-tour-apply skill](../skills/pr-tour-apply/SKILL.md): `status` (`finished` or `unfinished`),
+`headSha`, `tourDir`, `promptPath`, the `prompt` itself, `finishedAt`, and how many `changes`
+and `kept` decisions it holds. `/pr-tour-apply <key>` reads it, makes the approved changes, runs
+the project checks, and offers a fresh tour.
+
+`tour export` writes the zip of the tour the page shows for that review (the newest older one when
+the head has none), or of the stored tour of `--head`, to `.pr-review/exports/` or `--out`, as
+`export` does a canvas; it is the zip the tour comment carries. `tour import` stores a tour from
+such a zip, refusing one of another repository unless `--force` and one exported for another
+pull request than `--pr`, and keeps a stored tour of the same commit that is at least as new. The
+tour page has the same two: an export command in its header, and on a pull request with no tour, a
+drop zone (`GET /api/tours/<n>/export`, `POST /api/tours/<n>/import`). On a pull request with no
+tour of its head, opening the page looks through the comments for a tour someone shared, as the
+review page does for a canvas, and imports the tour comment of the head, else the newest, passing
+over one whose zip names another pull request; it looks again only when the comments or the head
+change. **Look for a shared tour** does the same on demand, reading the comments afresh
+(`POST /api/tours/<n>/shared-tour/fetch`).
+
+Opening the tour page resolves the head as the review page does: a pull request's asks the forge
+whether it moved, and local work is read again, so a tour of an earlier commit shows as outdated.
+The page's polls answer from the head last read (`GET /api/tours/<n>?poll=1`).
+
+`validate`, `preview`, `publish`, and `checkout` use the data directory that holds the tour dir, as `validate` and `publish`
+do for a canvas. `tour publish` answers `CANVAS_STALE` when the head moved and `CANVAS_ELSEWHERE`
+when the tour dir sits in another data directory.
+
+### Taking a tour
+
+`/tour/<n>`, `/tour/branch`, and `/tour/uncommitted` draw the tour of the target's head, or the
+newest older one with a bar saying how far behind it is. The page walks the cover, the landmarks,
+the decisions, the quiz, and the plan; every step is a browser history entry, so the back and
+forward buttons move through the tour, a reload lands on the step the reader was on, and a step's
+URL (`#landmark-<id>`, `#decision-<key>`, `#quiz-<id>`, `#plan`) can be shared. The keys: `→`,
+`space`, and `Enter` for next, `←` for back, `i` for the code behind a landmark, `k`, `a`, and `c`
+to keep, take the alternative, or ask for something else, `1` to `3` to answer, `/` to ask AI Chat, `?` for help, `esc` to close the help or the drawer. A landmark's scene and
+micro-world are drawn in sandboxed frames from `/tour-scene/<key>/<landmark>/scene|micro`.
+
+The cover asks who is taking the tour. **I am the author of this change** is ticked by itself
+for the pull request's author (on local work, for uncommitted changes, and for a branch when the
+clone commits as the author of its last commit), and the reader may tick it or not: in **author
+mode** the plan writes the re-implementation prompt and the author's picks are shared; in
+**reviewer mode** each decision shows what the author answered, the reader picks for themselves,
+and the plan writes a review suggestion from their picks and notes (`review-suggestion.md` beside
+the tour) to paste into their review, while their change requests go to their pending review. The
+choice is saved with the reader's state.
+
+Where the reader is and what they answered is saved to `tours/<headSha>/reader.json` as they go
+(`PUT /api/tours/<n>/reader`), so nothing is lost between visits; the bundle the page opens with
+is `GET /api/tours/<n>`. A decision offers three options and none is chosen at first: keep what
+the code does, take the tour's alternative, or something else. Clicking keep or the alternative
+settles the decision; a click elsewhere on the page takes that pick back. A decision must be
+settled before the step after it opens, and so must a question be answered right when the project
+requires the quiz (`tour.finalQuiz: required`); with the quiz merely on, a wrong answer reopens
+the landmark and the plan stays open. The browser's back and forward go through the same gate: a
+step an undo has since closed, or a hash typed into the address bar past an open decision, lands
+on the decision that keeps it closed. The focus follows each move to the step, and the tab's
+title names it.
+
+Something else opens the **grilling**: with AI Chat on (`chat.enabled`, acpx installed, and
+`tour.grill` not `off`), the drawer talks to the chat agent in the tour's own thread (`t0`, which
+the canvas's pane never lists), seeded from `prompts/tour-grill.md` with the landmarks and the
+decisions, and read-only like every chat turn (`POST /api/tours/<n>/grill`, its history at
+`GET /api/tours/<n>/grill/history`, and **stop** at `POST /api/tours/<n>/grill/cancel`). The agent asks what it needs, then emits a fenced
+`restatement` block that the page turns into a card once the block is whole: approve settles the
+decision and puts it in the plan, and reopening the conversation keeps it approved; edit lets the
+reader correct it, reject sends the correction back. A decision asked about but never answered gets
+the opening again. The agent says when it has enough; **finish** asks it to restate at once from what it has.
+On the plan, **restate the plan with the agent** asks for one fenced `plan` block. The reader may speak instead of type
+(`tour.audio`): the browser's Web Speech API turns it into text, the page says once where the
+audio goes, and the reader can turn audio off for themselves. Without chat, the reader writes the
+restatement in the same card. **confirm the plan** (`POST /api/tours/<n>/finish`) writes
+the re-implementation prompt to `tours/<headSha>/plan-prompt.md` in author mode, or the review
+suggestion to `review-suggestion.md` in reviewer mode (the generation prompt beside them,
+`prompt.md`, stays as prepare wrote it), records the reader in the tour's
+record (and, in author mode, their picks, so a regenerated tour carries them), and shares the
+record on the pull request once. Before it does, it reads the copies of the same commit other readers shared
+there and folds their records in, so the comment names everyone who finished on any machine. The
+tour of an earlier commit than the head is finished on this machine alone: shared, its record
+would replace the comment that carries the head's tour. On the tour of the pull request's head, the approved changes of a reader in reviewer mode go
+into their pending review as comments on their decisions' lines, once each, and leave with their
+verdict; `tour plan` reports such a tour as unfinished, since the plan is the author's to confirm. The quiz result stays on the machine. With `?preview`, the
+page draws `tour-model.json` as the generator has written it and saves nothing; `?landmark=<id>`
+opens on that landmark, which is how `tour preview` takes its screenshots.
+
+With AI Chat on, **ask AI Chat** in the nav (or `/`) opens a pane beside the tour on every step.
+Each place of the tour has its own thread: the cover's is about the whole tour, and each
+landmark, decision, quiz question, and the plan has one. The first question about a place
+starts its thread, titled after it, and the next one continues it. The open pane follows the
+reader from step to step, and the ask command has a dot when the step on screen has a thread.
+**threads** lists them by kind; **new thread** there starts another thread about the whole tour,
+and **go to stop** brings a thread's step back. An answer keeps coming in while the reader reads
+another stop; it is counted on the ask command until its thread is opened. One answer runs at a
+time per pull request, the grilling's and the canvas's included. On a wide window the tour moves
+over to make room, and the pane stays open across a reload. A quiz question's context leaves out
+its answer until the reader has it right. The threads are kept with the pull request's chat
+threads, apart from the grilling's, and the canvas's pane never lists them; each is its own
+read-only agent session, seeded from `prompts/tour-chat.md` (`POST /api/tours/<n>/chat`,
+`GET /api/tours/<n>/chat/threads`, a thread's history at
+`GET /api/tours/<n>/chat/threads/<name>/history`, **stop** at `POST /api/tours/<n>/chat/cancel`, and
+the count of answers not yet seen at `PUT /api/tours/<n>/chat/threads/<name>/unseen`).
+
+### The guide
+
+`tour.guide`, `docs/pr-tour.md` by default, is the project's committed notes for tours: how to
+run the app, how to make synthetic data and where fixtures may be written, which non-functional
+requirements matter, where specs and designs live, and what the agent may run. It is an
+allowlist: the generation skill runs nothing it does not name without asking first, and it never
+holds credentials or a production target. Without a guide a tour has no try-it recipes.
+
+### Sharing a tour
+
+A tour is shared as its own hidden comment, marked `pr-review-tour:v1`, holding the tour zip as
+base64, with a visible line on its shape and who has toured it. `tour.share` decides: `auto`
+follows `sharing.canvasComment`, `on` and `off` decide apart from it, and the personal
+`tourComment` wins over all. When the comment does not fit the host's limit or the post fails,
+the zip is exported to `<dataDir>/exports/` for the author to attach by hand; the tour page finds
+the attachment as the review page finds a canvas's, by its name. The zip is named
+`pr-<n>-<time>-<sha8>-<repo>-tour.zip` and holds `manifest.json` and `tour.json`. A copy of a
+tour already stored brings its record along: who finished it on another machine, and the
+author's picks when they finished later there. A copy found on the pull request is trusted as far
+as its poster may speak: the author's comment, or the pull request body, supplies the whole
+record, the author's picks included; anyone else's comment supplies only their own sign-off, so a
+commenter can neither settle the author's decisions nor sign off for others. A reviewer's own
+picks never leave their machine; the author's reach every reviewer through the record.
+
+### Tour config
+
+Under `tour:` in `pr-review.config.yml`; see the [example configuration](../pr-review.config.example.yml).
+
+| Key                            | Default           | Details                                                                                                             |
+| ------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `tour.budget.whyLandmarks`     | `4`               | Hard ceiling on why landmarks; the state landmark does not count                                                    |
+| `tour.budget.decisions`        | `5`               | Ceiling on decisions                                                                                                |
+| `tour.budget.quiz`             | `5`               | Ceiling on quiz questions                                                                                           |
+| `tour.budget.linesPerLandmark` | `400`             | About one why landmark per this many changed lines                                                                  |
+| `tour.finalQuiz`               | `on`              | `on`, `off`, or `required` before the prompt is written                                                             |
+| `tour.grill`                   | `change`          | `change` grills when the reader asks for something else, `off` never                                                |
+| `tour.audio`                   | `on`              | Speech through the browser's Web Speech API, with a one-time notice on where the audio goes                         |
+| `tour.microWorld`              | `on`              | `off` refuses a micro-world                                                                                         |
+| `tour.tryIt`                   | `auto`            | `auto` is on when the guide has a run recipe; `on`; `off`                                                           |
+| `tour.categories`              | all six           | The decision categories the project keeps: `trade-off`, `architecture`, `product`, `pokayoke`, `nfr`, `spec`        |
+| `tour.share`                   | `auto`            | `auto` follows `sharing.canvasComment`; `on`; `off`                                                                 |
+| `tour.models`                  | `{}`              | Per agent id, over `generation.models`                                                                              |
+| `tour.guide`                   | `docs/pr-tour.md` | The committed guide, relative to the repository root                                                                |
+| `tour.generate`                | `author`          | Who generates a tour from the review app: `author` (the change's author, or local work), `on` (every reader), `off` |
+| `tour.incremental`             | `true`            | A later commit's tour updates the newest tour of an ancestor; `false` starts every tour blank                       |
+
+The prompt template is `prompts/tour.md`, the grilling's seed is `prompts/tour-grill.md`, and the
+tour's AI Chat's seed is `prompts/tour-chat.md`; each is overridable as
+`prompts: { tour.md: <path>, tour-grill.md: <path>, tour-chat.md: <path> }` like the others. The scene guide the generator reads is `skills/pr-tour/scenes.md`.
+
 ## AI Chat
 
 The review app runs locally. Forge operations contact GitHub or GitLab, and AI Chat sends requests
@@ -1250,8 +1515,14 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   the first answer is done. A linked worktree's branch review has a checkout of its own
   (`checkouts/branch~<worktree>`).
 
+Merge-base checkouts that tours take are listed and removed with the others.
+
 The server removes checkouts with no chat turn for `checkoutIdleDays`, when it first opens a
-clone and every `checkoutSweepMinutes` after. `pr-review clean` does the same on demand:
+clone and every `checkoutSweepMinutes` after. On the same runs it removes the merge-base checkout
+of a pull request that has been merged or closed, whatever its age: only a tour's generator used
+it. It reads each one's state from the host; a state it cannot read leaves the checkout for the
+next run. The head checkout of a merged pull request stays to the idle rule, since AI Chat still
+reads it. `pr-review clean` removes idle checkouts on demand:
 
 ```text
 pr-review clean [--all | --older-than <days>] [--dry-run]
@@ -1398,16 +1669,17 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `GLAB_MISSING` / `GLAB_UNAUTHENTICATED` | Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), run `glab auth login`, and check authentication in the same environment that runs the server                                                   |
 | `GITLAB_API_ERROR`                      | Read the underlying error for permissions, rate limits, connectivity, or GitLab service problems                                                                                                        |
 | `PR_NOT_FOUND`                          | Check the PR number, repository, and your access                                                                                                                                                        |
-| `CANVAS_NOT_FOUND`                      | Generate or import a canvas for the requested commit                                                                                                                                                    |
+| `CANVAS_NOT_FOUND`                      | Generate or import a canvas, or a tour, for the requested commit                                                                                                                                        |
 | `CANVAS_INVALID`                        | Read the format errors; re-export or regenerate the canvas                                                                                                                                              |
 | `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                                                                            |
 | `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own                                                                |
 | `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                                                                             |
-| `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                                                                                 |
-| `CANVAS_ELSEWHERE`                      | `publish` got a canvas dir outside its data dir; publish the `canvasDir` prepare printed, with the `--data-dir` prepare used or none                                                                    |
+| `CANVAS_STALE`                          | The PR head moved, or the tour page shows another commit; prepare again, or reload                                                                                                                      |
+| `CANVAS_ELSEWHERE`                      | `publish` got a canvas or tour dir outside its data dir; publish the dir prepare printed, with the `--data-dir` prepare used or none                                                                    |
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                                                                 |
 | `SKILL_DIR_EXISTS`                      | The destination contains a customized directory; preserve it elsewhere before replacing it with `--force`                                                                                               |
 | `CHAT_BUSY`                             | Wait for the running reply, or press **stop** on the page that asked; when a canvas generation, another worktree of the clone, or another `pr-review serve` holds the review, ask again once it is done |
+| `CHECKOUT_BUSY`                         | Another `tour checkout` of the same review is moving the checkout at this moment; run it again                                                                                                          |
 | `GENERATION_BUSY`                       | One generation runs at a time; open the running one from its review page to follow or stop it, then start again                                                                                         |
 | `GENERATION_FAILED`                     | Follow the hint in the generation dialog, or run the skill from Claude Code or Codex                                                                                                                    |
 | `AGENT_AUTH_REQUIRED`                   | Sign in through the selected agent's CLI, then retry                                                                                                                                                    |
@@ -1415,7 +1687,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `AGENT_INCOMPLETE`                      | Retry the message or increase the chat timeout                                                                                                                                                          |
 | `COMMENT_FORBIDDEN`                     | Check the GitHub or GitLab account's repository access and token permissions                                                                                                                            |
 | `COMMENT_LINE_NOT_IN_DIFF`              | Choose a line shown in the current diff                                                                                                                                                                 |
-| `NOT_AUTHOR`                            | Only the pull request's author resolves points; sign in with that account, or dismiss the point instead                                                                                                 |
+| `NOT_AUTHOR`                            | Only the pull request's author resolves points, or generates a tour from the app by default; sign in with that account                                                                                  |
 | `SIGNOFF_INCOMPLETE`                    | Mark every layer except Other reviewed for this head                                                                                                                                                    |
 | `FORBIDDEN_HOST` / `CROSS_ORIGIN`       | Open the local server using `localhost` or `127.0.0.1` and submit actions from that page                                                                                                                |
 | `SERVER_NOT_RUNNING`                    | Start the server with `pr-review serve` in any terminal, then run `pr-review open` again                                                                                                                |
@@ -1439,3 +1711,15 @@ Validation reports name the field, file, hunk, or line to fix. Common groups are
 | `POINT_IMPACT`                                                  | Every `decide` point has an impact, and no other point has one                                                                                         |
 | `POINT_LEVEL`                                                   | A `question` point is `decide` or `check`                                                                                                              |
 | `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                                                     |
+
+The tour's `tour validate` and `tour publish` report the same way, with these codes:
+
+| Codes                                                                                | What to check                                                                                                                |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `SCHEMA`, `TEXT_TOO_LONG`, `MARKUP_IN_PLAIN_TEXT`                                    | Required fields, text caps on what a reader sees, and no backticks in titles, side labels, or not-toured lines               |
+| `LANDMARK_ORDER`, `LANDMARK_BUDGET`, `STATE_LANDMARK_MISSING`                        | Background, world, whys, respect, once each; the why budget and `overBudget`; a state landmark for stored data               |
+| `DECISION_BUDGET`, `QUIZ_BUDGET`, `CATEGORY_OFF`                                     | Decisions at most one more than the whys, questions one fewer than the landmarks, categories the project keeps               |
+| `ID_DUPLICATE`, `LANDMARK_UNKNOWN`                                                   | Unique ids and keys; a decision anchored on a why or respect landmark, a question on any landmark of this tour               |
+| `PATH_UNKNOWN`, `ANCHOR_OUTSIDE_DIFF`, `CHUNK_UNKNOWN`                               | Files of the diff; an anchor on a new-side line inside a hunk; chunks with their `@@` header and lines copied from the patch |
+| `PICTURE_MISSING`, `SCENE_INVALID`, `MICRO_INVALID`, `MICRO_LIMIT`, `SCENE_REPEATED` | A picture per landmark; the frame's rules; at most two micro-worlds; a technique on at most two scenes                       |
+| `TRY_IT_UNVERIFIED`                                                                  | A `tryIt` is `verified`, or left out; none when try-it is off                                                                |

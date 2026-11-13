@@ -1,0 +1,92 @@
+<div class="scene" data-technique="schema">
+  <svg class="sc-defs" width="0" height="0" aria-hidden="true">
+    <defs>
+      <marker id="ah-bad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="bad" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="ah-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="3.5" markerHeight="3.5" orient="auto-start-reverse"><path class="warn" d="M0,0 L10,5 L0,10 z"/></marker>
+      <marker id="ah-good" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="good" d="M0,0 L10,5 L0,10 z"/></marker>
+    </defs>
+  </svg>
+  <svg class="sc sc-wide" viewBox="0 45 1000 225" role="img" aria-label="wagtailcore_revision points at its page by object_id text and two content types">
+    <g class="t">
+      <rect x="30" y="100" width="230" height="116" rx="8"/><text class="h" x="45" y="125">wagtailcore_page</text>
+      <line x1="30" y1="138" x2="260" y2="138"/>
+      <text x="45" y="163">id</text><text class="v" x="245" y="163">7</text>
+      <text x="45" y="199">title</text><text class="v" x="245" y="199">About us</text>
+    </g>
+    <g class="t chg">
+      <rect x="390" y="56" width="270" height="194" rx="8"/>
+      <text class="old" x="405" y="78">wagtailcore_pagerevision</text><text class="h" x="405" y="102">wagtailcore_revision</text>
+      <rect class="cell warn" x="391" y="116" width="268" height="44"/><text x="405" y="143"><tspan class="old">page_id</tspan> object_id</text><text class="v" x="645" y="143">"7"</text>
+      <rect class="cell good" x="391" y="160" width="268" height="44"/><text x="405" y="187">content_type_id</text>
+      <rect class="cell good" x="391" y="204" width="268" height="45"/><text x="405" y="231">base_content_type_id</text>
+    </g>
+    <g class="t">
+      <rect x="775" y="140" width="210" height="116" rx="8"/><text class="h" x="790" y="165">django_content_type</text>
+      <line x1="775" y1="178" x2="985" y2="178"/>
+      <text x="790" y="203">tests.simplepage</text>
+      <text x="790" y="239">wagtailcore.page</text>
+    </g>
+    <path class="w bad" d="M390,128 C340,70 300,90 262,150" marker-end="url(#ah-bad)"/>
+    <text class="lb bad" x="322" y="72">FK dropped</text>
+    <path class="w warn hero" d="M390,146 C340,150 300,160 264,160" marker-end="url(#ah-warn)"/>
+    <text class="lb warn" x="327" y="192">matched as text</text>
+    <path class="w good" d="M660,182 C725,182 730,198 773,198" marker-end="url(#ah-good)"/>
+    <path class="w good" d="M660,226 C725,226 730,234 773,234" marker-end="url(#ah-good)"/>
+    <text class="lb good" x="718" y="166">filled by 0071</text>
+  </svg>
+
+  <svg class="sc sc-tall" viewBox="0 0 340 480" role="img" aria-label="the same tables, stacked">
+    <g class="t">
+      <rect x="90" y="8" width="210" height="96" rx="8"/><text class="h" x="102" y="30">wagtailcore_page</text>
+      <line x1="90" y1="40" x2="300" y2="40"/>
+      <text x="102" y="62">id</text><text class="v" x="288" y="62">7</text>
+      <text x="102" y="92">title</text><text class="v" x="288" y="92">About us</text>
+    </g>
+    <text class="lb bad" x="180" y="128">FK dropped</text>
+    <text class="lb warn" x="180" y="148">matched as text</text>
+    <g class="t chg">
+      <rect x="50" y="160" width="250" height="172" rx="8"/>
+      <text class="old" x="62" y="180">wagtailcore_pagerevision</text><text class="h" x="62" y="200">wagtailcore_revision</text>
+      <rect class="cell warn" x="51" y="212" width="248" height="40"/><text x="62" y="237"><tspan class="old">page_id</tspan> object_id</text><text class="v" x="288" y="237">"7"</text>
+      <rect class="cell good" x="51" y="252" width="248" height="40"/><text x="62" y="277">content_type_id</text>
+      <rect class="cell good" x="51" y="292" width="248" height="39"/><text x="62" y="317">base_content_type_id</text>
+    </g>
+    <text class="lb good" x="190" y="360">filled by 0071</text>
+    <g class="t">
+      <rect x="90" y="374" width="210" height="100" rx="8"/><text class="h" x="102" y="396">django_content_type</text>
+      <line x1="90" y1="406" x2="300" y2="406"/>
+      <text x="102" y="430">wagtailcore.page</text>
+      <text x="102" y="461">tests.simplepage</text>
+    </g>
+    <path class="w bad" d="M50,226 C4,226 4,47 88,47" marker-end="url(#ah-bad)"/>
+    <path class="w warn hero" d="M50,236 C26,236 26,64 88,64" marker-end="url(#ah-warn)"/>
+    <path class="w good" d="M300,272 C336,272 336,456 302,456" marker-end="url(#ah-good)"/>
+    <path class="w good" d="M300,312 C322,312 322,426 302,426" marker-end="url(#ah-good)"/>
+  </svg>
+  <style>
+    .sc-defs { position: absolute; }
+    .sc { width: 100%; height: auto; overflow: visible; font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .sc-tall { display: none; font-size: 13px; }
+    .sc .t rect { fill: var(--paper); stroke: var(--line); stroke-width: 1.5; }
+    .sc .t line { stroke: var(--line); stroke-width: 1.5; }
+    .sc .t.chg > rect:first-child { stroke: var(--warn); stroke-width: 2.5; }
+    .sc text { fill: var(--fg); }
+    .sc .h { font-weight: 700; }
+    .sc .v { text-anchor: end; fill: var(--muted); }
+    .sc .old { fill: var(--bad); opacity: 0.7; text-decoration: line-through; font-size: 0.85em; }
+    .sc .cell { stroke: none; }
+    .sc .cell.warn { fill: color-mix(in srgb, var(--warn) 16%, var(--paper)); }
+    .sc .cell.good { fill: color-mix(in srgb, var(--good) 13%, var(--paper)); }
+    .sc .lb { font: 600 14px ui-sans-serif, system-ui, sans-serif; text-anchor: middle; }
+    .sc-tall .lb { font-size: 12px; }
+    .sc text.lb, .sc-defs path { fill: var(--c); }
+    .sc path.w { fill: none; stroke: var(--c); stroke-width: 2; }
+    .sc .w.bad { stroke-dasharray: 6 5; opacity: 0.6; }
+    .sc .w.hero { stroke-width: 4; stroke-dasharray: 2 7; stroke-linecap: round; filter: drop-shadow(0 0 4px var(--warn)); animation: sc-run 1.2s linear infinite; }
+    @keyframes sc-run { to { stroke-dashoffset: -18; } }
+    @media (max-width: 40rem) {
+      .sc-wide { display: none; }
+      .sc-tall { display: block; }
+    }
+  </style>
+</div>

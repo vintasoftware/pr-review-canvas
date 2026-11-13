@@ -1,0 +1,39 @@
+<div class="scene" data-technique="state-machine">
+  <svg class="sm" viewBox="0 0 440 330" role="img" aria-label="circuit breaker states: a filtered error in half-open now goes to closed instead of staying stuck">
+    <defs>
+      <marker id="sm-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>
+      <marker id="sm-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--good)"/></marker>
+      <marker id="sm-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--bad)"/></marker>
+    </defs>
+
+    <path class="sm-e" d="M142,53 H296" marker-end="url(#sm-m)"/>
+    <text class="sm-l" x="220" y="42">failure</text>
+    <path class="sm-e" d="M345,79 L264,226" marker-end="url(#sm-m)"/>
+    <text class="sm-l" x="294" y="206" text-anchor="start">resetTimeout</text>
+    <path class="sm-e" d="M153,253 Q40,253 40,82" marker-end="url(#sm-m)"/>
+    <text class="sm-l" x="72" y="204" text-anchor="start">success</text>
+    <path class="sm-e gone" d="M200,278 C182,328 258,328 240,282" marker-end="url(#sm-b)"/>
+    <text class="sm-l gone" x="264" y="314" text-anchor="start">stuck here</text>
+    <path class="sm-e hero" d="M186,227 L111,82" marker-end="url(#sm-g)"/>
+    <text class="sm-l hero" x="168" y="142" text-anchor="start">fire(400)</text>
+    <text class="sm-l hero" x="168" y="162" text-anchor="start">filtered</text>
+
+    <rect class="sm-s" x="20" y="30" width="120" height="46" rx="23"/><text x="80" y="58">closed</text>
+    <rect class="sm-s" x="300" y="30" width="120" height="46" rx="23"/><text x="360" y="58">open</text>
+    <rect class="sm-s" x="155" y="230" width="130" height="46" rx="23"/><text x="220" y="258">half-open</text>
+  </svg>
+  <style>
+    .sm { width: 100%; max-width: 38rem; height: auto; overflow: visible; }
+    .sm text { font: 700 16px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--fg); text-anchor: middle; }
+    .sm text[text-anchor="start"] { text-anchor: start; }
+    .sm .sm-l { font-weight: 500; font-size: 14.5px; fill: var(--muted); }
+    .sm .sm-l.hero { font-weight: 700; fill: var(--good); }
+    .sm .sm-l.gone { fill: var(--bad); text-decoration: line-through; }
+    .sm-s { fill: var(--paper); stroke: var(--fg); stroke-width: 1.8; }
+    .sm-e { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+    .sm-e.gone { stroke: var(--bad); stroke-dasharray: 6 5; opacity: 0.75; }
+    .sm-e.hero { stroke: var(--good); stroke-width: 4; filter: drop-shadow(0 0 4px var(--good)); animation: sm-glow 2s ease-in-out infinite; }
+    @media (max-width: 40rem) { .sm .sm-l { font-size: 16.5px; } .sm text { font-size: 17px; } }
+    @keyframes sm-glow { 50% { filter: drop-shadow(0 0 9px var(--good)); } }
+  </style>
+</div>

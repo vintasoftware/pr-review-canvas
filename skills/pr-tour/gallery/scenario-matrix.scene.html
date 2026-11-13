@@ -1,0 +1,41 @@
+<div class="scene" data-technique="scenario-matrix">
+  <div class="sx">
+    <span></span><span class="sx-h">before</span><span></span><span class="sx-h">after</span>
+
+    <code class="sx-in">res.status(201)</code>
+    <div class="sx-c muted"><b>201</b><span>sent</span></div><span class="sx-eq">=</span>
+    <div class="sx-c muted"><b>201</b><span>sent</span></div>
+
+    <code class="sx-in">res.status("410")</code>
+    <div class="sx-c bad sx-gone"><b>410</b><span>sent, deprecated</span></div><span class="sx-eq good">→</span>
+    <div class="sx-c good sx-hero"><b>500</b><span>TypeError</span></div>
+
+    <code class="sx-in">res.status(99)</code>
+    <div class="sx-c muted"><b>500</b><span>Node throws at <code>.end()</code></span></div><span class="sx-eq warn">→</span>
+    <div class="sx-c warn"><b>500</b><span>RangeError</span></div>
+  </div>
+  <style>
+    .scene code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .sx { display: grid; grid-template-columns: auto 16rem 2.5rem 16rem; align-items: center; gap: 0.9rem 0.6rem; }
+    .sx-h { font-size: 0.8rem; font-weight: 650; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); text-align: center; }
+    .sx-in { justify-self: end; margin-right: 1rem; font-size: 0.95rem; }
+    .sx-c { display: flex; align-items: baseline; gap: 0.7rem; padding: 0.5rem 0.8rem; border: 0.12rem solid var(--c); border-radius: 0.5rem; background: var(--tint); }
+    .sx-c.muted { border-color: var(--line); background: var(--paper); }
+    .sx-c b { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--c); }
+    .sx-c.muted b { color: var(--fg); }
+    .sx-c span { font-size: 0.85rem; color: var(--fg); }
+    .sx-c.muted span { color: var(--muted); }
+    .sx-c span code { font-size: 0.8rem; }
+    .sx-gone { border-style: dashed; opacity: 0.75; }
+    .sx-gone b, .sx-gone span { text-decoration: line-through; text-decoration-color: var(--bad); }
+    .sx-hero { border-width: 0.2rem; box-shadow: 0 0 0.9rem color-mix(in srgb, var(--good) 45%, transparent); }
+    .sx-eq { justify-self: center; font-size: 1.3rem; font-weight: 800; color: var(--c, var(--line)); }
+    @media (max-width: 40rem) {
+      .sx { width: 100%; grid-template-columns: minmax(0, 1fr) 1.2rem minmax(0, 1fr); gap: 0.4rem; }
+      .sx > span:first-child { display: none; }
+      .sx-in { grid-column: 1 / -1; justify-self: start; margin: 0.6rem 0 0; }
+      .sx-c { flex-direction: column; gap: 0; padding: 0.4rem 0.6rem; }
+      .sx-c b { font-size: 1.3rem; }
+    }
+  </style>
+</div>

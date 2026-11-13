@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ChatContextSchema } from './chat.js'
+import { ChatContextSchema, TourPlaceSchema } from './chat.js'
 import { PendingCommentSchema } from './pending.js'
 
 export const ChatThreadSchema = z.object({
@@ -14,6 +14,13 @@ export const ChatThreadSchema = z.object({
    * review checkouts ran in the reader's checkout and have none.
    */
   seededCwd: z.string().optional(),
+  /**
+   * A thread of the tour page, which the canvas's pane never lists: the grilling's one thread, or,
+   * with a `place`, the tour chat's thread of that place.
+   */
+  tour: z.boolean().optional(),
+  /** On a tour chat thread: the place of the tour it is about. **ask** there continues it. */
+  place: TourPlaceSchema.optional(),
   /**
    * Whether the seed told the agent the reader may resolve attention points. An outdated canvas
    * keeps its commit but takes that right away, so a change sends the seed again. Threads from

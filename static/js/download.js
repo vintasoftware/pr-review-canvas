@@ -1,7 +1,7 @@
 // @ts-check
 // Handing a file to the browser. The export command fetches the zip itself, so it can show a
 // pending state and an error; this module only does the save at the end.
-import { fetchCanvasZip } from './api.js'
+import { fetchCanvasZip, fetchTourZip } from './api.js'
 
 /**
  * @typedef {{ doc?: Document, urls?: { createObjectURL: (b: Blob) => string, revokeObjectURL: (u: string) => void } }} SaveDeps
@@ -30,7 +30,27 @@ export function saveBlob(blob, filename, deps = {}) {
  * @param {{ headSha?: string, fetchImpl?: typeof fetch } & SaveDeps} [opts]
  * @returns {Promise<string>} the file name the browser saved
  */
-export async function exportCanvasZip(prNumber, opts = {}) {
+export function exportCanvasZip(prNumber, opts = {}) {
+  return exportZip(fetchCanvasZip, prNumber, opts)
+}
+
+/**
+ * The tour page's export command, as `exportCanvasZip` is the review page's.
+ * @param {import('./contract-types.js').ReviewKey} prNumber
+ * @param {{ headSha?: string, fetchImpl?: typeof fetch } & SaveDeps} [opts]
+ * @returns {Promise<string>} the file name the browser saved
+ */
+export function exportTourZip(prNumber, opts = {}) {
+  return exportZip(fetchTourZip, prNumber, opts)
+}
+
+/**
+ * @param {typeof fetchCanvasZip} fetchZip
+ * @param {import('./contract-types.js').ReviewKey} prNumber
+ * @param {{ headSha?: string, fetchImpl?: typeof fetch } & SaveDeps} opts
+ * @returns {Promise<string>}
+ */
+async function exportZip(fetchZip, prNumber, opts) {
   /** @type {{ headSha?: string, fetchImpl?: typeof fetch }} */
   const request = {}
   if (opts.headSha !== undefined) {
@@ -39,7 +59,7 @@ export async function exportCanvasZip(prNumber, opts = {}) {
   if (opts.fetchImpl !== undefined) {
     request.fetchImpl = opts.fetchImpl
   }
-  const { blob, filename } = await fetchCanvasZip(prNumber, request)
+  const { blob, filename } = await fetchZip(prNumber, request)
   const deps = {}
   if (opts.doc !== undefined) {
     deps.doc = opts.doc

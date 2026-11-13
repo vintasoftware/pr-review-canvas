@@ -4,6 +4,7 @@ import { TEXT_CAPS } from '../contract/review-artifact.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
 import { BASE_SHA, HEAD_SHA, SYNTHETIC_FILES, syntheticArtifact } from '../testing/synthetic.js'
 import {
+  diffFence,
   embedMarkdown,
   hunkRange,
   loadPromptSources,
@@ -292,7 +293,8 @@ describe('renderPrompt', () => {
     expect(prompt).toContain('# Review canvas for a change set')
     expect(prompt).toContain('- Ref comparison')
     expect(prompt).not.toContain('state: pre-pr')
-    expect(prompt).toContain('_No description._')
+    expect(prompt).toContain('_No pull request yet, and no commit messages._')
+    expect(renderPrompt(context(), PATCHES, sources)).not.toContain('No pull request yet')
     expect(prompt).toContain(
       '_No layers are configured; divide the change into semantic sections based on its behavior and concerns._'
     )
@@ -500,6 +502,12 @@ describe('renderPrompt', () => {
     expect(() => renderPrompt(context(), PATCHES, { ...sources, generation })).toThrow(
       'generation-strict.md uses an unknown token {{NOPE}}'
     )
+  })
+
+  it('fences a patch one backtick longer than its longest run, four at least', () => {
+    expect(diffFence('+a\n+`b`')).toBe('````')
+    expect(diffFence('+````\n+x')).toBe('`````')
+    expect(diffFence('+``````')).toBe('```````')
   })
 
   it('helpers: hunk ranges drop the context text, embedMarkdown strips front matter and demotes, counts skip empty patches', () => {

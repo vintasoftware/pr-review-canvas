@@ -5,8 +5,8 @@ import { readFile, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { readServerInfo, type ServerInfo } from '../hub/home.js'
 import { createHub, type Hub } from '../hub/hub.js'
-import { makeTempDir } from '../testing/fakes.js'
-import { type HubServer, startHubServer } from './node-server.js'
+import { makeTempDir, makeTestContext } from '../testing/fakes.js'
+import { type HubServer, startHubServer, startQuietServer } from './node-server.js'
 
 let home: string
 let hub: Hub
@@ -98,5 +98,23 @@ describe('startHubServer', () => {
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(0))
     expect(logs).toEqual(['stopped'])
     expect(await readServerInfo(home)).toBeNull()
+  })
+})
+
+describe('startQuietServer', () => {
+  it('answers under the project base path and at the root, and lets go of its port', async () => {
+    const t = await makeTestContext()
+    try {
+      const server = await startQuietServer(t.ctx)
+      const file = 'static/js/commands.js'
+      const underBase = await fetch(`${server.origin}${t.ctx.config.basePath}${file}`)
+      const atRoot = await fetch(`${server.origin}/${file}`)
+      expect([underBase.status, atRoot.status]).toEqual([200, 200])
+      expect(await underBase.text()).toBe(await atRoot.text())
+      await server.close()
+      await expect(fetch(`${server.origin}/${file}`)).rejects.toThrow()
+    } finally {
+      await t.cleanup()
+    }
   })
 })

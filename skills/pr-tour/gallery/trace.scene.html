@@ -1,0 +1,33 @@
+<div class="scene" data-technique="trace">
+  <span class="label tr-unit">database queries for one page of 50 commits, e.g. 3 authors · one tick per query</span>
+  <div class="tr-run bad">
+    <span class="tr-name"><span class="chip bad">before</span><code class="code strike">GetUserByEmail</code> <span class="small">53 calls × 2 queries</span></span>
+    <div class="tr-track" style="--n: 106"><i class="tr-ticks"></i><b class="big">106</b></div>
+  </div>
+  <div class="tr-run good">
+    <span class="tr-name"><span class="chip good">after</span><code class="code">GetUsersByEmails</code> <span class="small">2 calls × 3 queries</span></span>
+    <div class="tr-track" style="--n: 6"><i class="tr-ticks"></i><b class="big">6</b></div>
+  </div>
+  <style>
+    .tr-unit { align-self: stretch; }
+    .tr-run { align-self: stretch; display: grid; grid-template-columns: 22rem 1fr; align-items: center; gap: 0.5rem 1rem; margin-top: 1.4rem; }
+    .tr-name { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+    .tr-name .small { color: var(--muted); }
+    .tr-track { position: relative; height: 3rem; margin-right: 4.5rem; --f: calc(var(--n) / 106); }
+    /* One call is q queries wide; its ticks sit close together and a wider gap ends the call. */
+    /* One call's queries sit close together; a wider gap ends the call. --u is one query. */
+    .tr-ticks { position: absolute; inset: 0 auto 0 0; width: calc(var(--f) * 100%); --u: calc(100% / var(--n)); }
+    .bad .tr-ticks { background: repeating-linear-gradient(90deg, var(--c) 0 calc(var(--u) * 0.6), transparent 0 calc(var(--u) * 0.8), var(--c) 0 calc(var(--u) * 1.4), transparent 0 calc(var(--u) * 2)); }
+    .good .tr-ticks { background: repeating-linear-gradient(90deg, var(--c) 0 calc(var(--u) * 0.6), transparent 0 calc(var(--u) * 0.8), var(--c) 0 calc(var(--u) * 1.4), transparent 0 calc(var(--u) * 1.6), var(--c) 0 calc(var(--u) * 2.2), transparent 0 calc(var(--u) * 3)); }
+    .tr-track b { position: absolute; top: 50%; left: calc(var(--f) * 100% + 0.6rem); translate: 0 -50%; color: var(--c); line-height: 1; }
+    .bad .tr-ticks, .bad .tr-track b { opacity: 0.55; }
+    .good .tr-ticks { filter: drop-shadow(0 0 0.35rem var(--good)); animation: tr-glow 1.8s ease-in-out infinite alternate; }
+    .good .tr-track b { font-size: 2.6rem; text-shadow: 0 0 0.6rem color-mix(in srgb, var(--good) 45%, transparent); }
+    @keyframes tr-glow { from { filter: drop-shadow(0 0 0.1rem var(--good)); } }
+    @media (max-width: 40rem) {
+      .tr-run { grid-template-columns: 1fr; margin-top: 1.1rem; }
+      .tr-track { height: 2.4rem; margin-right: 3.9rem; }
+      .tr-track b, .good .tr-track b { font-size: 1.9rem; }
+    }
+  </style>
+</div>

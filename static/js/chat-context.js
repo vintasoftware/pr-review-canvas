@@ -11,6 +11,10 @@
  *   | { kind: 'point', fingerprint: string }} ChatContext
  */
 
+/** @typedef {import('./contract-types.js').TourPlace} TourPlace */
+/** What a saved turn pointed at: a canvas's context, or a place of the tour in a tour thread. */
+/** @typedef {ChatContext | TourPlace} ChatTurnContext */
+
 /** @type {ChatContext} */
 export const WHOLE_PR = { kind: 'pr' }
 
@@ -31,14 +35,14 @@ export function threadOfPlace(threads, agent, place) {
 
 /**
  * True when two contexts name the same target, so setting the second one changes nothing.
- * @param {ChatContext} a
- * @param {ChatContext} b
+ * @param {ChatTurnContext} a
+ * @param {ChatTurnContext} b
  */
 export function sameChatContext(a, b) {
   if (a.kind !== b.kind) {
     return false
   }
-  if (a.kind === 'pr') {
+  if (a.kind === 'pr' || a.kind === 'tour' || a.kind === 'tour-plan') {
     return true
   }
   if (a.kind === 'layer' && b.kind === 'layer') {
@@ -53,13 +57,47 @@ export function sameChatContext(a, b) {
   if (a.kind === 'point' && b.kind === 'point') {
     return a.fingerprint === b.fingerprint
   }
+  if (a.kind === 'tour-decision' && b.kind === 'tour-decision') {
+    return a.key === b.key
+  }
+  if (a.kind === 'tour-landmark' || a.kind === 'tour-question') {
+    return a.id === /** @type {typeof a} */ (b).id
+  }
   return false
 }
 
 /**
- * What the chip says. The label names the target exactly, so a reader always knows what the next
- * message is about.
- * @param {ChatContext} context
+ * A place of the tour as a thread is titled after it: by the title of its landmark or decision, or
+ * the words of its question, while the tour has it.
+ * @param {TourPlace} place
+ * @param {{ landmarks: ReadonlyArray<{ id: string, title: string }>, decisions: ReadonlyArray<{ key: string, title: string }>, quiz: ReadonlyArray<{ id: string, question: string }> }} tour
+ * @returns {string}
+ */
+export function tourPlaceLabel(place, tour) {
+  switch (place.kind) {
+    case 'tour':
+      return 'the whole tour'
+    case 'tour-landmark': {
+      const title = tour.landmarks.find(l => l.id === place.id)?.title
+      return title === undefined ? `landmark ${place.id}` : `landmark · ${title}`
+    }
+    case 'tour-decision': {
+      const title = tour.decisions.find(d => d.key === place.key)?.title
+      return title === undefined ? `decision · ${place.key}` : `decision · ${title}`
+    }
+    case 'tour-question': {
+      const question = tour.quiz.find(q => q.id === place.id)?.question
+      return question === undefined ? `question ${place.id}` : `question · ${question}`
+    }
+    case 'tour-plan':
+      return 'the plan'
+  }
+}
+
+/**
+ * What the chip says, and what a saved turn is labelled with. The label names the target exactly,
+ * so a reader always knows what the next message is about.
+ * @param {ChatTurnContext} context
  * @param {(layerId: string) => string | undefined} [layerTitle]
  * @param {(fingerprint: string) => string | undefined} [pointTitle]
  * @returns {string}
@@ -84,6 +122,16 @@ export function chatContextLabel(context, layerTitle, pointTitle) {
       const title = pointTitle?.(context.fingerprint)
       return title === undefined ? 'attention point' : `point · ${title}`
     }
+    case 'tour':
+      return 'the whole tour'
+    case 'tour-landmark':
+      return `landmark ${context.id}`
+    case 'tour-decision':
+      return `decision · ${context.key}`
+    case 'tour-question':
+      return `question ${context.id}`
+    case 'tour-plan':
+      return 'the plan'
   }
 }
 

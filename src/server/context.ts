@@ -10,25 +10,34 @@ import {
   type CheckoutStore,
   checkoutsFor,
   createCheckoutGit,
+  combineCheckouts,
   createReviewCheckouts,
   type ReviewCheckouts,
 } from '../chat/checkouts.js'
 import type { PromptOverrides } from '../project-config.js'
 import { loadSeedTemplate } from '../chat/seed.js'
+import { loadTourChatSeedTemplate, loadTourSeedTemplate } from '../chat/tour-seed.js'
 import { createTranscriptStore, type TranscriptStore } from '../chat/threads.js'
 import type { RuntimeConfig } from '../config.js'
 import type { ReviewArtifact } from '../contract/review-artifact.js'
 import {
+  canvasPipeline,
   createGenerationLane,
   createGenerationManager,
   type GenerationLane,
   type GenerationManager,
+  type GenerationManagerDeps,
+  type GenerationPipeline,
 } from '../generate/generation-manager.js'
 import { loadGenerationSkill } from '../generate/skill.js'
+import { tourPipeline } from '../generate/tour-pipeline.js'
+import { prepareTour } from '../tour/prepare.js'
+import { publishTour } from '../tour/publish.js'
 import { createGit, execGitIn, type Git } from '../git/git.js'
 import { type CapabilityProbe, createCapabilityProbe } from '../host/capabilities.js'
 import { createHostClient, execCliIn, type HostClient } from '../host/client.js'
 import { describeFixes, fixModel } from '../review/fix-model.js'
+import { TOUR_SKILL_NAME } from '../review/install-skill.js'
 import { prepare } from '../review/prepare.js'
 import { publish, readContext } from '../review/publish.js'
 import { PACKAGE_ROOT, STATIC_DIR } from '../paths.js'
@@ -39,6 +48,7 @@ import { createDerivedStore, type DerivedStore } from '../store/derived-store.js
 import { createPrStore, type PrStore } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
 import { createStateStore, type StateStore } from '../store/state-store.js'
+import { createTourStore, type TourStore } from '../store/tour-store.js'
 
 /** Directory roots the `/vendor/*` route may serve from. Exact files are listed in routes/static.ts. */
 export interface VendorRoots {
@@ -66,6 +76,8 @@ export interface AppContext {
   derived: DerivedStore
   prs: PrStore
   state: StateStore
+  /** The tours, beside the canvases. */
+  tours: TourStore
   /** What this forge login may post here, probed once and reused for ten minutes. */
   capabilities: CapabilityProbe
   /** Personal chat settings, in `.pr-review/settings.yml`. */
@@ -77,13 +89,23 @@ export interface AppContext {
   chat: ChatManager
   /** The canvas generation the review page starts. */
   generation: GenerationManager
+  /** The tour generation the tour page starts, in the same lane as the canvas's. */
+  tourGeneration: GenerationManager
   /** What the context shares with the other worktrees of its clone. */
   clone: CloneShared
   /** The acpx boundary, shared by the chat and the generation the review page starts. */
   runner: AgentRunner
   transcripts: TranscriptStore
-  /** The review checkouts AI Chat reads code from, one per review. */
+  /**
+   * The review checkouts, one per review at its head, which AI Chat reads code from. Listing and
+   * sweeping also cover `tourCheckouts`.
+   */
   checkouts: ReviewCheckouts
+  /**
+   * The tour generator's own checkouts, one per review at its head and one at its merge base,
+   * where it installs, runs, and writes; AI Chat's stays read-only and is never moved under a run.
+   */
+  tourCheckouts: TourCheckouts
   now: () => Date
   version: string
   staticDir: string
@@ -119,9 +141,10 @@ export interface StoreSet {
   derived: DerivedStore
   prs: PrStore
   state: StateStore
+  tours: TourStore
 }
 
-/** The four stores over one repo directory. Shared by the real context and by tests. */
+/** The five stores over one repo directory. Shared by the real context and by tests. */
 export function createStores(dataDir: string, config: RuntimeConfig, git: Git, now: () => Date): StoreSet {
   const root = repoDir(dataDir, config.repo)
   const canvases = createCanvasStore(root, git, config.worktree)
@@ -131,6 +154,7 @@ export function createStores(dataDir: string, config: RuntimeConfig, git: Git, n
     derived: createDerivedStore(canvases, git, now),
     prs,
     state: createStateStore(prs, now),
+    tours: createTourStore(root, git, config.worktree),
   }
 }
 
@@ -163,6 +187,8 @@ export interface CreateAppContextOptions {
 export interface CloneShared {
   /** Run from the clone's common git dir, so no one worktree's folder has to stay. */
   checkouts: CheckoutStore
+  /** The tour generator's own, at a review's head and at its merge base; apart from the rest. */
+  tourCheckouts: Record<TourCheckoutSide, CheckoutStore>
   /**
    * The chat turns running, by review folder: a pull request is one review for every worktree, a
    * local review is its own checkout's.
@@ -182,8 +208,13 @@ export function createCloneShared(
   now: () => Date,
   checkoutGit: CheckoutGit = createCheckoutGit(config.commonDir)
 ): CloneShared {
+  const root = checkoutsRoot(config.dataDir, config)
   return {
-    checkouts: createReviewCheckouts({ root: checkoutsRoot(config.dataDir, config), git: checkoutGit, now }),
+    checkouts: createReviewCheckouts({ root, git: checkoutGit, now }),
+    tourCheckouts: {
+      head: createReviewCheckouts({ root: path.join(root, 'tour', 'head'), git: checkoutGit, now }),
+      base: createReviewCheckouts({ root: path.join(root, 'tour', 'base'), git: checkoutGit, now }),
+    },
     chatTurns: new Map(),
     generationLane: createGenerationLane(),
   }
@@ -198,7 +229,12 @@ export interface ChatSet {
   chat: ChatManager
   transcripts: TranscriptStore
   checkouts: ReviewCheckouts
+  tourCheckouts: TourCheckouts
 }
+
+/** The two sides a tour's generator runs things in. */
+export type TourCheckoutSide = 'head' | 'base'
+export type TourCheckouts = Record<TourCheckoutSide, ReviewCheckouts>
 
 /** Where the review checkouts of one repository live, next to its canvases. */
 export function checkoutsRoot(dataDir: string, config: Pick<RuntimeConfig, 'repo'>): string {
@@ -216,7 +252,15 @@ export function createChatSet(
   prompts?: PromptOverrides
 ): ChatSet {
   const settings = createSettingsStore(config.dataDir)
-  const checkouts = checkoutsFor(clone.checkouts, config.worktree)
+  const tourCheckouts: TourCheckouts = {
+    head: checkoutsFor(clone.tourCheckouts.head, config.worktree),
+    base: checkoutsFor(clone.tourCheckouts.base, config.worktree),
+  }
+  const checkouts = combineCheckouts(
+    checkoutsFor(clone.checkouts, config.worktree),
+    tourCheckouts.head,
+    tourCheckouts.base
+  )
   const preflight = createPreflightProbe(runner, now)
   const transcripts = createTranscriptStore(key => stores.prs.prDir(key))
   return {
@@ -225,6 +269,7 @@ export function createChatSet(
     preflight,
     transcripts,
     checkouts,
+    tourCheckouts,
     agents: createAgentDirectory({ runner, preflight, cwd: config.repoRoot, now }),
     chat: createChatManager({
       runner,
@@ -235,6 +280,10 @@ export function createChatSet(
       repoRoot: config.repoRoot,
       overrides: config.chatOverrides,
       loadSeedTemplate: () => loadSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
+      loadTourSeedTemplate: () =>
+        loadTourSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
+      loadTourChatSeedTemplate: () =>
+        loadTourChatSeedTemplate(undefined, { repoRoot: config.repoRoot, overrides: prompts }),
       checkouts,
       currentBranch: () => git.currentBranch(),
       now,
@@ -244,38 +293,66 @@ export function createChatSet(
   }
 }
 
+/** The pr-review the tour generator runs: this server's own, whatever is on the agent's PATH. */
+export const PR_REVIEW_BIN = path.join(PACKAGE_ROOT, 'bin', 'pr-review.mjs')
+
 /**
- * The generation manager over the real pipeline: the same prepare and publish the CLI runs. It is
- * built from the rest of the context, and its steps run over the whole context once it exists.
+ * The generation managers over the real pipelines: the same prepare and publish the CLI runs. They
+ * are built from the rest of the context, and their steps run over the whole context once it
+ * exists. Both share the clone's lane, so one generation of either kind runs at a time.
  */
-export function createContextGeneration(
-  ctx: Omit<AppContext, 'generation'>,
+export function createContextGenerations(
+  ctx: Omit<AppContext, 'generation' | 'tourGeneration'>,
   lane: GenerationLane,
   whole: () => AppContext
-): GenerationManager {
-  return createGenerationManager({
-    runner: ctx.runner,
-    checkouts: ctx.checkouts,
-    lane,
-    worktree: ctx.config.worktree,
-    steps: {
-      prepare: (input, opts) => prepare(whole(), input, opts),
-      publish: (canvasDir, opts) => publish(whole(), canvasDir, opts),
-      fix: async (canvasDir, modelPath, text) => {
-        const context = await readContext(canvasDir)
-        const { patches } = await ctx.derived.ensure(context)
-        return describeFixes(await fixModel(modelPath, text, context, patches))
-      },
-    },
-    settings: () => ctx.chat.effectiveSettings(),
-    skill: agent => loadGenerationSkill(ctx.config.repoRoot, agent, ctx.version),
-    generation: ctx.projectConfig.config.generation,
-    repo: ctx.config.repo,
-    repoRoot: ctx.config.repoRoot,
-    currentBranch: () => ctx.git.currentBranch(),
-    log: ctx.log,
-    now: ctx.now,
-  })
+): Pick<AppContext, 'generation' | 'tourGeneration'> {
+  const manager = (pipeline: GenerationPipeline, skill: GenerationManagerDeps['skill']) =>
+    createGenerationManager({
+      runner: ctx.runner,
+      checkouts: ctx.checkouts,
+      lane,
+      worktree: ctx.config.worktree,
+      pipeline,
+      settings: () => ctx.chat.effectiveSettings(),
+      skill,
+      generation: ctx.projectConfig.config.generation,
+      repo: ctx.config.repo,
+      repoRoot: ctx.config.repoRoot,
+      currentBranch: () => ctx.git.currentBranch(),
+      log: ctx.log,
+      now: ctx.now,
+    })
+  return {
+    generation: manager(
+      canvasPipeline({
+        prepare: (input, opts) => prepare(whole(), input, opts),
+        publish: (canvasDir, opts) => publish(whole(), canvasDir, opts),
+        fix: async (canvasDir, modelPath, text) => {
+          const context = await readContext(canvasDir)
+          const { patches } = await ctx.derived.ensure(context)
+          return describeFixes(await fixModel(modelPath, text, context, patches))
+        },
+      }),
+      agent => loadGenerationSkill(ctx.config.repoRoot, agent, ctx.version)
+    ),
+    tourGeneration: manager(
+      tourPipeline({
+        prepare: (input, opts) => prepareTour(whole(), input, opts),
+        publish: (tourDir, opts) => publishTour(whole(), tourDir, opts),
+        repoRoot: ctx.config.repoRoot,
+        cli: {
+          command: `${shellQuote(process.execPath)} ${shellQuote(PR_REVIEW_BIN)}`,
+          dataDirFlag: `--data-dir ${shellQuote(ctx.config.dataDir)}`,
+        },
+      }),
+      agent => loadGenerationSkill(ctx.config.repoRoot, agent, ctx.version, TOUR_SKILL_NAME)
+    ),
+  }
+}
+
+/** A path as one shell word, for a command the agent types. */
+function shellQuote(word: string): string {
+  return /^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replaceAll("'", `'\\''`)}'`
 }
 
 export function createAppContext(opts: CreateAppContextOptions): AppContext {
@@ -289,7 +366,7 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
   const runner = opts.runner ?? createAgentRunner({ env })
   const stores = createStores(opts.config.dataDir, opts.config, git, now)
   const clone = opts.clone ?? createCloneShared(opts.config, now)
-  const parts: Omit<AppContext, 'generation'> = {
+  const parts: Omit<AppContext, 'generation' | 'tourGeneration'> = {
     config: opts.config,
     clone,
     log: opts.log ?? (line => process.stderr.write(`${line}\n`)),
@@ -308,7 +385,7 @@ export function createAppContext(opts: CreateAppContextOptions): AppContext {
   }
   const ctx: AppContext = {
     ...parts,
-    generation: createContextGeneration(parts, clone.generationLane, () => ctx),
+    ...createContextGenerations(parts, clone.generationLane, () => ctx),
   }
   return ctx
 }

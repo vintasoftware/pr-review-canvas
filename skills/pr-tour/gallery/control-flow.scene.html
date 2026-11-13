@@ -1,0 +1,66 @@
+<div class="scene" data-technique="control-flow">
+  <div class="cf-pair">
+    <figure class="cf-panel">
+      <span class="chip bad">before</span>
+      <svg viewBox="0 0 320 270" role="img" aria-label="before: the block's return reaches completed? as no and rolls back">
+        <defs>
+          <marker id="cf-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>
+          <marker id="cf-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--bad)"/></marker>
+        </defs>
+        <path class="cf-w fg" d="M160,46 V124"/>
+        <path class="cf-w bad hero" d="M100,158 H50 V212" marker-end="url(#cf-b)"/>
+        <path class="cf-w" d="M220,158 H270 V212" marker-end="url(#cf-m)"/>
+        <rect class="cf-term" x="90" y="14" width="140" height="32" rx="16"/><text x="160" y="35">save; return</text>
+        <path class="cf-dia" d="M160,124 L220,158 L160,192 L100,158 Z"/><text x="160" y="163">completed?</text>
+        <text class="cf-yn bad" x="76" y="150">no</text><text class="cf-yn" x="246" y="150">yes</text>
+        <rect class="cf-out bad hero" x="4" y="216" width="92" height="32" rx="6"/><text class="bad" x="50" y="237">ROLLBACK</text>
+        <rect class="cf-out" x="228" y="216" width="84" height="32" rx="6"/><text class="muted" x="270" y="237">COMMIT</text>
+      </svg>
+    </figure>
+    <figure class="cf-panel">
+      <span class="chip good">after</span>
+      <svg viewBox="0 0 320 270" role="img" aria-label="after: a new step sets completed = true, so the return commits">
+        <defs>
+          <marker id="cf-m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>
+          <marker id="cf-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--good)"/></marker>
+        </defs>
+        <path class="cf-w fg" d="M160,46 V62"/>
+        <path class="cf-w good hero" d="M160,110 V124 M220,158 H270 V212" marker-end="url(#cf-g)"/>
+        <path class="cf-w" d="M100,158 H50 V212" marker-end="url(#cf-m2)"/>
+        <rect class="cf-term" x="90" y="14" width="140" height="32" rx="16"/><text x="160" y="35">save; return</text>
+        <rect class="cf-new" x="70" y="62" width="180" height="48" rx="6"/><text class="good" x="160" y="83">completed = true</text><text class="cf-yn good" x="160" y="101">load_defaults 7.1</text>
+        <path class="cf-dia" d="M160,124 L220,158 L160,192 L100,158 Z"/><text x="160" y="163">completed?</text>
+        <text class="cf-yn" x="76" y="150">no</text><text class="cf-yn good" x="246" y="150">yes</text>
+        <rect class="cf-out" x="4" y="216" width="92" height="32" rx="6"/><text class="muted" x="50" y="237">ROLLBACK</text>
+        <rect class="cf-out good hero" x="228" y="216" width="84" height="32" rx="6"/><text class="cf-on" x="270" y="237">COMMIT</text>
+      </svg>
+    </figure>
+  </div>
+  <style>
+    .cf-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 26rem)); justify-content: center; gap: 1.5rem 5rem; width: 100%; }
+    .cf-panel { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; margin: 0; min-width: 0; }
+    .cf-panel svg { width: 100%; height: auto; overflow: visible; }
+    .cf-panel text { font: 600 14px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--fg); text-anchor: middle; }
+    .cf-panel text.good { fill: var(--good); } .cf-panel text.bad { fill: var(--bad); } .cf-panel text.muted { fill: var(--muted); }
+    .cf-panel .cf-on { fill: var(--paper); font-weight: 700; }
+    .cf-panel .cf-yn { font: 600 12px ui-sans-serif, system-ui, sans-serif; fill: var(--muted); }
+    .cf-panel .cf-yn.good { fill: var(--good); } .cf-panel .cf-yn.bad { fill: var(--bad); }
+    .cf-w { fill: none; stroke: var(--muted); stroke-width: 1.6; }
+    .cf-w.fg { stroke: var(--fg); stroke-width: 2; }
+    .cf-w.bad { stroke: var(--bad); stroke-dasharray: 7 5; }
+    .cf-w.good { stroke: var(--good); }
+    .cf-w.hero { stroke-width: 4; }
+    .cf-w.good.hero { filter: drop-shadow(0 0 4px var(--good)); }
+    .cf-term, .cf-dia { fill: var(--paper); stroke: var(--fg); stroke-width: 1.6; }
+    .cf-new { fill: color-mix(in srgb, var(--good) 12%, var(--paper)); stroke: var(--good); stroke-width: 2.4; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--good) 60%, transparent)); }
+    .cf-out { fill: var(--paper); stroke: var(--muted); stroke-width: 1.4; }
+    .cf-out.bad { stroke: var(--bad); stroke-dasharray: 6 4; }
+    .cf-out.good { fill: var(--good); stroke: var(--good); }
+    .cf-out.hero { stroke-width: 2.6; }
+    .cf-panel .hero, .cf-new { animation: cf-in 0.6s ease-out 0.5s both; }
+    @keyframes cf-in { from { opacity: 0; } }
+    @media (max-width: 40rem) {
+      .cf-pair { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</div>

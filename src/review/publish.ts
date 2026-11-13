@@ -101,9 +101,9 @@ async function readModel(canvasDir: string): Promise<{ raw: unknown } | { error:
  * local target the working tree is snapshotted again, so an edit made while the agent worked is
  * caught the same way a push is.
  */
-async function currentHead(
+export async function currentHead(
   ctx: AppContext,
-  context: GenerationContext
+  context: Pick<GenerationContext, 'target' | 'headSha' | 'mergeBaseSha' | 'pr'>
 ): Promise<{ headSha: string; moved: boolean }> {
   if (context.target.kind === 'pr') {
     const { host, repo } = ctx.config
@@ -136,12 +136,11 @@ export function attemptsSincePrepare(log: string): number {
  * the file reads without the code: `<time> published attempts=2` and
  * `<time> invalid attempts=1 errors=2 TEXT_TOO_LONG,HUNK_UNASSIGNED`.
  */
-async function recordAttempt(
-  canvasDir: string,
+export async function recordAttempt(
+  file: string,
   now: string,
   result: { ok: boolean; errors: ReadonlyArray<{ code: string }> }
 ): Promise<number> {
-  const file = path.join(canvasDir, 'publish.log')
   const attempts = attemptsSincePrepare((await readText(file)) ?? '') + 1
   const codes = result.errors.map(e => e.code).join(',')
   const line = result.ok
@@ -251,7 +250,7 @@ export async function publish(
       ? { ok: false, errors: [model.error], output: null }
       : validateModelOutput(model.raw, await validationInput(ctx, context, model.raw))
   const now = ctx.now().toISOString()
-  const attempts = await recordAttempt(canvasDir, now, result)
+  const attempts = await recordAttempt(path.join(canvasDir, 'publish.log'), now, result)
   if (!result.ok || result.output === null) {
     throw new ModelInvalidError({ ok: false, errors: result.errors }, attempts)
   }

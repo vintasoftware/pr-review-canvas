@@ -11,6 +11,7 @@ import type { PrepareResult } from '../review/prepare.js'
 import { ModelInvalidError, PublishError, type PublishResult } from '../review/publish.js'
 import { createFakeRunner, type FakeRunnerOptions } from '../testing/fake-runner.js'
 import {
+  canvasPipeline,
   createGenerationLane,
   createGenerationManager,
   extractModelJson,
@@ -133,6 +134,7 @@ function harness(
     list: async () => [],
     sweep: async () => ({ removed: [], skipped: [] }),
     size: async () => 0,
+    remove: async () => false,
   }
   const steps = {
     prepare: vi.fn(opts.steps?.prepare ?? (async () => prepared())),
@@ -144,7 +146,7 @@ function harness(
   const manager = createGenerationManager({
     runner,
     checkouts,
-    steps,
+    pipeline: canvasPipeline(steps),
     settings: async () => {
       await opts.settingsGate
       return { ...DEFAULT_SETTINGS, ...opts.settings }
