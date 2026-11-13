@@ -71,7 +71,7 @@ export function conversationHtml(comments, now) {
           .map(c => issueCommentHtml(c, now))
           .join('')}</details>`
   return (
-    `<details class="pr-conversation">${detailsSummaryHtml(`<span>Conversation · ${comments.length}</span>`, 'Toggle conversation')}<div class="body conversation">${humanHtml}${botHtml}` +
+    `<details class="pr-conversation">${detailsSummaryHtml(`<span>Conversation · <span class="conversation-count">${comments.length}</span></span>`, 'Toggle conversation')}<div class="body conversation">${humanHtml}${botHtml}` +
     '<div class="pr-composer-host"></div>' +
     '<p><button class="cmd" type="button" data-act="pr-comment" data-needs-post>comment</button></p></div></details>'
   )

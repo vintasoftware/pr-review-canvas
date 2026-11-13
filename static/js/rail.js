@@ -5,6 +5,7 @@
 /** @typedef {import('./contract-types.js').Layer} Layer */
 /** @typedef {import('./contract-types.js').PrState} PrState */
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
+import { cssEscape } from './anchors.js'
 import { diffstatHtml, layerChanges } from './diffstat.js'
 import { esc } from './dom.js'
 import { titleHtml } from './markdown.js'
@@ -14,6 +15,7 @@ import { levelIconHtml } from './point-level.js'
 import { stopsOf } from './point-steps.js'
 import { openPoints, pointStatus } from './points.js'
 import { filesReviewed, layerProgress } from './progress.js'
+import { showRailCurrent } from './scroll-spy.js'
 
 /**
  * Stripe color for a layer position (cycles through the six bands).
@@ -131,10 +133,36 @@ export function refreshRail(root, artifact, state) {
     return false
   }
   const active = rail.querySelector('a[aria-current]')?.getAttribute('href')?.slice(1)
+  const focused = focusedRailItem(rail)
   rail.innerHTML = railInnerHtml(artifact, state, {
     ...(active === undefined ? {} : { activeId: active }),
     points: rail.hasAttribute('data-points'),
     switchable: rail.hasAttribute('data-switchable'),
   })
+  // The keyboard stays where it was, on the switch it pressed or the link it followed.
+  if (focused !== null) {
+    const again = rail.querySelector(focused)
+    if (again instanceof HTMLElement) again.focus({ preventScroll: true })
+  }
+  showRailCurrent(rail.querySelector('a[aria-current]'))
   return true
+}
+
+/**
+ * The selector of the rail's switch button or link that has the focus, which a new drawing of the
+ * rail replaces, or null when the focus is elsewhere.
+ * @param {HTMLElement} rail
+ */
+function focusedRailItem(rail) {
+  const el = rail.ownerDocument.activeElement
+  if (el === null || !rail.contains(el)) {
+    return null
+  }
+  const view = el.getAttribute('data-view')
+  const href = el.getAttribute('href')
+  return view !== null
+    ? `button[data-view="${cssEscape(view)}"]`
+    : href !== null
+      ? `a[href="${cssEscape(href)}"]`
+      : null
 }

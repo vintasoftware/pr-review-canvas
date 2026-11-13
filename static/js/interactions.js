@@ -24,6 +24,7 @@ import {
   concealForComposer,
   focusComposer,
   revealConcealed,
+  setDisabledReason,
   refreshComposerCommands,
 } from './composer.js'
 import { commentHtml, setThreadCollapsed, threadRowHtml } from './diff-decorations.js'
@@ -37,6 +38,7 @@ import { pointAnchorId, reviewedId } from './keys.js'
 import {
   canvasHiddenLines,
   cardOf,
+  drawCardsOnScreen,
   getFoldLevel,
   getRenderContext,
   getStartCollapsed,
@@ -87,6 +89,8 @@ const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
 
 /** Pixels left above a card the keys scroll to, so its focus ring shows. */
 const FOCUS_GAP = 8
+/** How many times a key's scroll repeats while it brings undrawn cards on screen. */
+const MAX_DRAW_ROUNDS = 10
 /** The card kind and direction each step key moves by. */
 /** @type {Record<'next-layer' | 'prev-layer' | 'next-file' | 'prev-file', ['layer' | 'file', 1 | -1]>} */
 const STEPS = {
@@ -424,7 +428,8 @@ export function wireReview(root, session, opts = {}) {
 
   /**
    * @param {Element | null} el
-   * @param {ScrollLogicalPosition} [block] `start` for a card, `center` for a point
+   * @param {ScrollLogicalPosition | null} [block] `start` for a card, `center` for a point, and
+   *   null for what a stop of the one-point view shows, which the stop already put on screen
    */
   const focusItem = (el, block = 'start') => {
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
@@ -436,9 +441,16 @@ export function wireReview(root, session, opts = {}) {
       el.classList.add('is-focused')
       // The page's scroll padding already clears the outdated bar; this is the gap under it.
       el.style.scrollMarginTop = `${FOCUS_GAP}px`
-      // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around the
-      // element: a hidden element cannot take the focus.
-      scrollIntoViewSafe(el, block)
+      if (block !== null) {
+        // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around
+        // the element: a hidden element cannot take the focus.
+        scrollIntoViewSafe(el, block)
+        // A card this scroll brought on screen draws its diff and grows, which would push the
+        // element away again: the cards draw now and the scroll repeats until none is left.
+        for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
+          el.scrollIntoView({ block })
+        }
+      }
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.
       el.tabIndex = -1
@@ -669,6 +681,8 @@ export function wireReview(root, session, opts = {}) {
           const node = nodeFrom(doc, issueCommentHtml(answer.comment, renderNow()))
           if (node !== null) {
             root.querySelector('.conversation .pr-composer-host')?.before(node)
+            const count = root.querySelector('.pr-conversation .conversation-count')
+            if (count !== null) count.textContent = String(Number(count.textContent) + 1)
           }
           // Only the box that posted goes away; a draft the reader started meanwhile stays.
           box.remove()
@@ -811,7 +825,7 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /** @param {HTMLElement} button */
-  const postSignoff = button => {
+  const postSignoff = async button => {
     const dialog = button.closest('dialog')
     if (!(dialog instanceof HTMLDialogElement)) {
       return
@@ -820,7 +834,7 @@ export function wireReview(root, session, opts = {}) {
     const body = signoffBody(dialog)
     const editor = dialog.querySelector('textarea')
     const submittedText = editor?.value ?? ''
-    void runCommand(
+    const posted = await runCommand(
       button,
       async () => {
         const { review, submitted, warnings } = await session.postReview(
@@ -841,16 +855,21 @@ export function wireReview(root, session, opts = {}) {
           for (const warning of warnings) {
             dialog.querySelector('.signoff-result')?.append(document.createTextNode(` ${warning}`))
           }
-          return
+          return true
         }
         // The page behind already shows what the review changed, so the dialog gets out of the way,
         // and so does a pane floating over the page, which would cover the receipt.
         dialog.close()
         opts.uncover?.()
         toast(root, receipt, { link: { url: review.url, text: `see it on ${hostLabel()}` } })
+        return true
       },
       { pendingLabel: 'posting…' }
     )
+    if (posted === true) {
+      setDisabledReason(button, 'This review has already been posted')
+      button.textContent = 'posted'
+    }
   }
 
   /**
@@ -1332,6 +1351,7 @@ export function wireReview(root, session, opts = {}) {
     if (doc.querySelector('dialog[open]') !== null) {
       return
     }
+    event.preventDefault()
     const order = buildNavOrder(session.artifact)
     const points = openPoints(session.artifact.points, session.state)
     switch (decided.action) {
@@ -1343,7 +1363,7 @@ export function wireReview(root, session, opts = {}) {
         // The one-point view walks its stops: j and k the layers' openings, n and p every stop.
         const stop = opts.stepStop?.(direction, s => kind !== 'layer' || s.kind === 'layer')
         if (stop !== undefined) {
-          if (stop !== null) focusItem(stop, 'center')
+          if (stop !== null) focusItem(stop, null)
           break
         }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
@@ -1364,7 +1384,7 @@ export function wireReview(root, session, opts = {}) {
         if (stop === undefined) {
           stepPoint(order, points, direction)
         } else if (stop !== null) {
-          focusItem(stop, 'center')
+          focusItem(stop, null)
         }
         break
       }
@@ -1385,8 +1405,9 @@ export function wireReview(root, session, opts = {}) {
       }
       case 'reviewed-file':
       case 'reviewed-layer': {
-        // A point in focus stands for the file card that holds its line, as with `o`.
-        const point = focusedPoint(points)
+        // A point in focus stands for the file card that holds its line, as with `o`, also once it
+        // was acted on and left the open points.
+        const point = focusedPoint(session.artifact.points)
         const itemId = itemAround(
           order,
           point === undefined ? focused() : fileCardOf(root, point.path, point.layerId)
@@ -1411,8 +1432,8 @@ export function wireReview(root, session, opts = {}) {
           openLineComposer({ ...selection, line: selection.end, startLine: selection.start })
           break
         }
-        // With nothing selected, c comments on the line of the attention point in focus.
-        const point = focusedPoint(points)
+        // With nothing selected, c comments on the line of the attention point in focus, open or not.
+        const point = focusedPoint(session.artifact.points)
         const key = point === undefined ? null : keyForPath(point.path)
         if (point !== undefined && key !== null) {
           const target = { key, path: point.path, side: point.side ?? 'new', line: point.line }

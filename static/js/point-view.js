@@ -17,6 +17,8 @@ import { setPointExpanded } from './points.js'
 
 const LENS_ID = 'stop-lens'
 const NAV_ID = 'stop-nav'
+/** Marks the tests a layer's stop opened, which close when it goes. */
+const OPENED_ATTR = 'data-stop-opened'
 
 /**
  * The stop that shows `el`, `current` when it is one of them, or undefined for an element of a
@@ -112,9 +114,13 @@ export function showStop(root, section, stops, stop, files, artifact) {
   }
   section.setAttribute('data-lens', stop.kind)
   if (stop.kind === 'layer') {
-    // A layer's stop is its description and tests: the tests show, however the layers start them.
+    // A layer's stop is its description and tests: the tests show, however the layers start them,
+    // and close again when the stop goes, if the layers had them closed.
     const tests = section.querySelector('details.test-map')
-    if (tests instanceof HTMLDetailsElement) tests.open = true
+    if (tests instanceof HTMLDetailsElement && !tests.open) {
+      tests.open = true
+      tests.setAttribute(OPENED_ATTR, '')
+    }
     return
   }
   const { point } = stop
@@ -146,6 +152,25 @@ export function clearStop(root) {
   for (const el of root.querySelectorAll('[data-lens]')) {
     el.removeAttribute('data-lens')
   }
+  for (const tests of root.querySelectorAll(`details[${OPENED_ATTR}]`)) {
+    if (tests instanceof HTMLDetailsElement) tests.open = false
+    tests.removeAttribute(OPENED_ATTR)
+  }
+}
+
+/**
+ * What the way back from `stop` says, as HTML: the opening of its own layer by the layer's title,
+ * another layer's opening as the previous layer, as the way on names the next one, or the previous
+ * point.
+ * @param {Stop} stop
+ * @param {Stop} previous
+ */
+function backHtml(stop, previous) {
+  if (previous.kind === 'point') {
+    return 'previous point'
+  }
+  const title = titleHtml(previous.layer.title)
+  return previous.layer.id === stop.layer.id ? title : `previous layer: ${title}`
 }
 
 /**
@@ -167,10 +192,7 @@ export function stopNavHtml(stops, index, artifact) {
       ? ''
       : previous === undefined
         ? link('#overview', '&larr; overview')
-        : link(
-            `#${previous.id}`,
-            `&larr; ${previous.kind === 'layer' ? titleHtml(previous.layer.title) : 'previous point'}`
-          )
+        : link(`#${previous.id}`, `&larr; ${backHtml(stop, previous)}`)
   const here =
     stop?.kind === 'point'
       ? `<span class="step-n">Point ${stop.number} of ${stops.filter(s => s.kind === 'point').length}</span>`

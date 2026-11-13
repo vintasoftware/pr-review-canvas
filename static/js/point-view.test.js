@@ -79,14 +79,28 @@ describe('stopNavHtml', () => {
     expect(links(4)).toEqual([['#point-p-2', '← previous point'], expect.anything()])
   })
 
+  it('names a way back to another layer’s opening as the previous layer, and to its own by its title', () => {
+    const otherOnly = { ...artifact, points: artifact.points.filter(p => p.layerId === 'other') }
+    const ids = stopsOf(otherOnly)
+    const back = (/** @type {number} */ index) =>
+      draw(stopNavHtml(ids, index, otherOnly)).querySelector('a')?.textContent
+    expect(back(1)).toBe('← previous layer: Run path')
+    expect(back(2)).toBe('← Other changes')
+  })
+
   it('renders the Markdown of the layer titles it names', () => {
     const titled = withMarkdownTitles(artifact)
-    const html = (/** @type {number} */ index) =>
-      Array.from(draw(stopNavHtml(stopsOf(titled), index, titled)).querySelectorAll('a')).map(
+    const html = (/** @type {typeof titled} */ canvas, /** @type {number} */ index) =>
+      Array.from(draw(stopNavHtml(stopsOf(canvas), index, canvas)).querySelectorAll('a')).map(
         a => a.innerHTML
       )
-    expect(html(-1)).toEqual(['start with Layer 1: Run <code>path</code> →'])
-    expect(html(1)).toEqual(['← Run <code>path</code>', 'next layer: Other <strong>changes</strong> →'])
+    expect(html(titled, -1)).toEqual(['start with Layer 1: Run <code>path</code> →'])
+    expect(html(titled, 1)).toEqual([
+      '← Run <code>path</code>',
+      'next layer: Other <strong>changes</strong> →',
+    ])
+    const otherOnly = { ...titled, points: titled.points.filter(p => p.layerId === 'other') }
+    expect(html(otherOnly, 1)[0]).toBe('← previous layer: Run <code>path</code>')
   })
 
   it('leads from the last stop to the layers, as the rail’s switch does', () => {
@@ -183,9 +197,52 @@ describe('the one-point view on a rendered page', () => {
     reveal('article.file[data-layer="run-path"][data-path="src/new-name.ts"]')
     expect(view?.view).toBe('one')
     expect(seen).toEqual(['one'])
+    // The page says why the view changed under the reader.
+    expect(document.querySelector('.toast')?.textContent).toBe(
+      'no stop shows this, so it opens in the layers'
+    )
+    expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('note')
     expect(lensed()).toBeNull()
     expect(document.querySelector('nav.step-nav')).toBeNull()
     expect(shown()).toEqual(['layer-run-path'])
+  })
+
+  it('opens a layer’s tests in its stop, and closes them when it goes, as the layers had them', () => {
+    const tests = () => document.querySelector('#layer-run-path details.test-map')
+    expect(tests()).toHaveProperty('open', true)
+    view?.step(1, () => true)
+    expect(tests()).toHaveProperty('open', false)
+    // Tests the reader opened in the layers stay open after the stop.
+    view?.step(-1, () => true)
+    view?.switchView('all')
+    const opened = tests()
+    if (opened instanceof HTMLDetailsElement) opened.open = true
+    view?.switchView('points', '#layer-run-path')
+    view?.step(1, () => true)
+    expect(tests()).toHaveProperty('open', true)
+  })
+
+  it('shows a stop from the top of the page, and scrolls to a point’s row only when it is further down', () => {
+    const scrolled = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    // The rail's link, as the bar's: a point of the Other layer stands for its row in the diff.
+    document
+      .querySelector('nav.rail a[href="#point-p-2"]')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(lensed()?.id).toBe('layer-other')
+    expect(scrolled).toHaveBeenLastCalledWith({ top: 0 })
+    const row = document.querySelector('tr.ifind[data-fingerprint="fp-2"]')
+    if (!(row instanceof HTMLElement)) throw new Error('no row')
+    const centered = vi.fn()
+    row.scrollIntoView = centered
+    // A key on the same stop, with the row on screen and then below the fold.
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 120, 100, 30))
+    expect(view?.step(1, () => true, true)).toBe(row)
+    expect(centered).not.toHaveBeenCalled()
+    vi.spyOn(row, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, window.innerHeight + 200, 100, 30))
+    expect(view?.step(1, () => true, true)).toBe(row)
+    expect(scrolled).toHaveBeenLastCalledWith({ top: 0 })
+    expect(centered).toHaveBeenCalledWith({ block: 'center' })
+    scrolled.mockRestore()
   })
 
   it('steps through the stops that fit, the one on screen first when asked, and stops at either end', () => {
@@ -210,6 +267,17 @@ describe('the one-point view on a rendered page', () => {
     view?.switchView('one')
     expect(shown()).toEqual(['layer-other'])
     expect(window.location.hash).toBe('#point-p-2')
+  })
+
+  it('marks every history entry a stop shows, and none the layers show, so back in the layers knows a stop’s scroll', () => {
+    expect(window.history.state).toEqual({ stop: true })
+    view?.step(1, () => true)
+    expect(window.location.hash).toBe('#point-p-1')
+    expect(window.history.state).toEqual({ stop: true })
+    view?.switchView('all')
+    expect(window.history.state).toBeNull()
+    view?.switchView('points')
+    expect(window.history.state).toEqual({ stop: true })
   })
 
   it('comes back from the layers to the stop the URL still names in the layer being read', () => {
