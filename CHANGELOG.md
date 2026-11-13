@@ -85,6 +85,9 @@
   reads as points the overview holds.
 - Changing reading modes in settings updates the URL to match the stop on screen, so a reload
   returns to that stop.
+- Going back from **Layers** to **Attention points** opens the point you came from, also on a
+  narrow screen, where you scroll up past the overview to reach the switch. Before, it opened the
+  first layer's description.
 
 ### Fixes
 
