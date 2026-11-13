@@ -45,7 +45,7 @@ compactPoints: false
 # Whether the overview summary, a layer's rationale and the PR description fill the width of their
 # panel. false stops their lines at 100 characters, like the rest of the page's text.
 fullWidthText: false
-# Whether the diff hides its inline items, so you read the code first. The switch under the header
+# Whether the diff hides its inline items, so you read the code first. The Hide comments switch
 # and the i key change it. Nothing is deleted, and switching it off brings the items back. Points
 # stay in the layer summary (except the Other layer's) and drafts in the review panel; comments and
 # annotations show only in the diff.

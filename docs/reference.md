@@ -714,8 +714,8 @@ it automatically.
 
 ### Hiding inline items
 
-To read the code before the attention points and comments shape what you think of it, click
-**hide inline items** under the **Hide code** control, or press `i`. The diff then hides its
+To read the code before the attention points and comments shape what you think of it, turn on the
+**Hide comments** switch beside the **Hide code** control, or press `i`. The diff then hides its
 inline attention points, review comments (earlier and carried), pending drafts, and annotations.
 This changes only the view. The layer summary, the review panel, counts, and statuses stay as they
 are, and nothing is dismissed or deleted. Switch it off to get back the same items. Points stay in

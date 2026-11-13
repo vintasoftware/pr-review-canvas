@@ -727,6 +727,16 @@ describe('the reading level control', () => {
     )
   })
 
+  it('draws a control beside it on the same row, with that control hint under its own', () => {
+    document.body.innerHTML = foldLevelControlHtml(
+      'light',
+      { total: 40, hidden: 0 },
+      { control: '<button id="beside"></button>', hint: '<span id="beside-hint"></span>' }
+    )
+    expect(document.querySelector('.reading-row #beside')).not.toBeNull()
+    expect(document.querySelector('.fold-hint + #beside-hint')).not.toBeNull()
+  })
+
   it('follows a level chosen with the keyboard', () => {
     document.body.innerHTML = foldLevelControlHtml('light', { total: 40, hidden: 0 })
     refreshFoldLevel(document.body, 'aggressive', { total: 40, hidden: 30 })

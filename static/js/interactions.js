@@ -892,7 +892,7 @@ export function wireReview(root, session, opts = {}) {
   /** @param {boolean} on */
   const switchInline = on => {
     setInlineHide({ ...getInlineHide(), hideInline: on }, root)
-    toast(root, on ? 'inline items hidden' : 'inline items shown')
+    toast(root, on ? 'comments hidden' : 'comments shown')
     saveSettings({ hideInline: on }).catch(() => {
       toast(root, 'could not save the inline switch; it holds for this page only')
     })

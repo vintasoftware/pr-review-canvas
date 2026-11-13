@@ -121,15 +121,22 @@ export function inlineHideHint(hide) {
   return `${hidden} hidden from the diff · ${where.join('; ')}`
 }
 
-/** @param {InlineHide} hide */
-export function inlineHideControlHtml(hide) {
+/**
+ * The switch beside Hide code. Hide code is a dropdown of levels; this one is on or off, so it is
+ * drawn as a switch to set the two apart.
+ * @param {InlineHide} hide
+ */
+export function inlineHideSwitchHtml(hide) {
   return (
-    '<div class="inline-hide">' +
-    `<button class="cmd" type="button" id="${INLINE_TOGGLE_ID}" data-act="toggle-inline" aria-pressed="${hide.hideInline}" ` +
-    'title="Read the code first: hide the inline attention points, comments, drafts, and annotations. Press i to switch; settings choose what it hides.">' +
-    `${hide.hideInline ? 'show' : 'hide'} inline items</button>` +
-    `<span class="inline-hint muted" role="status">${inlineHideHint(hide)}</span></div>`
+    `<button class="inline-switch" type="button" role="switch" id="${INLINE_TOGGLE_ID}" data-act="toggle-inline" aria-checked="${hide.hideInline}" ` +
+    'title="Read the code first: hide the attention points, comments, drafts, and annotations in the diff. Press i to switch; settings choose what it hides.">' +
+    'Hide comments<span class="switch-track" aria-hidden="true"></span></button>'
   )
+}
+
+/** @param {InlineHide} hide */
+export function inlineHideHintHtml(hide) {
+  return `<span class="inline-hint" role="status">${inlineHideHint(hide)}</span>`
 }
 
 /**
@@ -225,10 +232,9 @@ export function setInlineHide(next, page, view = window) {
   )
   const button = page.querySelector(`#${INLINE_TOGGLE_ID}`)
   if (button !== null) {
-    button.setAttribute('aria-pressed', String(current.hideInline))
-    button.textContent = `${current.hideInline ? 'show' : 'hide'} inline items`
+    button.setAttribute('aria-checked', String(current.hideInline))
   }
-  const hint = page.querySelector('.inline-hide .inline-hint')
+  const hint = page.querySelector('.inline-hint')
   if (hint !== null) {
     hint.textContent = inlineHideHint(current)
   }

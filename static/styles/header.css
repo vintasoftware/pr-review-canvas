@@ -45,41 +45,98 @@
   gap: 4px 16px;
   align-items: baseline;
 }
-/* How much code is hidden: a setting on the reading, so it sits with the progress line and not
-   among the commands, and says what it hides rather than leaving the reader to find out. */
+/* The view controls: what the page hides. They sit with the progress line and not among the
+   commands, because they change only what the reader sees. Hide code picks a level from a
+   dropdown; Hide comments is on or off, so it is a switch, set off by a rule. Each says under the
+   row what it hides. */
 .reading {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 2px;
   margin-top: 14px;
-}
-.reading label {
   font-size: 12px;
   color: var(--fg-muted);
+}
+.reading-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.reading-ctl {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
 }
 .reading select {
   padding: 2px 6px;
   font-size: 13px;
 }
-.fold-hint {
-  font-size: 12px;
-  color: var(--fg-muted);
+.inline-switch {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 0 0 0 14px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
-/* Under Hide code: both change only what the reader sees. */
-.inline-hide {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: baseline;
-  margin-top: 6px;
-}
-.inline-hide .cmd[aria-pressed='true'] {
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 16px;
+  border: 1px solid var(--fg-dim);
+  border-radius: 8px;
   background: var(--panel-2);
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--fg-dim);
+  transition:
+    transform 0.15s,
+    background-color 0.15s;
+}
+.inline-switch[aria-checked='true'] {
+  color: var(--fg);
   font-weight: 600;
 }
-.inline-hint {
-  font-size: 12px;
+.inline-switch[aria-checked='true'] .switch-track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.inline-switch[aria-checked='true'] .switch-track::after {
+  transform: translateX(12px);
+  background: var(--bg);
+}
+.inline-switch:hover .switch-track {
+  border-color: var(--accent);
+}
+.inline-switch:focus-visible {
+  outline: none;
+}
+.inline-switch:focus-visible .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-track::after {
+    transition: none;
+  }
 }
 .stripe {
   height: 6px;

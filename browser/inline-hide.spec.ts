@@ -50,13 +50,13 @@ test('hides and shows every inline item, keeps the layer summary as it was, and 
   }
   const toggle = page.locator('#inline-toggle')
   for (const row of Object.values(rows)) await expect(row).toBeVisible()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
   const before = await summary(page)
   await page.screenshot({ path: test.info().outputPath('inline-shown.png') })
 
   await saved(page, () => toggle.click())
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
-  await expect(toggle).toHaveText('show inline items')
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await expect(toggle).toHaveAccessibleName('Hide comments')
   await expect(page.locator('.inline-hint')).toContainText('still in the layer summary')
   for (const row of Object.values(rows)) await expect(row).toBeHidden()
   // Only the code is left: the rows are still in the page, and the code lines are where they were.
@@ -68,17 +68,17 @@ test('hides and shows every inline item, keeps the layer summary as it was, and 
   // The setting outlives the page.
   await page.reload()
   await appFile(page).scrollIntoViewIfNeeded()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await expect(rows.point).toHaveCount(1)
   for (const row of Object.values(rows)) await expect(row).toBeHidden()
   expect(await summary(page)).toEqual(before)
 
   // The i key switches it back, and the same items return.
   await saved(page, () => page.locator('body').press('i'))
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
   for (const row of Object.values(rows)) await expect(row).toBeVisible()
   await page.reload()
-  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-checked', 'false')
 })
 
 test('keeps the code under the reader in place when it switches', async ({ page, reviewUrl }) => {
@@ -108,7 +108,7 @@ test('a click on a point in the layer summary shows only that point', async ({ p
   // The rest stays hidden, and so does the switch.
   await expect(file.locator('tr.thread[data-thread="1001"]')).toBeHidden()
   await expect(file.locator('tr.annot')).toBeHidden()
-  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-checked', 'true')
 
   // Switching off and on again puts the point back under the rule.
   await page.locator('body').press('i')
@@ -129,7 +129,7 @@ test('a code link in the text of a point is not a visit to the point', async ({ 
   await page.locator('section.layer li.finding[data-point="p-1"] .prose a.loc').click()
   await expect(file.locator('#L-src_app_ts-new-5')).toBeInViewport()
   await expect(file.locator('tr.ifind[data-point="p-1"]')).toBeHidden()
-  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-checked', 'true')
 })
 
 test('a resolved point the author keeps open stays in the layer summary through the switch', async ({
@@ -144,9 +144,9 @@ test('a resolved point the author keeps open stays in the layer summary through 
   await expect(card).toHaveAttribute('data-status', 'resolved')
   await expect(card).toBeVisible()
   await page.locator('body').press('i')
-  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-checked', 'true')
   await page.locator('body').press('i')
-  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('#inline-toggle')).toHaveAttribute('aria-checked', 'false')
   await expect(card).toBeVisible()
 })
 
@@ -162,11 +162,11 @@ test('with "turn hiding off" chosen, a summary click switches it off and lands o
   await dialog.locator('[data-act="settings-save"]').click()
   await expect(dialog).toBeHidden()
   const toggle = page.locator('#inline-toggle')
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
   await expect(file.locator('tr.ifind[data-point="p-1"]')).toBeHidden()
 
   await page.locator('section.layer li.finding[data-point="p-1"] a[data-item-link]').click()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
   await expect(file.locator('tr.ifind[data-point="p-1"]')).toBeVisible()
   await expect(file.locator('tr.thread[data-thread="1001"]')).toBeVisible()
   await expect(file.locator('#L-src_app_ts-new-4')).toBeInViewport()
@@ -255,10 +255,10 @@ test('with "turn hiding off" chosen, ] onto a hidden point switches it off', asy
   await dialog.locator('#set-hidden-item-click').selectOption('show-all')
   await saved(page, () => dialog.locator('[data-act="settings-save"]').click())
   await expect(dialog).toBeHidden()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
 
   await saved(page, () => stepToOtherPoint(page))
   await expect(otherPoint(page)).toBeFocused()
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('html')).not.toHaveAttribute('data-hide-inline')
 })

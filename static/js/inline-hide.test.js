@@ -7,7 +7,8 @@ import {
   DEFAULT_INLINE_KINDS,
   getInlineHide,
   HIDE_ATTR,
-  inlineHideControlHtml,
+  inlineHideHintHtml,
+  inlineHideSwitchHtml,
   inlineHideHint,
   isHiddenItemClick,
   isHiddenRow,
@@ -35,7 +36,8 @@ const still = /** @type {Window} */ (/** @type {unknown} */ ({ innerHeight: 600,
 function page() {
   const el = document.createElement('div')
   el.innerHTML =
-    inlineHideControlHtml(getInlineHide()) +
+    inlineHideSwitchHtml(getInlineHide()) +
+    inlineHideHintHtml(getInlineHide()) +
     '<table><tbody>' +
     '<tr id="L-a-new-1" class="ann"><td class="ln">1</td></tr>' +
     '<tr class="annot ann" data-decoration="note"><td>note</td></tr>' +
@@ -90,14 +92,14 @@ describe('setInlineHide', () => {
     expect(getInlineHide().hideInlineKinds).toEqual(['points'])
   })
 
-  it('makes the button and its hint follow, however the switch changed', () => {
+  it('makes the switch and its hint follow, however the switch changed', () => {
     const el = page()
     setInlineHide(ON, el, still)
-    expect(the(el, '#inline-toggle').getAttribute('aria-pressed')).toBe('true')
-    expect(the(el, '#inline-toggle').textContent).toBe('show inline items')
+    expect(the(el, '#inline-toggle').getAttribute('aria-checked')).toBe('true')
+    expect(the(el, '#inline-toggle').textContent).toBe('Hide comments')
     expect(the(el, '.inline-hint').textContent).toMatch(/hidden from the diff/)
     setInlineHide(OFF, el, still)
-    expect(the(el, '#inline-toggle').textContent).toBe('hide inline items')
+    expect(the(el, '#inline-toggle').getAttribute('aria-checked')).toBe('false')
     expect(the(el, '.inline-hint').textContent).toBe('')
   })
 
@@ -195,9 +197,10 @@ describe('the hint', () => {
     )
   })
 
-  it('is a pressed button while on', () => {
-    expect(inlineHideControlHtml(ON)).toContain('aria-pressed="true"')
-    expect(inlineHideControlHtml(OFF)).toContain('aria-pressed="false"')
+  it('is a switch, checked while on', () => {
+    expect(inlineHideSwitchHtml(ON)).toContain('role="switch"')
+    expect(inlineHideSwitchHtml(ON)).toContain('aria-checked="true"')
+    expect(inlineHideSwitchHtml(OFF)).toContain('aria-checked="false"')
   })
 })
 
