@@ -295,15 +295,15 @@ describe('the one-point view on a rendered page', () => {
     expect(window.location.hash).toBe('#layer-other')
   })
 
-  it('comes back from the layers to the URL’s stop for a reader who scrolled up to the overview to reach the switch', () => {
+  it('comes back from the overview to the stop the URL names, where a narrow screen puts the switch', () => {
     view?.step(1, () => true)
     view?.switchView('all')
-    // On a narrow screen the switch sits above the overview, which the rail then marks.
+    // The reader scrolled up past the overview to reach the switch.
     markRailCurrent(document, 'overview')
     view?.switchView('points')
     expect(window.location.hash).toBe('#point-p-1')
     expect(lensed()?.getAttribute('data-lens')).toBe('point')
-    // Only the points follow the URL from there: one layer at a time opens on the overview.
+    // One layer at a time still opens on the overview.
     view?.switchView('all')
     markRailCurrent(document, 'overview')
     view?.switchView('one')

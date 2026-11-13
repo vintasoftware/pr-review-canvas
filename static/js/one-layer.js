@@ -290,9 +290,8 @@ export function initOneLayer(root, opts) {
       return
     }
     const here = placeNow()
-    // From the top of the page the points open on the stop the URL names, else on their first,
-    // not on the overview. On a narrow screen the switch sits above the overview, so a reader
-    // back from a stop scrolls up past it to tap the switch.
+    // From the overview the points open on the stop the URL names, else on the first stop. On a
+    // narrow screen a reader scrolls up past the overview to reach the switch.
     const all = stops()
     const top = stopNamed(all, win.location.hash) ?? all[0]
     shownHash = place ?? (next === 'points' && here === '#overview' ? `#${top?.id ?? 'overview'}` : here)
