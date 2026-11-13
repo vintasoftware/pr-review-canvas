@@ -25,16 +25,6 @@ export function isDiffLayout(value) {
 }
 
 /**
- * The layout a diff column this wide draws in.
- * @param {DiffLayout} chosen
- * @param {number} width
- * @returns {DiffLayout}
- */
-export function layoutForWidth(chosen, width) {
-  return chosen === 'split' && width < SPLIT_MIN_WIDTH ? 'unified' : chosen
-}
-
-/**
  * @param {DiffLayout} layout
  * @returns {DiffLayout}
  */

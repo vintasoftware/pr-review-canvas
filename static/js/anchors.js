@@ -36,10 +36,11 @@ export function findRow(root, key, side, line) {
     return el
   }
   if (side === 'old') {
-    // Context rows carry the new-side id and the old line as data; deleted rows have the old-side id.
-    const ctx = root.querySelector(`table[data-key="${cssEscape(key)}"] tr[data-old="${line}"]`)
-    if (ctx instanceof HTMLTableRowElement) {
-      return ctx
+    // A row that holds both sides carries the new-side id and the old line as data; a row with
+    // an old line alone has the old-side id.
+    const row = root.querySelector(`table[data-key="${cssEscape(key)}"] tr[data-old="${line}"]`)
+    if (row instanceof HTMLTableRowElement) {
+      return row
     }
   }
   return null

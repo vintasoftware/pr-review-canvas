@@ -1,13 +1,7 @@
 // @ts-check
 // The reader's switch between the unified and split layouts of the diffs. The choice is saved in
 // the settings file; the page draws split only while the diff column is wide enough for two sides.
-import {
-  chosenDiffLayout,
-  drawnDiffLayout,
-  layoutForWidth,
-  nextDiffLayout,
-  SPLIT_MIN_WIDTH,
-} from './diff-layouts.js'
+import { chosenDiffLayout, drawnDiffLayout, nextDiffLayout, SPLIT_MIN_WIDTH } from './diff-layouts.js'
 
 /** @typedef {import('./diff-layouts.js').DiffLayout} DiffLayout */
 
@@ -64,9 +58,10 @@ export function initLayoutSwitch(root, relayout) {
   const width = () => (main === null ? 0 : contentWidth(main))
   const fits = () => width() >= SPLIT_MIN_WIDTH
   const apply = () => {
-    const next = layoutForWidth(chosenDiffLayout(), width())
+    const wide = fits()
+    const next = wide ? chosenDiffLayout() : 'unified'
     if (next !== drawnDiffLayout()) relayout(next)
-    paintToggle(root, fits())
+    paintToggle(root, wide)
   }
   const observer = main === null || typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(apply)
   if (main !== null) observer?.observe(main)

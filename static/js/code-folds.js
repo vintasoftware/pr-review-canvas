@@ -378,10 +378,10 @@ export function setFoldShown(summary, shown) {
 
 /**
  * Opens the folded rows around a deep-link target, so a line inside a fold can be reached.
- * @param {HTMLElement} card
+ * @param {HTMLElement} diff the drawn diff, so a diff drawn again is wired once
  */
-export function wireFoldReveal(card) {
-  card.addEventListener('reveal-code', event => {
+export function wireFoldReveal(diff) {
+  diff.addEventListener('reveal-code', event => {
     const target = event.target
     const row = target instanceof Element ? target.closest('tr') : null
     const summary = row === null ? null : foldSummaryFor(row)

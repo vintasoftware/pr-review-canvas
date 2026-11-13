@@ -5,7 +5,6 @@ import {
   diffColumns,
   drawnDiffLayout,
   isDiffLayout,
-  layoutForWidth,
   setChosenDiffLayout,
   setDrawnDiffLayout,
   SPLIT_MIN_WIDTH,
@@ -29,16 +28,13 @@ afterEach(() => {
 })
 
 describe('diff layouts', () => {
-  it('knows its values and draws split only in a column wide enough', () => {
+  it('knows its values', () => {
     expect([isDiffLayout('split'), isDiffLayout('unified'), isDiffLayout('side'), isDiffLayout(1)]).toEqual([
       true,
       true,
       false,
       false,
     ])
-    expect(layoutForWidth('split', SPLIT_MIN_WIDTH)).toBe('split')
-    expect(layoutForWidth('split', SPLIT_MIN_WIDTH - 1)).toBe('unified')
-    expect(layoutForWidth('unified', 4000)).toBe('unified')
   })
 
   it('counts the columns of the drawn layout', () => {
