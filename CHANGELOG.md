@@ -4,6 +4,10 @@
 
 ### Reading
 
+- **Split diffs** draw every diff with the old code on the left and the new on the right, as
+  GitHub's split view does. The layout button beside skin and theme, the `s` key, or **Diff layout**
+  in the settings dialog switches it, saved as `diffLayout` in `settings.yml`. A diff column under
+  900px wide draws unified until it widens. Unified stays the default.
 - **Full-width text** in the settings dialog, saved as `fullWidthText` in `settings.yml`, lets the
   overview summary, a layer's rationale and the PR description fill the width of their panel,
   diagrams included, instead of stopping at 100 characters. It is off by default.

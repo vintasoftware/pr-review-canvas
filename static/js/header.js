@@ -11,6 +11,7 @@ import { draftsByCommit, pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { refreshRail } from './rail.js'
 import { foldLevelControlHtml } from './reading-level.js'
+import { diffLayoutToggleHtml } from './layout-switch.js'
 import { approveBlockedReason } from './signoff.js'
 import { headerBarHtml } from './header-bar.js'
 
@@ -161,7 +162,8 @@ export function renderHeader(bundle, opts) {
         `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
         `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
         '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, point colors, and the AI Chat agent, model, and limits">settings</button>' +
-        '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>'
+        '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
+        (drawn === null ? '' : diffLayoutToggleHtml())
     ) +
     '<div class="stripe" aria-hidden="true"></div>' +
     '<div class="hdr-title">' +

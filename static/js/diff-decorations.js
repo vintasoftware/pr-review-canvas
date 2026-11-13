@@ -10,7 +10,7 @@ import { viewCommentHtml } from './comment-link.js'
 import { esc, fragment, avatarHtml, timeAgo, wideCellHtml } from './dom.js'
 import { renderMarkdown } from './markdown.js'
 import { pendingRowHtml } from './pending.js'
-import { pointRowHtml } from './points.js'
+import { pointRowHtml, setPointExpanded } from './points.js'
 
 const DECORATION = 'data-decoration'
 
@@ -114,6 +114,37 @@ export function threadRowHtml(t, opts) {
     ) +
     '</tr>'
   )
+}
+
+/**
+ * How the reader left the threads and points of a card's diff, and what puts them back that way
+ * once it is drawn again: each thread shown or collapsed, each point opened or shown resolved.
+ * @param {ParentNode} card
+ * @returns {() => void}
+ */
+export function holdDecorations(card) {
+  const collapsed = new Map(
+    Array.from(card.querySelectorAll('tr.thread'), row => [
+      row.getAttribute('data-thread'),
+      row.querySelector('.thread-full[hidden]') !== null,
+    ])
+  )
+  const points = new Map(
+    Array.from(card.querySelectorAll('tr.ifind'), row => [row.getAttribute('data-fingerprint'), row])
+  )
+  return () => {
+    for (const row of card.querySelectorAll('tr.thread')) {
+      const held = collapsed.get(row.getAttribute('data-thread'))
+      if (held !== undefined) setThreadCollapsed(row, held)
+    }
+    for (const row of card.querySelectorAll('tr.ifind')) {
+      const was = points.get(row.getAttribute('data-fingerprint'))
+      if (was !== undefined) {
+        setPointExpanded(row, was.hasAttribute('data-expanded'))
+        row.toggleAttribute('data-revealed', was.hasAttribute('data-revealed'))
+      }
+    }
+  }
 }
 
 /**

@@ -21,6 +21,11 @@ theme: auto
 # control on the page changes it for that page only.
 foldLevel: light
 
+# How a diff reads: unified in one column, or split with the old and new code side by side. A
+# diff column too narrow for split draws unified. The layout button in the page's header and the
+# s key change it here too.
+diffLayout: ${DEFAULT_SETTINGS.diffLayout}
+
 # How a review shows its layers: all on one page, or one at a time with the rail to move between
 # them.
 layerView: all
@@ -257,6 +262,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.foldLevel !== undefined) {
     out.foldLevel = input.foldLevel
+  }
+  if (input.diffLayout !== undefined) {
+    out.diffLayout = input.diffLayout
   }
   if (input.layerView !== undefined) {
     out.layerView = input.layerView

@@ -19,6 +19,7 @@ import { setChatEnabled } from './ask.js'
 import {
   applyDecorations,
   commentHtml,
+  holdDecorations,
   insertNoteRow,
   insertPointRow,
   insertThreadRow,
@@ -906,6 +907,29 @@ const repoGit = createGit(path.resolve(PACKAGE_ROOT, '..', '..'))
 const liveHead = await repoGit.revParse('refs/pr/278/head').catch(() => null)
 const liveDiffAvailable =
   liveHead === fixture.pr.headSha && (await repoGit.commitExists(fixture.pr.mergeBaseSha))
+
+describe('holdDecorations', () => {
+  it('puts back the threads and points it saw, and leaves alone the ones drawn since', () => {
+    const thread = (/** @type {number} */ id, hidden = '') =>
+      `<tr class="thread" data-thread="${id}"><td><div class="thread-full"${hidden}></div>` +
+      '<div class="thread-collapsed"></div></td></tr>'
+    const point = (/** @type {string} */ fp, attrs = '') =>
+      `<tr class="ifind is-handled" data-fingerprint="${fp}"${attrs}><td></td></tr>`
+    document.body.innerHTML = `<table><tbody>${thread(1, ' hidden')}${point('a', ' data-expanded data-revealed')}</tbody></table>`
+    const restore = holdDecorations(document)
+    // Drawn again as the page first draws them, with a thread and a point that were not there.
+    document.body.innerHTML = `<table><tbody>${thread(1)}${thread(2)}${point('a')}${point('b')}</tbody></table>`
+    restore()
+    const full = (/** @type {number} */ id) => document.querySelector(`[data-thread="${id}"] .thread-full`)
+    expect(full(1)?.hasAttribute('hidden')).toBe(true)
+    expect(full(2)?.hasAttribute('hidden')).toBe(false)
+    const drawn = (/** @type {string} */ fp) => document.querySelector(`[data-fingerprint="${fp}"]`)
+    expect(drawn('a')?.hasAttribute('data-expanded')).toBe(true)
+    expect(drawn('a')?.hasAttribute('data-revealed')).toBe(true)
+    expect(drawn('b')?.hasAttribute('data-expanded')).toBe(false)
+    expect(drawn('b')?.hasAttribute('data-revealed')).toBe(false)
+  })
+})
 
 describe('canvas without an Other layer', () => {
   it('renders the rail, the sections, and the progress count with every layer semantic', () => {

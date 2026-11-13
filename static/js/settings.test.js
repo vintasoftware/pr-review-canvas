@@ -20,6 +20,7 @@ const SETTINGS = {
     skin: 'terminal',
     theme: 'auto',
     foldLevel: 'light',
+    diffLayout: 'unified',
     layerView: 'all',
     readByPoints: true,
     pointColors: 'classic',
@@ -235,6 +236,7 @@ describe('readSettingsForm', () => {
     holder.innerHTML = settingsDialogHtml(SETTINGS, AGENTS)
     expect(readSettingsForm(holder)).toEqual({
       foldLevel: 'light',
+      diffLayout: 'unified',
       layerView: 'all',
       readByPoints: true,
       pointColors: 'classic',
@@ -359,6 +361,7 @@ describe('openSettingsDialog', () => {
     await flush()
     expect(saved[0]).toEqual({
       foldLevel: 'light',
+      diffLayout: 'unified',
       layerView: 'all',
       readByPoints: true,
       pointColors: 'classic',
@@ -461,6 +464,7 @@ describe('the dialog with parts missing', () => {
     )
     expect(readSettingsForm(holder)).toEqual({
       foldLevel: 'light',
+      diffLayout: 'unified',
       layerView: 'all',
       readByPoints: true,
       pointColors: 'classic',

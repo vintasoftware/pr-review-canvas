@@ -34,6 +34,8 @@ describe('keyAction', () => {
       ['R', 'reviewed-layer'],
       ['c', 'comment'],
       ['d', 'dismiss'],
+      ['f', 'fold-level'],
+      ['s', 'diff-layout'],
       ['?', 'help'],
       ['Escape', 'escape'],
     ]

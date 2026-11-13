@@ -109,6 +109,7 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           version: ctx.version,
           host: ctx.config.host,
           foldLevel: settings.foldLevel,
+          diffLayout: settings.diffLayout,
           layerView: settings.layerView,
           readByPoints: settings.readByPoints,
           pointColors: settings.pointColors,

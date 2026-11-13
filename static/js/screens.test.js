@@ -225,6 +225,7 @@ describe('header', () => {
       'refresh',
       'settings',
       'help',
+      'layout: unified',
       'skin: terminal',
       'theme: auto',
     ])

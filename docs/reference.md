@@ -555,6 +555,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `skin`                 | `github`  | `terminal`, `github`, `olive`                                                    |
 | `theme`                | `auto`    | `auto`, `light`, `dark`                                                          |
 | `foldLevel`            | `light`   | `light`, `moderate`, `aggressive`                                                |
+| `diffLayout`           | `unified` | `unified`, `split`                                                               |
 | `layerView`            | `all`     | `all`, `one`                                                                     |
 | `readByPoints`         | `false`   | `true`, `false`                                                                  |
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
@@ -708,6 +709,28 @@ A `light` fold may cover at most 40 lines of generated content.
 
 Files with patches longer than 2,000 lines wait behind **show diff**. A link into the file opens
 it automatically.
+
+### Diff layout
+
+A diff reads in one of two layouts, as on GitHub:
+
+- **unified**: one column, each deleted line above the line that replaced it (the default).
+- **split**: the old file on the left and the new file on the right. In each run of changes, the
+  first deleted line sits beside the first added line, the second beside the second, and the
+  shorter side is left blank. Long lines wrap.
+
+The layout button in the header, beside skin and theme, shows the layout on screen. It, the `s`
+key, and **Diff layout** in the settings dialog switch every diff, in the layers and in the stops
+of [one point at a time](#one-point-at-a-time), and save the choice as `diffLayout` in
+`settings.yml`. What you opened or closed, an open comment box, and your place stay as they were.
+
+Split needs a diff column at least 900px wide. Narrower, as at 1440px with the AI Chat pane
+docked, the page draws unified and keeps the saved choice: the button is disabled and says why,
+and split comes back once the column is wide enough.
+
+In split, each side has its own line numbers, comment button and selection; a selection stays on
+one side, and so does the text you drag over to copy. Comments, attention points and annotations
+span both sides under their line.
 
 ### One layer at a time
 

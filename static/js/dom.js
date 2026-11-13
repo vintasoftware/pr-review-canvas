@@ -1,5 +1,6 @@
 // @ts-check
 // Small DOM helpers. Everything that builds HTML from data goes through esc().
+import { diffColumns } from './diff-layouts.js'
 
 /**
  * @param {unknown} value
@@ -38,7 +39,7 @@ export function optionsHtml(values, selected, labels) {
  * @param {string} inner HTML
  */
 export function wideCellHtml(inner) {
-  return `<td class="code x" colspan="4"><div class="x-in">${inner}</div></td>`
+  return `<td class="code x" colspan="${diffColumns()}"><div class="x-in">${inner}</div></td>`
 }
 
 /** The chevron every collapse toggle draws. It points right; CSS turns it down while open. */

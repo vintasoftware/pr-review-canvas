@@ -5,6 +5,7 @@
 // never shifted by filtering: filtered lines are folded (hidden rows), not dropped.
 import { diffWordsWithSpace } from 'diff'
 import hljs from 'hljs'
+import { codeSpanCellsHtml, drawnDiffLayout } from './diff-layouts.js'
 import { esc } from './dom.js'
 import { parseHunkHeader } from './hunks.js'
 import { buildLineId, hunkAnchorId, hunkId } from './keys.js'
@@ -30,6 +31,11 @@ import { buildLineId, hunkAnchorId, hunkId } from './keys.js'
  */
 /**
  * @typedef {{ header: string, oldStart: number, oldLines: number, newStart: number, newLines: number, entries: Entry[] }} HunkBlock
+ */
+/**
+ * One row of a diff: the old file's line and the new file's. A context line is both; a changed
+ * line has no line on the other side in the unified layout, and may have one in the split layout.
+ * @typedef {{ old: Entry, new: Entry | null } | { old: null, new: Entry }} LineRow
  */
 /**
  * One matched move, as the changed lines of each side paired by position. Context lines the block
@@ -701,13 +707,25 @@ export function codeHtml(e) {
 }
 
 /**
- * @param {Entry} e
+ * The line a row's classes and fold come from: its old line, or its new one when it has none.
+ * @param {LineRow} row
+ */
+function entryOf(row) {
+  return row.old === null ? row.new : row.old
+}
+
+/**
+ * One row of the drawn layout. It carries the new side's id when it has a new line, else the old
+ * side's, and the old line as data when it has both, so `findRow` finds either side.
+ * @param {LineRow} row
  * @param {string} key
  * @returns {string}
  */
-export function rowHtml(e, key) {
+export function rowHtml(row, key) {
+  const split = drawnDiffLayout() === 'split'
+  const e = entryOf(row)
   /** @type {string[]} */
-  const classes = [e.type]
+  const classes = split ? [] : [e.type]
   if (foldKey(e) !== null) {
     // `folded` is what the stylesheet hides and what the summary row's toggle walks over. An
     // edited move starts open, so it also carries `shown`.
@@ -722,25 +740,118 @@ export function rowHtml(e, key) {
   if (e.noise) {
     classes.push('noise')
   }
-  const idSide = e.type === 'del' ? 'old' : 'new'
-  const idLine = e.type === 'del' ? e.oldLine : e.newLine
-  const id = idLine === null ? '' : ` id="${esc(buildLineId(key, idSide, idLine))}"`
-  const dataOld = e.type === 'ctx' && e.oldLine !== null ? ` data-old="${e.oldLine}"` : ''
-  const marker = e.type === 'add' ? '+' : e.type === 'del' ? '-' : ' '
-  // A deleted line is commented on the old side; every other row on the new side.
-  const commentSide = e.type === 'del' ? 'old' : 'new'
-  const commentLine = commentSide === 'old' ? e.oldLine : e.newLine
-  const plus =
-    commentLine === null
-      ? ''
-      : `<button class="plus" type="button" data-act="comment-line" data-needs-post data-key="${esc(key)}" data-side="${commentSide}" data-line="${commentLine}" aria-label="Comment on line ${commentLine}">+</button>`
+  /** @type {'old' | 'new'} */
+  const side = row.new === null ? 'old' : 'new'
+  const line = row.new === null ? e.oldLine : row.new.newLine
+  const id = line === null ? '' : ` id="${esc(buildLineId(key, side, line))}"`
+  const dataOld = row.new !== null && row.old !== null ? ` data-old="${row.old.oldLine}"` : ''
+  const cells = split
+    ? splitCellsHtml(row.old, 'old', key) + splitCellsHtml(row.new, 'new', key)
+    : `<td class="ln">${row.old?.oldLine ?? ''}</td>` +
+      `<td class="ln">${row.new?.newLine ?? ''}</td>` +
+      `<td class="gut">${plusHtml(key, side, line)}</td>` +
+      `<td class="code">${markerOf(e)}${codeHtml(e)}</td>`
+  return `<tr${classes.length === 0 ? '' : ` class="${classes.join(' ')}"`}${id}${dataOld}>${cells}</tr>`
+}
+
+/** @param {Entry} e */
+function markerOf(e) {
+  return e.type === 'add' ? '+' : e.type === 'del' ? '-' : ' '
+}
+
+/**
+ * @param {string} key
+ * @param {'old' | 'new'} side
+ * @param {number | null} line
+ */
+function plusHtml(key, side, line) {
+  return line === null
+    ? ''
+    : `<button class="plus" type="button" data-act="comment-line" data-needs-post data-key="${esc(key)}" data-side="${side}" data-line="${line}" aria-label="Comment on line ${line}">+</button>`
+}
+
+/**
+ * The rows of the split layout. In each run of changes the i-th deleted line sits beside the i-th
+ * added line, as GitHub lines them up. A line the renderer folds pairs only with a line of the
+ * same fold, so every row folds whole.
+ * @param {Entry[]} entries
+ * @returns {LineRow[]}
+ */
+export function splitRows(entries) {
+  /** @type {LineRow[]} */
+  const rows = []
+  /** @type {Entry[]} */
+  let dels = []
+  /** @type {Entry[]} */
+  let adds = []
+  const pairUp = () => {
+    let d = 0
+    let a = 0
+    for (;;) {
+      const del = dels[d]
+      const add = adds[a]
+      if (del === undefined || add === undefined) {
+        break
+      }
+      if (foldKey(del) === foldKey(add)) {
+        rows.push({ old: del, new: add })
+        d++
+        a++
+      } else if (foldKey(del) !== null) {
+        rows.push({ old: del, new: null })
+        d++
+      } else {
+        rows.push({ old: null, new: add })
+        a++
+      }
+    }
+    rows.push(...dels.slice(d).map(del => ({ old: del, new: null })))
+    rows.push(...adds.slice(a).map(add => ({ old: null, new: add })))
+    dels = []
+    adds = []
+  }
+  for (const e of entries) {
+    if (e.type === 'ctx') {
+      pairUp()
+      rows.push({ old: e, new: e })
+    } else {
+      ;(e.type === 'del' ? dels : adds).push(e)
+    }
+  }
+  pairUp()
+  return rows
+}
+
+/**
+ * The line number, comment button, and code of one side of a split row.
+ * @param {Entry | null} e
+ * @param {'old' | 'new'} side
+ * @param {string} key
+ */
+function splitCellsHtml(e, side, key) {
+  if (e === null) {
+    return `<td class="ln blank" data-side="${side}"></td><td class="gut blank" data-side="${side}"></td><td class="code blank" data-side="${side}"></td>`
+  }
+  const line = side === 'old' ? e.oldLine : e.newLine
+  const cls = e.type === 'ctx' ? '' : ` ${e.type}`
   return (
-    `<tr class="${classes.join(' ')}"${id}${dataOld}>` +
-    `<td class="ln">${e.oldLine ?? ''}</td>` +
-    `<td class="ln">${e.newLine ?? ''}</td>` +
-    `<td class="gut">${plus}</td>` +
-    `<td class="code">${marker}${codeHtml(e)}</td></tr>`
+    `<td class="ln${cls}" data-side="${side}">${line}</td>` +
+    `<td class="gut${cls}" data-side="${side}">${plusHtml(key, side, line)}</td>` +
+    `<td class="code${cls}" data-side="${side}">${markerOf(e)}${codeHtml(e)}</td>`
   )
+}
+
+/**
+ * The rows of a hunk's lines in the drawn layout.
+ * @param {Entry[]} entries
+ * @returns {LineRow[]}
+ */
+export function lineRows(entries) {
+  return drawnDiffLayout() === 'split'
+    ? splitRows(entries)
+    : entries.map(e =>
+        e.type === 'add' ? { old: null, new: e } : { old: e, new: e.type === 'ctx' ? e : null }
+      )
 }
 
 /**
@@ -759,8 +870,8 @@ export function foldKey(e) {
 /**
  * The summary row a run of folded rows sits behind. A move names the other end of the move and
  * offers a jump to it; anything else counts the lines it hides.
- * @param {Entry} first the first row of the run
- * @param {number} n how many rows the run holds
+ * @param {Entry} first the first line of the run
+ * @param {number} n how many lines the run holds
  * @param {string} key
  * @returns {string}
  */
@@ -783,66 +894,61 @@ export function foldSummaryHtml(first, n, key) {
   const toggle =
     `<button class="cmd" type="button" data-act="show-fold" aria-expanded="${shown}">` +
     `${shown ? 'hide' : 'show'}</button>`
-  return (
-    `<tr class="more fold${move === null ? '' : ' move'}"><td class="ln" colspan="2"></td><td class="gut"></td>` +
-    `<td class="code">${label} &middot; ${toggle}</td></tr>`
-  )
+  return `<tr class="more fold${move === null ? '' : ' move'}">${codeSpanCellsHtml(`${label} &middot; ${toggle}`)}</tr>`
 }
 
 /**
- * Rows for one hunk: the header row, folds, and one row per line.
+ * Rows for one hunk: the header row, then the lines, each run of folded lines behind its summary.
  * @param {HunkBlock} hunk
  * @param {string} key
  * @returns {string}
  */
 export function buildRows(hunk, key) {
   /** @type {string[]} */
-  const rows = []
-  rows.push(
-    `<tr class="hunk"><td class="ln" colspan="2"></td><td class="gut"></td><td class="code">${esc(hunk.header)}</td></tr>`
-  )
-  let i = 0
-  while (i < hunk.entries.length) {
-    const e = hunk.entries[i]
-    if (e === undefined) {
-      break
+  const rows = [`<tr class="hunk">${codeSpanCellsHtml(esc(hunk.header))}</tr>`]
+  /** The open run of folded lines: its fold, where its summary goes, its first line and count. */
+  let run = /** @type {{ fold: string, at: number, first: Entry, count: number } | null} */ (null)
+  const closeRun = () => {
+    if (run !== null) {
+      rows[run.at] = foldSummaryHtml(run.first, run.count, key)
+      run = null
     }
-    const fold = foldKey(e)
-    if (fold !== null) {
-      let j = i
-      while (j < hunk.entries.length) {
-        const next = hunk.entries[j]
-        if (next === undefined || foldKey(next) !== fold) {
-          break
-        }
-        j++
-      }
-      rows.push(foldSummaryHtml(e, j - i, key))
-      for (let k = i; k < j; k++) {
-        const x = hunk.entries[k]
-        if (x) {
-          rows.push(rowHtml(x, key))
-        }
-      }
-      i = j
-      continue
-    }
-    rows.push(rowHtml(e, key))
-    i++
   }
+  for (const row of lineRows(hunk.entries)) {
+    const first = entryOf(row)
+    const fold = foldKey(first)
+    if (fold !== (run?.fold ?? null)) {
+      closeRun()
+      if (fold !== null) {
+        run = { fold, at: rows.length, first, count: 0 }
+        rows.push('')
+      }
+    }
+    if (run !== null) {
+      run.count += row.old !== null && row.new !== null && row.old !== row.new ? 2 : 1
+    }
+    rows.push(rowHtml(row, key))
+  }
+  closeRun()
   return rows.join('')
 }
 
 const THEAD =
   '<thead><tr><th scope="col" class="ln">Old</th><th scope="col" class="ln">New</th><th scope="col" class="gut"><span class="sr">Comment</span></th><th scope="col" class="code">Change</th></tr></thead>'
 
+const SPLIT_HEAD =
+  '<colgroup><col class="ln"><col class="gut"><col><col class="ln"><col class="gut"><col></colgroup>' +
+  '<thead><tr><th scope="col" class="ln">Old</th><th scope="col" class="gut"><span class="sr">Comment</span></th><th scope="col" class="code">Old code</th>' +
+  '<th scope="col" class="ln">New</th><th scope="col" class="gut"><span class="sr">Comment</span></th><th scope="col" class="code">New code</th></tr></thead>'
+
 /**
  * @param {{ key: string, path: string, lang?: string | undefined }} file
  * @param {string} patch
  * @param {{ hunkIds?: ReadonlySet<string> }} [opts] only these hunk ids; all when omitted
- * @returns {string} HTML: one table per hunk inside .diff-wrap
+ * @returns {string} HTML: one table per hunk inside .diff-wrap, in the page's drawn layout
  */
 export function renderDiff(file, patch, opts = {}) {
+  const split = drawnDiffLayout() === 'split'
   const hunks = prepareHunks(patch)
   /** @type {string[]} */
   const tables = []
@@ -854,12 +960,12 @@ export function renderDiff(file, patch, opts = {}) {
     }
     highlightHunk(h, file.lang)
     tables.push(
-      `<table class="diff" id="${esc(hunkAnchorId(file.key, n))}" data-hunk="${esc(id)}" data-key="${esc(file.key)}">` +
-        `<caption class="sr">Chunk ${n} of ${esc(file.path)}</caption>${THEAD}<tbody>${buildRows(h, file.key)}</tbody></table>`
+      `<table class="diff${split ? ' split' : ''}" id="${esc(hunkAnchorId(file.key, n))}" data-hunk="${esc(id)}" data-key="${esc(file.key)}">` +
+        `<caption class="sr">Chunk ${n} of ${esc(file.path)}</caption>${split ? SPLIT_HEAD : THEAD}<tbody>${buildRows(h, file.key)}</tbody></table>`
     )
   })
   if (tables.length === 0) {
     return '<div class="unavailable">No diff to show.</div>'
   }
-  return `<div class="diff-wrap">${tables.join('')}</div>`
+  return `<div class="diff-wrap${split ? ' split' : ''}">${tables.join('')}</div>`
 }

@@ -1,11 +1,13 @@
 // @ts-check
 // @vitest-environment happy-dom
+import { setDrawnDiffLayout } from './diff-layouts.js'
 import {
   buildRows,
   codeHtml,
   detectMoves,
   highlightHunk,
   isImport,
+  lineRows,
   markNoise,
   pairChangedLines,
   parsePatch,
@@ -14,6 +16,7 @@ import {
   rowHtml,
   sameIgnoringWhitespace,
   splitHighlightedLines,
+  splitRows,
   wordDiff,
   wrapRanges,
 } from './diff-renderer.js'
@@ -319,27 +322,31 @@ const EMPTY_HUNK = { header: '', oldStart: 0, oldLines: 0, newStart: 0, newLines
 describe('rowHtml and buildRows', () => {
   it('emits ids per side, data-old on context rows, and the gutter button', () => {
     const [hunk] = parsePatch(PATCH)
-    const ctx = hunk?.entries[0]
-    const add = hunk?.entries[1]
-    const del = hunk?.entries[3]
-    if (!(ctx && add && del)) {
+    const [ctx, add, , delRow] = lineRows(hunk?.entries ?? [])
+    const del = delRow?.old
+    if (!(ctx && add && delRow && del)) {
       throw new Error('no entries')
     }
     expect(rowHtml(ctx, 'k')).toBe(
       '<tr class="ctx" id="L-k-new-1" data-old="1"><td class="ln">1</td><td class="ln">1</td><td class="gut"><button class="plus" type="button" data-act="comment-line" data-needs-post data-key="k" data-side="new" data-line="1" aria-label="Comment on line 1">+</button></td><td class="code"> import { a } from &#39;./a&#39;</td></tr>'
     )
     expect(rowHtml(add, 'k')).toContain('<tr class="add" id="L-k-new-2">')
-    expect(rowHtml(del, 'k')).toContain('<tr class="del" id="L-k-old-3">')
+    // A line with no number has no id and nothing to comment on.
+    const numberless = { .../** @type {NonNullable<typeof add.new>} */ (add.new), newLine: null }
+    expect(rowHtml({ old: null, new: numberless }, 'k')).toContain(
+      '<tr class="add"><td class="ln"></td><td class="ln"></td><td class="gut"></td>'
+    )
+    expect(rowHtml(delRow, 'k')).toContain('<tr class="del" id="L-k-old-3">')
     // A deleted line is commented on the old side, at its old line number.
-    expect(rowHtml(del, 'k')).toContain('data-side="old" data-line="3"')
+    expect(rowHtml(delRow, 'k')).toContain('data-side="old" data-line="3"')
     del.noise = true
-    expect(rowHtml(del, 'k')).toContain('<tr class="del folded noise" id="L-k-old-3">')
+    expect(rowHtml(delRow, 'k')).toContain('<tr class="del folded noise" id="L-k-old-3">')
     del.noise = false
     del.move = { id: 1, kind: 'exact', side: 'from', line: 40 }
-    expect(rowHtml(del, 'k')).toContain('<tr class="del folded move-from" id="L-k-old-3">')
+    expect(rowHtml(delRow, 'k')).toContain('<tr class="del folded move-from" id="L-k-old-3">')
     // An edited move is worth reading, so its rows start open.
     del.move = { id: 1, kind: 'edited', side: 'from', line: 40 }
-    expect(rowHtml(del, 'k')).toContain('<tr class="del folded shown move-from" id="L-k-old-3">')
+    expect(rowHtml(delRow, 'k')).toContain('<tr class="del folded shown move-from" id="L-k-old-3">')
   })
 
   it('folds noise behind a show row and leaves code outside the diff out of the table', () => {
@@ -504,5 +511,127 @@ describe('move detection boundaries', () => {
       ].join('\n')
     )
     expect(detectMoves(hunks)).toEqual([])
+  })
+})
+
+describe('split layout', () => {
+  beforeEach(() => setDrawnDiffLayout('split'))
+  afterEach(() => setDrawnDiffLayout('unified'))
+
+  /** @param {string[]} lines */
+  const entriesOf = lines => parsePatch(lines.join('\n'))[0]?.entries ?? []
+  /** @param {ReturnType<typeof splitRows>} rows */
+  const sides = rows => rows.map(r => [r.old?.oldLine ?? null, r.new?.newLine ?? null])
+
+  it('puts the i-th deleted line beside the i-th added line, and blanks the shorter side', () => {
+    const entries = entriesOf(['@@ -1,4 +1,5 @@', ' a', '-b', '-c', '+B', '+C', '+D', ' e', '-f'])
+    expect(sides(splitRows(entries))).toEqual([
+      [1, 1],
+      [2, 2],
+      [3, 3],
+      [null, 4],
+      [4, 5],
+      [5, null],
+    ])
+    // A context line is one entry on both sides.
+    const [ctx] = splitRows(entries)
+    expect(ctx?.old).toBe(ctx?.new)
+  })
+
+  it('pairs a folded line only with a line of the same fold, so every row folds whole', () => {
+    const hunks = prepareHunks(
+      [
+        '@@ -1,6 +1,3 @@',
+        '-one()',
+        '-two()',
+        '-three()',
+        '-x',
+        '+y',
+        ' keep',
+        '@@ -20,1 +17,4 @@',
+        ' keep2',
+        '+one()',
+        '+two()',
+        '+three()',
+      ].join('\n')
+    )
+    expect(sides(splitRows(hunks[0]?.entries ?? []))).toEqual([
+      [1, null],
+      [2, null],
+      [3, null],
+      [4, 1],
+      [5, 2],
+    ])
+    const rows = buildRows(hunks[0] ?? EMPTY_HUNK, 'k')
+    expect(rows.match(/class="more fold move"/g)).toHaveLength(1)
+    expect(rows).toContain('&#8943; 3 lines moved to')
+    expect(rows).toContain('<tr class="folded move-from" id="L-k-old-1">')
+  })
+
+  it('starts an edited move open, on its own side', () => {
+    const hunks = prepareHunks(
+      [
+        '@@ -1,4 +1,4 @@',
+        '-one()',
+        '-two()',
+        '-three()',
+        '-four()',
+        '+one()',
+        '+two()',
+        '+three()',
+        '+five()',
+      ].join('\n')
+    )
+    const rows = buildRows(hunks[0] ?? EMPTY_HUNK, 'k')
+    expect(rows).toContain('<tr class="folded shown move-from" id="L-k-old-1">')
+    expect(rows).toContain('<tr class="folded shown move-to" id="L-k-new-1">')
+  })
+
+  it('puts a folded added line on its own row before the plain lines pair up', () => {
+    const hunks = prepareHunks(['@@ -1,2 +1,3 @@', ' a', '-x', "+import { b } from './b'", '+y'].join('\n'))
+    expect(sides(splitRows(hunks[0]?.entries ?? []))).toEqual([
+      [1, 1],
+      [null, 2],
+      [2, 3],
+    ])
+  })
+
+  it('counts both sides of a folded row in its summary', () => {
+    const hunks = prepareHunks(['@@ -1,2 +1,2 @@', '-a( 1 )', '-b( 2 )', '+a(1)', '+b(2)'].join('\n'))
+    const rows = buildRows(hunks[0] ?? EMPTY_HUNK, 'k')
+    expect(rows).toContain('4 lines hidden (imports, whitespace)')
+    expect(rows.match(/<tr class="folded noise"/g)).toHaveLength(2)
+  })
+
+  it('gives a row the new side id with the old line as data, and each side its own cells', () => {
+    const [ctx, , , pair, del] = splitRows(entriesOf(['@@ -1,4 +1,4 @@', ' a', '+n', ' z', '-b', '+B', '-c']))
+    if (!(ctx && pair && del)) {
+      throw new Error('no rows')
+    }
+    expect(rowHtml(ctx, 'k')).toMatch(
+      /^<tr id="L-k-new-1" data-old="1"><td class="ln" data-side="old">1<\/td>/
+    )
+    const html = rowHtml(pair, 'k')
+    expect(html).toContain('<tr id="L-k-new-4" data-old="3">')
+    expect(html).toContain('<td class="code del" data-side="old">-b</td>')
+    expect(html).toContain('data-side="old" data-line="3" aria-label="Comment on line 3"')
+    expect(html).toContain('<td class="code add" data-side="new">+B</td>')
+    expect(rowHtml(del, 'k')).toContain('<tr id="L-k-old-4"><td class="ln del" data-side="old">4</td>')
+    expect(rowHtml(del, 'k')).toContain('<td class="code blank" data-side="new"></td>')
+  })
+
+  it('draws the page in the split layout while it is the drawn one', () => {
+    const file = { key: 'src_app_ts', path: 'src/app.ts', lang: 'typescript' }
+    document.body.innerHTML = renderDiff(file, PATCH)
+    expect(document.querySelector('.diff-wrap.split > table.diff.split')).not.toBeNull()
+    expect(document.querySelectorAll('table.diff')[0]?.querySelectorAll('th').length).toBe(6)
+    expect(document.querySelector('tr.hunk td.code')?.getAttribute('colspan')).toBe('4')
+    // The changed line pairs with the line it became, and keeps its word marks.
+    const row = document.querySelector('#L-src_app_ts-new-4')
+    expect(row?.getAttribute('data-old')).toBe('3')
+    expect(row?.querySelector('td.code.del .wd')).toBeNull()
+    expect([...(row?.querySelectorAll('td.code.add .wa') ?? [])].map(s => s.textContent).join('')).toBe(
+      ' + b()'
+    )
   })
 })

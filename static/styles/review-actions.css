@@ -1,8 +1,10 @@
 /* Selection, comments, sign-off, and notifications. */
-tr.is-selected td {
+tr.is-selected td,
+td.is-selected {
   background: var(--accent-bg);
 }
-tr.is-selected .ln {
+tr.is-selected .ln,
+td.ln.is-selected {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 tr.sel-bar .x {
