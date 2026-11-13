@@ -108,6 +108,11 @@
 .proposed-point {
   margin: 0 0 6px;
 }
+/* Why a proposed range cannot be sent: it crosses two chunks. */
+.proposed-anchor {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
 .proposed .tbtns {
   margin-top: 8px;
   display: flex;

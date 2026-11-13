@@ -24,6 +24,7 @@ import { reviewPaneHtml, wireReviewPane } from './side-pane.js'
 import { runCommand, toast, wireCopyCommands } from './commands.js'
 import { initDeepLinks } from './deep-link.js'
 import { initDiagrams } from './diagram.js'
+import { setChosenDiffLayout } from './diff-layouts.js'
 import { esc, qs } from './dom.js'
 import { exportCanvasZip } from './download.js'
 import {
@@ -236,6 +237,7 @@ export class PrAppElement extends HTMLElement {
     // The reading level the canvas opens at comes from the settings file with the page, so the
     // first draw hides what the reader asked for.
     setFoldLevel(this, this.bootstrap.foldLevel)
+    setChosenDiffLayout(this.bootstrap.diffLayout)
     setStartCollapsed(this.bootstrap.startCollapsed)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
     document.documentElement.toggleAttribute('data-full-width-text', this.bootstrap.fullWidthText)
@@ -645,6 +647,8 @@ export class PrAppElement extends HTMLElement {
     document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)
     // The dialog fine-tunes the switch; the header button and the i key own on and off.
     setInlineHide({ ...data.settings, hideInline: getInlineHide().hideInline }, this)
+    setChosenDiffLayout(data.settings.diffLayout)
+    this.interactions?.applyDiffLayout()
     const density = document.documentElement.dataset['points']
     applyPointsDensity(
       document.documentElement,

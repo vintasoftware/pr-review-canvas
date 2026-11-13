@@ -4,7 +4,8 @@
 // deep link lands inside them. Every model fold is wired once, when the diff is drawn; the
 // reader's level only decides which of them are active, so changing it never rebuilds the table
 // and an open composer or an expanded fold survives. The renderer's own folds hide in every mode.
-import { findRow } from './anchors.js'
+import { findRow, parseLineId } from './anchors.js'
+import { diffColumns } from './diff-layouts.js'
 import { CHEVRON_ICON, esc } from './dom.js'
 import { foldsForLevel } from './fold-levels.js'
 
@@ -40,6 +41,15 @@ const wiredFolds = /** @type {WeakMap<Element, WiredFold[]>} */ (new WeakMap())
  */
 function drawnDiff(card) {
   return card.querySelector('.diff-wrap')
+}
+
+/**
+ * The folds wired on a card's drawn diff.
+ * @param {HTMLElement} card
+ */
+function foldsOf(card) {
+  const diff = drawnDiff(card)
+  return diff === null ? [] : (wiredFolds.get(diff) ?? [])
 }
 
 /**
@@ -137,6 +147,18 @@ function foldLabel(rows, fold) {
 }
 
 /**
+ * The code lines a row shows: none for a row of another kind, and two for a split row with a line
+ * changed on each side.
+ * @param {HTMLTableRowElement} row
+ */
+function linesOf(row) {
+  if (row.id === '') {
+    return 0
+  }
+  return row.querySelector('td.del') !== null && row.querySelector('td.add') !== null ? 2 : 1
+}
+
+/**
  * Inserts the fold's toggle above its first row: a chevron, the title, and how many code lines it
  * hides, so a folded range reads as hidden code rather than as a stray heading.
  * @param {HTMLTableRowElement} first
@@ -148,7 +170,7 @@ function createToggle(first, title, lines) {
   header.className = 'more code-fold'
 
   const cell = document.createElement('td')
-  cell.colSpan = 4
+  cell.colSpan = diffColumns()
 
   const toggle = document.createElement('button')
   toggle.className = 'fold-toggle'
@@ -195,8 +217,7 @@ function paintFold(wired) {
  * @param {boolean} discussed whether a thread or a pending draft sits in the card's chunks
  */
 export function setCodeFoldLevel(card, level, discussed) {
-  const diff = drawnDiff(card)
-  const wired = diff === null ? [] : (wiredFolds.get(diff) ?? [])
+  const wired = foldsOf(card)
   const active = new Set(
     discussed
       ? []
@@ -245,7 +266,11 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
       continue
     }
     const ids = rows.map(row => row.id).filter(Boolean)
-    const { header, toggle } = createToggle(first, foldLabel(rows, fold), ids.length)
+    const { header, toggle } = createToggle(
+      first,
+      foldLabel(rows, fold),
+      rows.reduce((n, row) => n + linesOf(row), 0)
+    )
     toggle.setAttribute('aria-controls', ids.join(' '))
     const w = {
       fold,
@@ -278,6 +303,43 @@ export function applyCodeFolds(card, key, folds, level, discussed) {
 
   wiredFolds.set(diff, wired)
   setCodeFoldLevel(card, level, discussed)
+}
+
+/**
+ * How the reader left a card's folds, and what puts them back that way once its diff is drawn
+ * again: the diff's own folds by the first line each hides, the canvas folds by the fold itself.
+ * @param {HTMLElement} card
+ * @param {string} key
+ * @returns {() => void}
+ */
+export function holdFolds(card, key) {
+  // Every line each folded row shows, both sides of a split row, since a run of one layout can be
+  // several runs of the other.
+  const lines = Array.from(card.querySelectorAll('tr.folded')).flatMap(row => {
+    const shown = row.classList.contains('shown')
+    const old = row.getAttribute('data-old')
+    const oldLine = old === null ? null : { side: /** @type {const} */ ('old'), line: Number(old) }
+    return [parseLineId(row.id), oldLine].map(line => ({ line, shown }))
+  })
+  const expanded = new Set(
+    foldsOf(card)
+      .filter(w => w.expanded)
+      .map(w => w.fold)
+  )
+  return () => {
+    /** @type {Map<HTMLTableRowElement, boolean>} */
+    const summaries = new Map()
+    for (const { line, shown } of lines) {
+      const row = line && findRow(card, key, line.side, line.line)
+      const summary = row && foldSummaryFor(row)
+      if (summary) summaries.set(summary, summaries.get(summary) === true || shown)
+    }
+    for (const [summary, shown] of summaries) setFoldShown(summary, shown)
+    for (const w of foldsOf(card).filter(f => expanded.has(f.fold))) {
+      w.expanded = true
+      paintFold(w)
+    }
+  }
 }
 
 /**
@@ -316,10 +378,10 @@ export function setFoldShown(summary, shown) {
 
 /**
  * Opens the folded rows around a deep-link target, so a line inside a fold can be reached.
- * @param {HTMLElement} card
+ * @param {HTMLElement} diff the drawn diff, so a diff drawn again is wired once
  */
-export function wireFoldReveal(card) {
-  card.addEventListener('reveal-code', event => {
+export function wireFoldReveal(diff) {
+  diff.addEventListener('reveal-code', event => {
     const target = event.target
     const row = target instanceof Element ? target.closest('tr') : null
     const summary = row === null ? null : foldSummaryFor(row)

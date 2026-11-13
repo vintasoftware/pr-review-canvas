@@ -4,6 +4,8 @@
 // are model output, so every field is checked against the pull request's own files and points
 // before a card offers to act on it; a block that does not check out stays a code block.
 import { splitFences } from './fences.js'
+import { hunkSpan } from './hunks.js'
+import { resolveLink } from './links.js'
 
 /**
  * `point` is the attention point the comment acts on, when the agent named one this canvas has.
@@ -67,12 +69,26 @@ export function proposalFingerprint(comment) {
 }
 
 /**
+ * The lines a comment covers: `startLine` to `line`, one line when they are equal.
+ * @typedef {{ startLine: number, line: number }} ProposedRange
+ */
+
+/**
+ * Why a range cannot be sent, in the link check's words, and the part of the range inside each
+ * chunk it crosses, for the reader to choose from.
+ * @typedef {{ message: string, parts: ProposedRange[] }} AnchorError
+ */
+
+/**
  * What a target has to satisfy to be postable: the file is in this pull request, and the line is
- * one the diff shows on that side. `pointFor` finds the attention point a `point` field names, and
- * `resolves` says whether this reader may resolve points here, which a resolution needs.
+ * one the diff shows on that side. Both ends of a range can pass that and still be in two chunks,
+ * which the server refuses: `anchorError` returns the reason and the parts for that, or null.
+ * `pointFor` finds the attention point a `point` field names, and `resolves` says whether this
+ * reader may resolve points here, which a resolution needs.
  * @typedef {{
  *   hasPath: (path: string) => boolean,
  *   hasLine: (path: string, side: 'new' | 'old', line: number) => boolean,
+ *   anchorError: (comment: ProposedComment) => AnchorError | null,
  *   pointFor?: (ref: string) => ProposalPoint | undefined,
  *   resolves?: boolean,
  * }} CommentTargets
@@ -217,6 +233,19 @@ export function splitChatAnswer(markdown, targets) {
 }
 
 /**
+ * The `#line:` link check, so the message names the file's chunk ranges.
+ * @param {ReadonlyArray<import('./contract-types.js').FileEntry>} files
+ * @param {string} path
+ * @param {'new' | 'old'} side
+ * @param {number} start
+ * @param {number} end
+ */
+function linkError(files, path, side, start, end) {
+  const resolved = resolveLink({ kind: 'line', path, start, end, side }, { layers: [], files })
+  return resolved.ok ? null : resolved.message
+}
+
+/**
  * The lines a diff shows, as the card's check needs them: every hunk's line numbers per side, and
  * the attention points a comment may name. A name two points share names neither.
  * @param {ReadonlyArray<import('./contract-types.js').FileEntry>} files
@@ -234,6 +263,25 @@ export function targetsFromFiles(files, points = [], resolves = false) {
       return only === undefined ? undefined : { fingerprint: only.fingerprint, title: only.title }
     },
     hasPath: path => byPath.has(path),
+    anchorError: comment => {
+      const start = comment.startLine ?? comment.line
+      const message = linkError(files, comment.path, comment.side, start, comment.line)
+      if (message === null) {
+        return null
+      }
+      const parts = (byPath.get(comment.path)?.hunks ?? [])
+        // A chunk with no lines on this side shows none to comment on, as `hasLine` says.
+        .filter(h => (comment.side === 'new' ? h.newLines : h.oldLines) > 0)
+        .map(h => hunkSpan(h, comment.side))
+        .map(span => ({ startLine: Math.max(span.start, start), line: Math.min(span.end, comment.line) }))
+        // The same check again, so a part offered is one the server takes.
+        .filter(
+          part =>
+            part.startLine <= part.line &&
+            linkError(files, comment.path, comment.side, part.startLine, part.line) === null
+        )
+      return { message, parts }
+    },
     hasLine: (path, side, line) => {
       const entry = byPath.get(path)
       if (entry === undefined) {

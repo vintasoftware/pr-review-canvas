@@ -212,6 +212,40 @@ describe('targetsFromFiles', () => {
     expect(targets.hasLine('src/app.ts', 'old', 4)).toBe(true)
     expect(targets.hasLine('nope.ts', 'new', 1)).toBe(false)
   })
+
+  it('offers the part of a range in each chunk that shows lines on its side', () => {
+    const hunk = (
+      /** @type {number} */ oldStart,
+      /** @type {number} */ oldLines,
+      /** @type {number} */ newStart
+    ) => ({
+      id: `h${oldStart}`,
+      header: '',
+      oldStart,
+      oldLines,
+      newStart,
+      newLines: 2,
+    })
+    const three = targetsFromFiles([
+      {
+        path: 'a.ts',
+        key: 'a_ts',
+        status: 'modified',
+        additions: 2,
+        deletions: 2,
+        // The middle chunk only adds lines, so it shows none on the old side.
+        hunks: [hunk(1, 4, 1), hunk(6, 0, 7), hunk(10, 3, 12)],
+      },
+    ])
+    expect(three.anchorError({ path: 'a.ts', startLine: 2, line: 11, side: 'old', body: 'x' })).toEqual({
+      message: 'a.ts:2-11 (old) is not inside one chunk of the diff (old-side lines 1-4, 6, 10-12)',
+      parts: [
+        { startLine: 2, line: 4 },
+        { startLine: 10, line: 11 },
+      ],
+    })
+    expect(three.anchorError({ path: 'a.ts', startLine: 2, line: 4, side: 'old', body: 'x' })).toBeNull()
+  })
 })
 
 describe('splitChatAnswer', () => {

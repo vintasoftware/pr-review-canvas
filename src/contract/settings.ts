@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { GenerationModels, Sharing } from '../project-config.js'
 import type { ReviewKey } from './review-key.js'
+import { DEFAULT_DIFF_LAYOUT, DIFF_LAYOUTS } from '../../static/js/diff-layouts.js'
 import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 import { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
 import { DEFAULT_POINT_COLORS, POINT_COLORS } from '../../static/js/point-colors.js'
@@ -22,6 +23,8 @@ export { DEFAULT_THEME, THEMES } from '../../static/js/theme.js'
 export type { LayerView } from '../../static/js/layer-views.js'
 export { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
 export type { PointColors } from '../../static/js/point-colors.js'
+export type { DiffLayout } from '../../static/js/diff-layouts.js'
+export { DEFAULT_DIFF_LAYOUT, DIFF_LAYOUTS } from '../../static/js/diff-layouts.js'
 export { DEFAULT_POINT_COLORS, POINT_COLORS } from '../../static/js/point-colors.js'
 export type { HiddenItemClick, InlineKind } from '../../static/js/inline-hide.js'
 export {
@@ -71,6 +74,8 @@ export const SettingsSchema = z.object({
   theme: z.enum(THEMES),
   /** The reading level every review opens at; the control on the page changes it for one page. */
   foldLevel: z.enum(FOLD_LEVELS),
+  /** Whether a diff reads as one column, or with the old and new code side by side. */
+  diffLayout: z.enum(DIFF_LAYOUTS),
   /** Whether a review shows every layer on one page, or the overview or one layer at a time. */
   layerView: z.enum(LAYER_VIEWS),
   /**
@@ -123,6 +128,7 @@ export const DEFAULT_SETTINGS: Settings = {
   skin: DEFAULT_SKIN,
   theme: DEFAULT_THEME,
   foldLevel: DEFAULT_FOLD_LEVEL,
+  diffLayout: DEFAULT_DIFF_LAYOUT,
   layerView: DEFAULT_LAYER_VIEW,
   readByPoints: false,
   pointColors: DEFAULT_POINT_COLORS,
@@ -161,6 +167,7 @@ export const SettingsInputSchema = z.strictObject({
   skin: z.enum(SKINS).optional(),
   theme: z.enum(THEMES).optional(),
   foldLevel: z.enum(FOLD_LEVELS).optional(),
+  diffLayout: z.enum(DIFF_LAYOUTS).optional(),
   layerView: z.enum(LAYER_VIEWS).optional(),
   readByPoints: z.boolean().optional(),
   pointColors: z.enum(POINT_COLORS).optional(),

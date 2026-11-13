@@ -9,10 +9,12 @@ import {
   composerInput,
   composerRowHtml,
   focusComposer,
+  liftComposer,
   setDisabledReason,
   toggleMarkdownPreview,
 } from './composer.js'
 import { sendCommandsHtml } from './comment-link.js'
+import { setDrawnDiffLayout } from './diff-layouts.js'
 import { noPostingTitle, setHost } from './host.js'
 
 /** @param {string} html */
@@ -266,6 +268,110 @@ describe('concealForComposer', () => {
     concealForComposer(host)
     closeComposers(document)
     expect(host.querySelector('.extra')?.hasAttribute('hidden')).toBe(true)
+  })
+})
+
+describe('liftComposer', () => {
+  /** A diff with a line row, a thread, and a draft, as the diff is drawn again in a new layout. */
+  const diff = (/** @type {string} */ extra = '') =>
+    '<table class="diff" data-key="k"><tbody><tr id="L-k-new-4"><td class="ln">4</td></tr>' +
+    '<tr class="thread" data-thread="7"><td><div class="thread-full"></div></td></tr>' +
+    `<tr><td><div class="cmt pending-cmt" data-pending-id="p1"><div class="prose">one</div></div></td></tr>${extra}</tbody></table>`
+
+  afterEach(() => setDrawnDiffLayout('unified'))
+
+  it('puts a line box back under its line, text, focus and all, spanning the new columns', () => {
+    document.body.innerHTML = diff(
+      composerRowHtml({ id: 'c1', label: 'x', kind: 'inline', path: 'a.ts', line: 4, side: 'new' })
+    )
+    const area = type(document.querySelector('.composer-box') ?? document.body, 'kept')
+    area.focus()
+    const restore = liftComposer(document)
+    expect(document.querySelector('.composer-box')).toBeNull()
+    document.body.innerHTML = diff()
+    setDrawnDiffLayout('split')
+    restore()
+    const row = document.querySelector('tr.composer')
+    expect(row?.previousElementSibling?.id).toBe('L-k-new-4')
+    expect(row?.querySelector('td')?.colSpan).toBe(6)
+    expect(document.activeElement).toBe(area)
+    expect(area.value).toBe('kept')
+  })
+
+  it('puts a reply back in its thread and an edit back over its draft, concealed again', () => {
+    document.body.innerHTML = diff()
+    document
+      .querySelector('.thread-full')
+      ?.insertAdjacentHTML('beforeend', composerHtml({ id: 'c1', label: 'x', kind: 'reply' }))
+    let restore = liftComposer(document)
+    document.body.innerHTML = diff()
+    restore()
+    expect(document.querySelector('tr.thread .composer-box')).not.toBeNull()
+
+    document.body.innerHTML = diff()
+    document
+      .querySelector('.pending-cmt')
+      ?.insertAdjacentHTML(
+        'beforeend',
+        composerHtml({ id: 'c2', label: 'x', kind: 'inline', pendingId: 'p1' })
+      )
+    restore = liftComposer(document)
+    document.body.innerHTML = diff()
+    restore()
+    expect(document.querySelector('.pending-cmt .composer-box')).not.toBeNull()
+    expect(document.querySelector('.pending-cmt .prose')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('drops a box whose place is gone, and does nothing without one', () => {
+    document.body.innerHTML = diff(
+      composerRowHtml({ id: 'c0', label: 'x', kind: 'inline', path: 'a.ts', line: 4, side: 'old' })
+    )
+    const gone = liftComposer(document)
+    document.body.innerHTML = diff()
+    gone()
+    expect(document.querySelector('.composer-box')).toBeNull()
+    document.body.innerHTML = diff()
+    document
+      .querySelector('.thread-full')
+      ?.insertAdjacentHTML('beforeend', composerHtml({ id: 'c1', label: 'x', kind: 'reply' }))
+    const restore = liftComposer(document)
+    document.body.innerHTML = '<table class="diff" data-key="k"><tbody></tbody></table>'
+    restore()
+    expect(document.querySelector('.composer-box')).toBeNull()
+    // A box of no kind this knows how to place goes with the old diff.
+    document.body.innerHTML = diff('<tr><td><div class="composer-box"><textarea></textarea></div></td></tr>')
+    const stray = liftComposer(document)
+    document.body.innerHTML = diff()
+    stray()
+    expect(document.querySelector('.composer-box')).toBeNull()
+    // A PR-level box is not in a diff, so a redraw leaves it where it is.
+    document.body.innerHTML = composerHtml({ id: 'c3', label: 'x', kind: 'issue' })
+    liftComposer(document)()
+    expect(document.querySelector('.composer-box')).not.toBeNull()
+  })
+
+  it('puts the box that resolves a point back under that point’s commands, and drops it with the point', () => {
+    const point = (/** @type {string} */ inner = '') =>
+      '<tr class="ifind" data-fingerprint="fp-1"><td><span class="tbtns">' +
+      `<button data-act="point-settle" data-fingerprint="fp-1">resolve</button></span>${inner}</td></tr>`
+    const box =
+      '<div class="composer-box settle-box"><textarea></textarea>' +
+      '<button data-act="settle-save" data-fingerprint="fp-1">resolve</button></div>'
+    document.body.innerHTML = diff(point(box))
+    const area = type(document.querySelector('.settle-box') ?? document.body, 'the spec says sum')
+    let restore = liftComposer(document)
+    expect(document.querySelector('.settle-box')).toBeNull()
+    document.body.innerHTML = diff(point())
+    restore()
+    expect(document.querySelector('tr.ifind .tbtns')?.nextElementSibling?.querySelector('textarea')).toBe(
+      area
+    )
+    expect(area.value).toBe('the spec says sum')
+
+    restore = liftComposer(document)
+    document.body.innerHTML = diff()
+    restore()
+    expect(document.querySelector('.settle-box')).toBeNull()
   })
 })
 
