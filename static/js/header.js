@@ -10,6 +10,7 @@ import { canvasHiddenLines, drawnCanvas, getFoldLevel } from './layers.js'
 import { draftsByCommit, pendingBarHtml, pendingCount } from './pending.js'
 import { progressSummary } from './progress.js'
 import { refreshRail } from './rail.js'
+import { getInlineHide, inlineHideHintHtml, inlineHideSwitchHtml } from './inline-hide.js'
 import { foldLevelControlHtml } from './reading-level.js'
 import { diffLayoutToggleHtml } from './layout-switch.js'
 import { approveBlockedReason } from './signoff.js'
@@ -136,6 +137,7 @@ export function renderHeader(bundle, opts) {
   const level = getFoldLevel()
   // How much of the diff to hide is the reader's choice for any canvas on screen, an outdated one
   // they opened too, counted over the diff the page draws.
+  const inline = getInlineHide()
   const reading =
     drawn === null
       ? ''
@@ -151,7 +153,8 @@ export function renderHeader(bundle, opts) {
               mergeBaseSha: drawn.on.mergeBaseSha,
             },
             level
-          )
+          ),
+          { control: inlineHideSwitchHtml(inline), hint: inlineHideHintHtml(inline) }
         )
   const risk = ready ? riskLineHtml(artifact.risk) : ''
   return (

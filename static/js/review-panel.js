@@ -71,7 +71,7 @@ export function reviewPanelHtml(state, ctx) {
           .map(
             p =>
               `<li class="review-draft" ${draftAttrs(p)}>` +
-              `<p class="review-where"><a class="loc" href="${esc(draftLink(p))}">${esc(pendingRange(p))}</a>` +
+              `<p class="review-where"><a class="loc" data-item-link href="${esc(draftLink(p))}">${esc(pendingRange(p))}</a>` +
               ` <span class="muted">· ${draftOrigin(p, ctx.points)}</span></p>` +
               pendingCommentHtml(p, ctx.now) +
               '</li>'

@@ -50,6 +50,19 @@ compactPoints: false
 # Whether the overview summary, a layer's rationale and the PR description fill the width of their
 # panel. false stops their lines at 100 characters, like the rest of the page's text.
 fullWidthText: false
+# Whether the diff hides its inline items, so you read the code first. The Hide comments switch
+# and the i key change it. Nothing is deleted, and switching it off brings the items back. Points
+# stay in the layer summary (except the Other layer's) and drafts in the review panel; comments and
+# annotations show only in the diff.
+hideInline: false
+
+# What the switch hides: one or more of points, comments (earlier and carried), pending (your
+# drafts), and annotations. To hide nothing, leave the switch off.
+hideInlineKinds: [${DEFAULT_SETTINGS.hideInlineKinds.join(', ')}]
+
+# What going to a hidden item does, from a point's link in the layer summary, a draft's link in the
+# review panel, or the ] key: reveal shows only that item; show-all turns the switch off.
+hiddenItemClick: ${DEFAULT_SETTINGS.hiddenItemClick}
 
 # Which agent answers in the AI Chat pane: claude or codex. Canvas generation does not read
 # this; generation.models in pr-review.config.yml sets the canvas generation models.
@@ -283,6 +296,15 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.fullWidthText !== undefined) {
     out.fullWidthText = input.fullWidthText
+  }
+  if (input.hideInline !== undefined) {
+    out.hideInline = input.hideInline
+  }
+  if (input.hideInlineKinds !== undefined) {
+    out.hideInlineKinds = input.hideInlineKinds
+  }
+  if (input.hiddenItemClick !== undefined) {
+    out.hiddenItemClick = input.hiddenItemClick
   }
   if (input.chatAgent !== undefined) {
     out.chatAgent = input.chatAgent

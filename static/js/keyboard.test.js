@@ -35,6 +35,7 @@ describe('keyAction', () => {
       ['c', 'comment'],
       ['d', 'dismiss'],
       ['f', 'fold-level'],
+      ['i', 'toggle-inline'],
       ['s', 'diff-layout'],
       ['?', 'help'],
       ['Escape', 'escape'],

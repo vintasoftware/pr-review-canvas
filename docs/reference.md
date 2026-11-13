@@ -562,6 +562,9 @@ The data directory's `settings.yml` accepts these keys and values:
 | `startCollapsed`       | `false`   | `true` opens only the first layer and no file; `false` opens them all            |
 | `compactPoints`        | `false`   | `true` lists each point as one line until opened; `false` draws them whole       |
 | `fullWidthText`        | `false`   | `true` lets the summary, rationale and PR description fill their panel           |
+| `hideInline`           | `false`   | `true` hides the inline items; see [Hiding inline items](#hiding-inline-items)   |
+| `hideInlineKinds`      | all four  | One or more of `points`, `comments`, `pending`, `annotations`                    |
+| `hiddenItemClick`      | `reveal`  | `reveal` shows only the item gone to; `show-all` turns `hideInline` off          |
 | `chatAgent`            | `claude`  | `claude`, `codex` (2)                                                            |
 | `chatModel`            | `null`    | A model ID, or `null` for the agent's default (1) (2)                            |
 | `chatTimeoutSec`       | `600`     | Integer seconds, 30–3600                                                         |
@@ -731,6 +734,27 @@ and split comes back once the column is wide enough.
 In split, each side has its own line numbers, comment button and selection; a selection stays on
 one side, and so does the text you drag over to copy. Comments, attention points and annotations
 span both sides under their line.
+
+### Hiding inline items
+
+To read the code before the attention points and comments shape what you think of it, turn on the
+**Hide comments** switch beside the **Hide code** control, or press `i`. The diff then hides its
+inline attention points, review comments (earlier and carried), pending drafts, and annotations.
+This changes only the view. The layer summary, the review panel, counts, and statuses stay as they
+are, and nothing is dismissed or deleted. Switch it off to get back the same items. Points stay in
+the layer summary and drafts in the review panel. Comments, annotations, and the points of the
+Other layer show only in the diff, so they come back when you switch it off; `]` also reaches
+Other-layer points. Code lines, folds, and line links do not move, and the code in the middle of the
+screen stays in place. You can still comment on a line while items are hidden: the composer opens
+as usual, and the review panel lists the draft.
+
+The choice is saved as `hideInline` in `settings.yml`, so the next page opens the same way. In the
+settings dialog, **what it hides** picks the kinds (`hideInlineKinds`); at least one stays
+checked, so to hide nothing you leave the switch off. **Going to a hidden item**
+(`hiddenItemClick`) sets what happens when you follow a point's link in the layer summary, a
+draft's link in the review panel, or press `]` onto a hidden point. **show only that item** brings
+back that one row and keeps the rest hidden until the next switch. **turn hiding off** shows
+everything again.
 
 ### One layer at a time
 

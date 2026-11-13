@@ -74,6 +74,14 @@ import {
 } from './points.js'
 import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
+import {
+  getInlineHide,
+  inlineKindsText,
+  isHiddenRow,
+  itemRowSelector,
+  setInlineHide,
+  showRow,
+} from './inline-hide.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { initLayoutSwitch, TOO_NARROW } from './layout-switch.js'
 import { confineTextSelection, lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
@@ -575,6 +583,8 @@ export function wireReview(root, session, opts = {}) {
       found = pick()
     }
     if (found !== undefined) {
+      // A point of the Other layer has only its row, which the inline switch may hide.
+      goToHidden(found.el)
       focusItem(found.el, 'center')
     }
   }
@@ -888,6 +898,57 @@ export function wireReview(root, session, opts = {}) {
     setFoldLevel(root, value)
     refreshFoldLevel(root, value, hiddenAt(value))
     toast(root, `hiding code: ${value}`, { tone: 'note' })
+  }
+
+  /** @param {boolean} on */
+  const switchInline = on => {
+    setInlineHide({ ...getInlineHide(), hideInline: on }, root)
+    toast(root, `${inlineKindsText(getInlineHide().hideInlineKinds)} ${on ? 'hidden' : 'shown'}`)
+    saveSettings({ hideInline: on }).catch(() => {
+      toast(root, 'could not save the inline switch; it holds for this page only')
+    })
+  }
+
+  /**
+   * Shows a hidden row the reader went to, or turns hiding off, as hiddenItemClick says.
+   * @param {Element | null} row
+   */
+  const goToHidden = row => {
+    if (row === null || !isHiddenRow(row, doc.documentElement)) {
+      return
+    }
+    if (getInlineHide().hiddenItemClick === 'show-all') {
+      switchInline(false)
+    } else {
+      showRow(row)
+    }
+  }
+
+  /**
+   * Runs in the capture phase, before the link scrolls to its line, so the page lands with the row
+   * in place. It draws the row's file first, because a card draws its diff only when on screen.
+   * @param {MouseEvent} event
+   */
+  const onItemLink = event => {
+    const link = event.target instanceof Element ? event.target.closest('a[data-item-link]') : null
+    const item = link?.closest('[data-point], [data-pending-id]') ?? null
+    if (item === null || !getInlineHide().hideInline) {
+      return
+    }
+    const pointId = item.getAttribute('data-point')
+    const draftId = item.getAttribute('data-pending-id') ?? ''
+    const path =
+      pointId === null
+        ? session.pending.find(p => p.id === draftId)?.path
+        : session.artifact.points.find(p => p.id === pointId)?.path
+    if (path !== undefined) drawCardsOf(root, path)
+    goToHidden(
+      root.querySelector(
+        pointId === null
+          ? itemRowSelector('pending', cssEscape(draftId))
+          : itemRowSelector('points', cssEscape(pointId))
+      )
+    )
   }
 
   /**
@@ -1339,6 +1400,9 @@ export function wireReview(root, session, opts = {}) {
         opts.setLayerView?.(el.getAttribute('data-view') ?? '', el.getAttribute('href') ?? undefined)
       }
     },
+    'toggle-inline': () => {
+      switchInline(!getInlineHide().hideInline)
+    },
     help: () => {
       openHelpDialog(root)
     },
@@ -1535,6 +1599,9 @@ export function wireReview(root, session, opts = {}) {
         // The key steps through the levels, so the reader can open the code up without the mouse.
         applyFoldLevel(nextFoldLevel(getFoldLevel()))
         break
+      case 'toggle-inline':
+        switchInline(!getInlineHide().hideInline)
+        break
       case 'diff-layout':
         toggleDiffLayout()
         break
@@ -1573,6 +1640,7 @@ export function wireReview(root, session, opts = {}) {
   doc.addEventListener('pointerup', onPointerUp)
   doc.addEventListener('pointercancel', onPointerUp)
   doc.addEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+  doc.addEventListener('click', onItemLink, true)
   const stopCardReveal = wireCardReveal(root)
   applyCapabilityGating(root, session.capabilities)
 
@@ -1715,6 +1783,7 @@ export function wireReview(root, session, opts = {}) {
       doc.removeEventListener('pointerup', onPointerUp)
       doc.removeEventListener('pointercancel', onPointerUp)
       doc.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+      doc.removeEventListener('click', onItemLink, true)
       stopCardReveal()
       stopPaddingUnderBar()
       layoutSwitch.stop()

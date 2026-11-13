@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   checkoutListHtml,
   formatBytes,
+  keepOneKind,
+  KEEP_ONE_KIND_NOTE,
   MODEL_SUGGESTIONS,
   SETTINGS_TAB_KEY,
   modelOptionsHtml,
@@ -27,6 +29,9 @@ const SETTINGS = {
     startCollapsed: false,
     compactPoints: false,
     fullWidthText: false,
+    hideInline: false,
+    hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+    hiddenItemClick: 'reveal',
     chatAgent: 'claude',
     chatModel: null,
     chatTimeoutSec: 600,
@@ -243,6 +248,8 @@ describe('readSettingsForm', () => {
       startCollapsed: false,
       compactPoints: false,
       fullWidthText: false,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'claude',
       chatModel: null,
       chatTimeoutSec: 600,
@@ -298,6 +305,57 @@ describe('readSettingsForm', () => {
       'action: purple, blue, gray'
     )
     expect(readSettingsForm(holder).pointColors).toBe('action')
+  })
+
+  it('reads what the inline switch hides and what going to a hidden item does, and leaves on and off to the page', () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = settingsDialogHtml(
+      {
+        ...SETTINGS,
+        settings: {
+          ...SETTINGS.settings,
+          hideInline: true,
+          hideInlineKinds: ['comments', 'annotations'],
+          hiddenItemClick: 'show-all',
+        },
+      },
+      AGENTS
+    )
+    const checked = Array.from(holder.querySelectorAll('input[name="set-inline-kind"]:checked')).map(
+      box => /** @type {HTMLInputElement} */ (box).value
+    )
+    expect(checked).toEqual(['comments', 'annotations'])
+    expect(holder.querySelector('#set-hidden-item-click option[selected]')?.textContent).toBe(
+      'turn hiding off'
+    )
+    expect(readSettingsForm(holder)).toMatchObject({
+      hideInlineKinds: ['comments', 'annotations'],
+      hiddenItemClick: 'show-all',
+    })
+    expect(readSettingsForm(holder)).not.toHaveProperty('hideInline')
+  })
+
+  it('checks the last kind again when it is unchecked, and says why', () => {
+    const holder = document.createElement('div')
+    holder.innerHTML = settingsDialogHtml(
+      { ...SETTINGS, settings: { ...SETTINGS.settings, hideInlineKinds: ['comments', 'annotations'] } },
+      AGENTS
+    )
+    /** @param {string} kind */
+    const box = kind =>
+      /** @type {HTMLInputElement} */ (holder.querySelector(`input[name="set-inline-kind"][value="${kind}"]`))
+    const note = () => holder.querySelector('[data-kinds-note]')?.textContent
+    box('comments').checked = false
+    keepOneKind(holder, box('comments'))
+    expect(note()).toBe('')
+    box('annotations').checked = false
+    keepOneKind(holder, box('annotations'))
+    expect(box('annotations').checked).toBe(true)
+    expect(note()).toBe(KEEP_ONE_KIND_NOTE)
+    expect(readSettingsForm(holder).hideInlineKinds).toEqual(['annotations'])
+    box('points').checked = true
+    keepOneKind(holder, box('points'))
+    expect(note()).toBe('')
   })
 })
 
@@ -368,6 +426,8 @@ describe('openSettingsDialog', () => {
       startCollapsed: false,
       compactPoints: false,
       fullWidthText: false,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'codex',
       chatModel: null,
       chatTimeoutSec: 600,
@@ -471,6 +531,8 @@ describe('the dialog with parts missing', () => {
       startCollapsed: true,
       compactPoints: true,
       fullWidthText: true,
+      hideInlineKinds: ['points', 'comments', 'pending', 'annotations'],
+      hiddenItemClick: 'reveal',
       chatAgent: 'claude',
       chatModel: 'gpt-5.2',
       chatTimeoutSec: 120,

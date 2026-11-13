@@ -709,23 +709,32 @@ describe('the reading level control', () => {
     expect([...(select?.options ?? [])].map(o => o.value)).toEqual(['light', 'moderate', 'aggressive'])
     expect(select?.value).toBe('light')
     expect(document.querySelector('label')?.getAttribute('for')).toBe(select?.id)
-    expect(document.querySelector('.fold-hint')?.textContent).toContain(
-      'imports, whitespace, moved blocks, and generated files'
+    expect(document.querySelector('.fold-hint')?.textContent).toBe(
+      'hides imports, whitespace, moved and generated code'
     )
   })
 
   it('names what each level adds and how much of the diff it hides', () => {
-    // A level that hides nothing says so rather than showing 0.
-    expect(foldLevelHint('light', { total: 40, hidden: 0 })).toContain('nothing else hidden')
-    expect(foldLevelHint('moderate', { total: 40, hidden: 12 })).toContain(
-      'also test bodies, helpers, wiring, templates'
+    // A level that hides nothing beyond the renderer's own folds shows no count.
+    expect(foldLevelHint('light', { total: 40, hidden: 0 })).toBe(
+      'hides imports, whitespace, moved and generated code'
     )
-    expect(foldLevelHint('moderate', { total: 40, hidden: 12 })).toContain(
-      '12 of 40 lines hidden of the diff'
+    expect(foldLevelHint('moderate', { total: 40, hidden: 12 })).toBe(
+      'also hides tests, helpers, wiring, and boilerplate · 12 of 40 lines hidden'
     )
-    expect(foldLevelHint('aggressive', { total: 40, hidden: 30 })).toContain(
-      'only the code you have to judge'
+    expect(foldLevelHint('aggressive', { total: 40, hidden: 30 })).toBe(
+      'shows only the code to judge · 30 of 40 lines hidden'
     )
+  })
+
+  it('draws a control beside it on the same row, with that control hint under its own', () => {
+    document.body.innerHTML = foldLevelControlHtml(
+      'light',
+      { total: 40, hidden: 0 },
+      { control: '<button id="beside"></button>', hint: '<span id="beside-hint"></span>' }
+    )
+    expect(document.querySelector('.reading-row #beside')).not.toBeNull()
+    expect(document.querySelector('.fold-hint + #beside-hint')).not.toBeNull()
   })
 
   it('follows a level chosen with the keyboard', () => {
@@ -733,6 +742,6 @@ describe('the reading level control', () => {
     refreshFoldLevel(document.body, 'aggressive', { total: 40, hidden: 30 })
 
     expect(document.querySelector('select')?.value).toBe('aggressive')
-    expect(document.querySelector('.fold-hint')?.textContent).toContain('only the code you have to judge')
+    expect(document.querySelector('.fold-hint')?.textContent).toContain('only the code to judge')
   })
 })

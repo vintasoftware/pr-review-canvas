@@ -63,12 +63,11 @@ export function diffColumns() {
 
 /**
  * The cells of a row whose content spans the code columns, after the line numbers and the comment
- * column: a hunk header, a fold summary, the selection's bar.
+ * column: a hunk header, a fold summary.
  * @param {string} html
- * @param {string} [cls] the spanning cell's classes
  */
-export function codeSpanCellsHtml(html, cls = 'code') {
+export function codeSpanCellsHtml(html) {
   return drawn === 'split'
-    ? `<td class="ln"></td><td class="gut"></td><td class="${cls}" colspan="4">${html}</td>`
-    : `<td class="ln" colspan="2"></td><td class="gut"></td><td class="${cls}">${html}</td>`
+    ? `<td class="ln"></td><td class="gut"></td><td class="code" colspan="4">${html}</td>`
+    : `<td class="ln" colspan="2"></td><td class="gut"></td><td class="code">${html}</td>`
 }

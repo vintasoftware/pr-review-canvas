@@ -234,7 +234,7 @@ describe('in the split layout', () => {
       'old',
       'old',
     ])
-    expect(document.querySelector('tr.sel-bar td.code')?.getAttribute('colspan')).toBe('4')
+    expect(document.querySelector('tr.sel-bar td.code')?.getAttribute('colspan')).toBe('6')
     markSelection(document.body, null)
     expect(document.querySelectorAll('.is-selected').length).toBe(0)
   })

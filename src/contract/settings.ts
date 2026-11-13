@@ -5,6 +5,12 @@ import { DEFAULT_DIFF_LAYOUT, DIFF_LAYOUTS } from '../../static/js/diff-layouts.
 import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 import { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
 import { DEFAULT_POINT_COLORS, POINT_COLORS } from '../../static/js/point-colors.js'
+import {
+  DEFAULT_HIDDEN_ITEM_CLICK,
+  DEFAULT_INLINE_KINDS,
+  HIDDEN_ITEM_CLICKS,
+  INLINE_KINDS,
+} from '../../static/js/inline-hide.js'
 import { DEFAULT_SKIN, isSkin, SKINS, type Skin } from '../../static/js/skin.js'
 import { DEFAULT_THEME, isTheme, THEMES, type Theme } from '../../static/js/theme.js'
 
@@ -20,6 +26,13 @@ export type { PointColors } from '../../static/js/point-colors.js'
 export type { DiffLayout } from '../../static/js/diff-layouts.js'
 export { DEFAULT_DIFF_LAYOUT, DIFF_LAYOUTS } from '../../static/js/diff-layouts.js'
 export { DEFAULT_POINT_COLORS, POINT_COLORS } from '../../static/js/point-colors.js'
+export type { HiddenItemClick, InlineKind } from '../../static/js/inline-hide.js'
+export {
+  DEFAULT_HIDDEN_ITEM_CLICK,
+  DEFAULT_INLINE_KINDS,
+  HIDDEN_ITEM_CLICKS,
+  INLINE_KINDS,
+} from '../../static/js/inline-hide.js'
 
 /** The agents the chat knows how to reach through acpx. */
 export const CHAT_AGENTS = ['claude', 'codex'] as const
@@ -44,6 +57,11 @@ const CheckoutIdleDaysSchema = z
   .min(CHECKOUT_IDLE_NEVER)
   .max(CHECKOUT_IDLE_MAX_DAYS)
   .refine(days => days !== 0, { message: 'checkoutIdleDays is -1 or at least 1' })
+/** The kinds the inline switch hides: each named once, in any order. */
+const InlineKindsSchema = z
+  .array(z.enum(INLINE_KINDS))
+  .min(1, { message: 'hideInlineKinds names no kind; leave the switch off to hide nothing' })
+  .refine(kinds => new Set(kinds).size === kinds.length, { message: 'hideInlineKinds names a kind twice' })
 const CheckoutSweepMinutesSchema = z
   .number()
   .int()
@@ -73,6 +91,12 @@ export const SettingsSchema = z.object({
   compactPoints: z.boolean(),
   /** Whether the overview summary, a layer's rationale and the PR description fill their panel. */
   fullWidthText: z.boolean(),
+  /** Whether the diff hides its inline items. A view setting only. */
+  hideInline: z.boolean(),
+  /** Which inline items the switch hides. */
+  hideInlineKinds: InlineKindsSchema,
+  /** What going to a hidden item does: show only that item, or turn hiding off. */
+  hiddenItemClick: z.enum(HIDDEN_ITEM_CLICKS),
   /** The agent that answers in AI Chat. Canvas generation does not read it. */
   chatAgent: z.enum(CHAT_AGENTS),
   /** The model AI Chat runs, or null for the agent's default. Canvas generation does not read it. */
@@ -111,6 +135,9 @@ export const DEFAULT_SETTINGS: Settings = {
   startCollapsed: false,
   compactPoints: false,
   fullWidthText: false,
+  hideInline: false,
+  hideInlineKinds: [...DEFAULT_INLINE_KINDS],
+  hiddenItemClick: DEFAULT_HIDDEN_ITEM_CLICK,
   chatAgent: 'claude',
   chatModel: null,
   chatTimeoutSec: 600,
@@ -147,6 +174,9 @@ export const SettingsInputSchema = z.strictObject({
   startCollapsed: z.boolean().optional(),
   compactPoints: z.boolean().optional(),
   fullWidthText: z.boolean().optional(),
+  hideInline: z.boolean().optional(),
+  hideInlineKinds: InlineKindsSchema.optional(),
+  hiddenItemClick: z.enum(HIDDEN_ITEM_CLICKS).optional(),
   chatAgent: z.enum(CHAT_AGENTS).optional(),
   chatModel: z.string().max(200).nullable().optional(),
   chatTimeoutSec: z.number().int().min(CHAT_TIMEOUT_MIN_SEC).max(CHAT_TIMEOUT_MAX_SEC).optional(),

@@ -13,9 +13,9 @@ export const FOLD_LEVEL_SELECT_ID = 'fold-level'
 
 /** What each level adds to the one below it, said in the reader's terms. */
 const FOLD_LEVEL_WHAT = {
-  light: 'the diff as always: imports, whitespace, moved blocks, and generated files',
-  moderate: 'also test bodies, helpers, wiring, templates, and boilerplate',
-  aggressive: 'only the code you have to judge stays open',
+  light: 'hides imports, whitespace, moved and generated code',
+  moderate: 'also hides tests, helpers, wiring, and boilerplate',
+  aggressive: 'shows only the code to judge',
 }
 
 /**
@@ -46,9 +46,8 @@ export function foldCountText(counts) {
  */
 export function foldLevelHint(level, counts) {
   // The renderer's own folds (imports, whitespace, moved blocks) hide at every level and are not
-  // counted, so an empty count says the level hides nothing beyond them.
-  const amount = counts.hidden === 0 ? 'nothing else hidden' : `${hiddenLabel(counts)} of the diff`
-  return `${FOLD_LEVEL_WHAT[level]} · ${amount}`
+  // counted, so a level that hides nothing beyond them shows no count.
+  return `${FOLD_LEVEL_WHAT[level]}${foldCountText(counts)}`
 }
 
 /**
@@ -58,14 +57,18 @@ export function foldLevelHint(level, counts) {
  * here holds for this page only.
  * @param {FoldLevel} level
  * @param {HiddenCounts} counts what the level hides across the canvas
+ * @param {{ control: string, hint: string }} [beside] another view control drawn on the same row,
+ *   with its hint under this one's
  * @returns {string}
  */
-export function foldLevelControlHtml(level, counts) {
+export function foldLevelControlHtml(level, counts, beside = { control: '', hint: '' }) {
   const options = optionsHtml(FOLD_LEVELS, level)
   return (
-    `<div class="reading"><label for="${FOLD_LEVEL_SELECT_ID}">Hide code</label>` +
-    `<select id="${FOLD_LEVEL_SELECT_ID}" title="How much of the diff this page hides. Press f to step through the levels; the settings dialog sets the default.">${options}</select>` +
-    `<span class="fold-hint" role="status">${esc(foldLevelHint(level, counts))}</span></div>`
+    '<div class="reading"><div class="reading-row">' +
+    `<span class="reading-ctl"><label for="${FOLD_LEVEL_SELECT_ID}">Hide code</label>` +
+    `<select id="${FOLD_LEVEL_SELECT_ID}" title="How much of the diff this page hides. Press f to step through the levels; the settings dialog sets the default.">${options}</select></span>` +
+    `${beside.control}</div>` +
+    `<span class="fold-hint" role="status">${esc(foldLevelHint(level, counts))}</span>${beside.hint}</div>`
   )
 }
 

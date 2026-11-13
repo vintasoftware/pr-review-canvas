@@ -18,6 +18,7 @@ import { applyPointsDensity, setMentionCanvas } from './points.js'
 import { pendingForPoint } from './pending.js'
 import { applyPointColors } from './point-colors.js'
 import { wireBarDismissal } from './bar-dismissal.js'
+import { getInlineHide, setInlineHide } from './inline-hide.js'
 import { readChatMinimized, readChatWidth, renderChatShell, wireChat } from './chat.js'
 import { reviewPaneHtml, wireReviewPane } from './side-pane.js'
 import { runCommand, toast, wireCopyCommands } from './commands.js'
@@ -240,6 +241,7 @@ export class PrAppElement extends HTMLElement {
     setStartCollapsed(this.bootstrap.startCollapsed)
     applyPointColors(this.bootstrap.pointColors, document.documentElement)
     document.documentElement.toggleAttribute('data-full-width-text', this.bootstrap.fullWidthText)
+    setInlineHide(this.bootstrap, this)
     applyPointsDensity(
       document.documentElement,
       this.bootstrap.compactPoints,
@@ -643,6 +645,8 @@ export class PrAppElement extends HTMLElement {
     this.chat?.followSettings(data.settings)
     applyPointColors(data.settings.pointColors, document.documentElement)
     document.documentElement.toggleAttribute('data-full-width-text', data.settings.fullWidthText)
+    // The dialog fine-tunes the switch; the header button and the i key own on and off.
+    setInlineHide({ ...data.settings, hideInline: getInlineHide().hideInline }, this)
     setChosenDiffLayout(data.settings.diffLayout)
     this.interactions?.applyDiffLayout()
     const density = document.documentElement.dataset['points']

@@ -3,12 +3,15 @@ tr.is-selected td,
 td.is-selected {
   background: var(--accent-bg);
 }
-tr.is-selected .ln,
+/* One stripe at the left edge of what is selected: the row in unified, one side's line in split. */
+tr.is-selected td.ln:first-child,
 td.ln.is-selected {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 tr.sel-bar .x {
   background: var(--panel-2);
+}
+tr.sel-bar .x-in {
   display: flex;
   align-items: center;
   justify-content: space-between;
