@@ -242,7 +242,7 @@ test.describe('split layout, each behavior', () => {
     await expect(file.locator('td[data-side="new"].is-selected')).toHaveCount(6)
     await expect(file.locator('td[data-side="old"].is-selected')).toHaveCount(0)
     await expect(file.locator('tr.sel-bar .lbl')).toHaveText('src/app.ts lines 3–4')
-    await expect(file.locator('tr.sel-bar td.code')).toHaveAttribute('colspan', '4')
+    await expect(file.locator('tr.sel-bar td.code')).toHaveAttribute('colspan', '6')
 
     await page.keyboard.press('s')
     await expect(file.locator('table.diff.split')).toHaveCount(0)

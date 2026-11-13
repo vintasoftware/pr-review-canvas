@@ -18,8 +18,7 @@
 
 import { findRow } from './anchors.js'
 import { askButtonHtml } from './ask.js'
-import { codeSpanCellsHtml } from './diff-layouts.js'
-import { esc } from './dom.js'
+import { esc, wideCellHtml } from './dom.js'
 
 /**
  * @param {Selection | null} selection
@@ -118,7 +117,7 @@ export function selectionToolbarHtml(selection) {
       end: selection.end,
     }) +
     '</span>'
-  return `<tr class="sel-bar" data-decoration="selection">${codeSpanCellsHtml(html, 'code x')}</tr>`
+  return `<tr class="sel-bar" data-decoration="selection">${wideCellHtml(html)}</tr>`
 }
 
 /**
