@@ -8,7 +8,7 @@
 import { esc } from './dom.js'
 import { hostLabel } from './host.js'
 import { draftsByCommit, pendingCommentHtml, pendingComments, pendingLabel, pendingRange } from './pending.js'
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleHtml } from './markdown.js'
 
 export const REVIEW_PANEL_ID = 'review-panel'
 
@@ -38,7 +38,7 @@ function draftOrigin(p, points) {
   const chat = p.proposalFingerprint !== undefined
   if (p.pointFingerprint !== undefined) {
     const point = points.find(q => q.fingerprint === p.pointFingerprint)
-    const about = point === undefined ? 'an attention point' : `the point “${esc(point.title)}”`
+    const about = point === undefined ? 'an attention point' : `the point “${titleHtml(point.title)}”`
     return chat ? `proposed by AI Chat about ${about}` : `from ${about}`
   }
   return chat ? 'proposed by AI Chat' : 'your comment'

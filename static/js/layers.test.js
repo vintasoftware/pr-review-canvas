@@ -8,7 +8,13 @@ import { toPatchMap } from '../../src/git/diff-collector.js'
 import { createGit } from '../../src/git/git.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { PACKAGE_ROOT } from '../../src/server/context.js'
-import { GH_REVIEW_COMMENTS, SYNTHETIC_FILES, syntheticArtifact } from '../../src/testing/synthetic.js'
+import {
+  GH_REVIEW_COMMENTS,
+  publishedSyntheticArtifact,
+  SYNTHETIC_FILES,
+  syntheticArtifact,
+  withMarkdownTitles,
+} from '../../src/testing/synthetic.js'
 import { setChatEnabled } from './ask.js'
 import {
   applyDecorations,
@@ -107,11 +113,12 @@ describe('layer sections', () => {
   const paths = pathSet(files)
 
   it('renders the test map with links for covered tests', () => {
-    const layer = artifact.layers[0]
+    const published = publishedSyntheticArtifact()
+    const layer = published.layers[0]
     if (!layer) {
       throw new Error('no layer')
     }
-    document.body.innerHTML = testMapHtml(layer, paths)
+    document.body.innerHTML = testMapHtml(layer, published.points, paths)
     // Closed, under a label that says how much of what needs a test has one.
     expect(document.querySelector('details.test-map')?.hasAttribute('open')).toBe(false)
     expect(document.querySelector('.test-map > summary.lbl.sub h3')?.textContent).toBe('Tests')
@@ -121,8 +128,32 @@ describe('layer sections', () => {
     const rows = [...document.querySelectorAll('tbody tr')]
     expect(rows.map(r => r.querySelector('.st')?.textContent)).toEqual(['covered', 'missing', 'not-needed'])
     expect(rows[0]?.querySelector('a.loc')?.getAttribute('href')).toBe('#file:src/app.test.ts')
-    expect(rows[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe('y is unused')
-    expect(testMapHtml({ ...layer, tests: [] }, paths)).toBe('')
+    // A behavior's name renders like the title of the point it becomes.
+    expect(rows[0]?.querySelector('td')?.innerHTML).toMatch(/^run\(\) adds b\(\)/)
+    const coded = {
+      ...layer,
+      tests: [{ behavior: '`run()` adds **b**', status: /** @type {const} */ ('not-needed') }],
+    }
+    document.body.innerHTML = testMapHtml(coded, published.points, paths)
+    expect(document.querySelector('tbody td')?.innerHTML).toBe('<code>run()</code> adds <strong>b</strong>')
+    document.body.innerHTML = testMapHtml(layer, published.points, paths)
+    // A missing behavior's note is the body of the point publish made for it; the row links to
+    // that point's card, not to its line, where the layer's decision sits too.
+    expect(rows[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe('See its attention point')
+    const href = rows[1]?.querySelector('.muted.small a')?.getAttribute('href') ?? ''
+    document.body.innerHTML = renderLayers(published, files, state)
+    const card = document.querySelector(href)
+    expect(card?.matches('li.finding')).toBe(true)
+    expect(card?.querySelector('.prose')?.textContent?.trim()).toBe('y is unused')
+    // A canvas written before tests stored their anchor and title keeps the note in the row.
+    const legacy = layer.tests.map(t =>
+      t.status === 'missing' ? { ...t, anchor: undefined, title: undefined } : t
+    )
+    document.body.innerHTML = testMapHtml({ ...layer, tests: legacy }, published.points, paths)
+    expect(document.querySelectorAll('tbody tr')[1]?.querySelector('.muted.small')?.textContent?.trim()).toBe(
+      'y is unused'
+    )
+    expect(testMapHtml({ ...layer, tests: [] }, published.points, paths)).toBe('')
   })
 
   it('labels the coverage from the behaviors that need a test', () => {
@@ -233,6 +264,18 @@ describe('layer sections', () => {
     expect(other?.querySelector('article.file#file-src_app_ts-other .more-hunks')?.textContent).toBe(
       '1 more chunk in layer 1 · Run path'
     )
+    // Every layer title on the page renders its Markdown: the headings and the "more chunks" links.
+    document.body.innerHTML = renderLayers(withMarkdownTitles(artifact), files, state)
+    expect(document.querySelector('#layer-run-path h2')?.innerHTML).toContain('Run <code>path</code>')
+    expect(document.querySelector('#layer-run-path .more-hunks a')?.innerHTML).toBe(
+      'Other <strong>changes</strong>'
+    )
+    expect(document.querySelector('#layer-other summary h2')?.innerHTML).toContain(
+      'Other <strong>changes</strong>'
+    )
+    expect(document.querySelector('#file-src_app_ts-other .more-hunks a')?.innerHTML).toBe(
+      'layer 1 · Run <code>path</code>'
+    )
   })
 
   it('puts a layer diagram after the rationale and before the decisions, and omits it when absent', () => {
@@ -330,6 +373,16 @@ describe('layer sections', () => {
     const done = { ...state, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     document.body.innerHTML = renderLayerSection(layer, 0, artifact, files, done, cctx)
     expect(document.querySelector('.layer-ctl input')?.hasAttribute('checked')).toBe(true)
+    // The heading renders the title's Markdown.
+    document.body.innerHTML = renderLayerSection(
+      { ...layer, title: 'How `run()` adds' },
+      0,
+      artifact,
+      files,
+      state,
+      cctx
+    )
+    expect(document.querySelector('h2')?.innerHTML).toContain('How <code>run()</code> adds')
   })
 
   it('starts routine files collapsed without marking them reviewed', () => {

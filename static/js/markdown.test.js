@@ -1,6 +1,6 @@
 // @ts-check
 // @vitest-environment happy-dom
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleHtml, titleText } from './markdown.js'
 
 describe('renderMarkdown', () => {
   it('renders GFM and strips scripts, handlers, and javascript: hrefs', () => {
@@ -244,4 +244,22 @@ it('does not treat lookalike domains as GitHub image hosts', () => {
   document.body.innerHTML = renderMarkdown(sources.map(src => `![Image](${src})`).join('\n\n'))
   expect([...document.querySelectorAll('img')].map(img => img.getAttribute('src'))).toEqual(sources)
   expect(document.querySelector('a')).toBeNull()
+})
+
+describe('titleHtml', () => {
+  it('keeps code, bold, italics and strikethrough, and shows a link as its text', () => {
+    expect(titleHtml('`toast()` ignores **Show layers** and *waits* ~~twice~~')).toBe(
+      '<code>toast()</code> ignores <strong>Show layers</strong> and <em>waits</em> <del>twice</del>'
+    )
+    expect(titleHtml('See [the store](#hunk:src/store.ts#1) and ![x](https://example.com/x.png)')).toBe(
+      'See the store and '
+    )
+    expect(titleHtml('<img src=x onerror=alert(1)> & <b>raw</b>')).toBe(
+      '&lt;img src=x onerror=alert(1)&gt; &amp; &lt;b&gt;raw&lt;/b&gt;'
+    )
+  })
+
+  it('gives the words without their Markdown', () => {
+    expect(titleText('`toast()` ignores **Show layers** & <b>')).toBe('toast() ignores Show layers & <b>')
+  })
 })

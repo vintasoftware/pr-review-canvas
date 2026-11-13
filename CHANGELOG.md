@@ -80,6 +80,36 @@
   readers, instead of **Collapse**.
 - Resizing to a phone layout keeps an open settings or sign-off dialog in front of AI Chat.
 
+### Canvas writing
+
+- The generation prompt no longer asks for "one or two short sentences". A new **Writing** section
+  asks for complete sentences a reviewer understands on the first read, names as the reader sees
+  them, and no compression or padding. When a field runs over its cap, the generator now leaves
+  out a detail instead of the words a sentence needs, and writes a file note only when it says
+  something the diff doesn't show at a glance. The caps are unchanged.
+- A project with its own copy of `generation-format.md` keeps the old wording until it takes the
+  **Writing** section from the bundled template.
+- A missing-test attention point's body is the generator's note on the gap, without the line
+  `The layer "…" lists this behavior without a test.` in front of it, and the prompt asks for the
+  note as a point body. A gap with no note reads `No test covers this behavior.` The layer's Tests
+  table no longer repeats that note: the row links to the point with **See its attention point**,
+  which opens the point's card, or its stop in the one-point view.
+- Layer and attention-point titles render their Markdown on the page, as a posted comment already
+  did on GitHub: `code`, **bold**, _italics_ and ~~strikethrough~~, with a link shown as its text.
+  Before, a title such as "`toast()` ignores **Show layers**" showed its backticks and asterisks.
+  The chat's head, chips and thread names, the approve button's reason, and the button that opens
+  a point name the title in plain words. A behavior's name in the Tests table renders the same
+  way, since it becomes the title of a missing test's point.
+- The review body that sign-off posts lists layer and dismissed-point titles with their code and
+  emphasis rendered, as the page shows them. Outside code spans it still escapes the characters
+  that would open a link, a heading, a table cell or raw HTML; a code span is copied as written.
+- Caps no longer count asterisks, as they already did not count backticks, so `**Retry**` costs 5
+  characters.
+- `validate` checks a missing test's note against the attention-point body cap, since the note is
+  that point's body. A canvas whose missing-test note runs past the cap, such as one an incremental
+  run copies from an older canvas, fails `validate` with `TEXT_TOO_LONG` until the note is
+  shortened.
+
 ## 0.10.0
 
 Changes since 0.9.0.

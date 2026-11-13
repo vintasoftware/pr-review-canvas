@@ -253,6 +253,66 @@ function linkDefinitions(src) {
     .join('\n')
 }
 
+/** What a title keeps of its Markdown: it is one line, and it often sits inside a link. */
+const TITLE_TAGS = ['code', 'strong', 'em', 'del']
+
+/**
+ * Each title's HTML and words, parsed once: the rail, the cards and the chat draw the same titles
+ * again on every state change, as `diffstat.js` keeps its counts for the same reason. A canvas
+ * has a few dozen titles, so the map stays small.
+ * @type {Map<string, { html: string, text: string }>}
+ */
+const titles = new Map()
+
+/** @param {string} src markdown */
+function titleForms(src) {
+  const known = titles.get(src)
+  if (known !== undefined) {
+    return known
+  }
+  const box = document.createElement('div')
+  box.append(
+    DOMPurify.sanitize(marked.parseInline(src, { async: false }), {
+      ALLOWED_TAGS: TITLE_TAGS,
+      ALLOWED_ATTR: [],
+      KEEP_CONTENT: true,
+      RETURN_DOM_FRAGMENT: true,
+    })
+  )
+  // As in renderProse, the tag list is enforced again after the sanitizer: an element outside it
+  // gives way to its text, so an image's leaves nothing.
+  for (const element of box.querySelectorAll('*')) {
+    if (TITLE_TAGS.includes(element.tagName.toLowerCase())) {
+      for (const name of element.getAttributeNames()) element.removeAttribute(name)
+    } else {
+      element.replaceWith(...element.childNodes)
+    }
+  }
+  const forms = { html: box.innerHTML, text: box.textContent ?? '' }
+  titles.set(src, forms)
+  return forms
+}
+
+/**
+ * A layer's or a point's title as one line of sanitized HTML: code, bold, italics and
+ * strikethrough. A title sits inside a link in the rail and the stop bar, so a link in it shows
+ * as its text.
+ * @param {string} src markdown
+ * @returns {string} sanitized HTML
+ */
+export function titleHtml(src) {
+  return titleForms(src).html
+}
+
+/**
+ * A title's words without its Markdown, for an accessible name, a tooltip, or the chat's labels.
+ * The words are text, not HTML: a caller writes them as text or escapes them.
+ * @param {string} src markdown
+ */
+export function titleText(src) {
+  return titleForms(src).text
+}
+
 /**
  * Markdown as sanitized HTML. Two fields draw diagrams, the PR summary and a layer rationale, and
  * they ask for it with `diagrams`. Everywhere else a ```mermaid fence stays a code block: a PR

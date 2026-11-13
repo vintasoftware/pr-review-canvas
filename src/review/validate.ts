@@ -156,6 +156,8 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
     layer.tests.forEach((t, j) => {
       check(`${at}.tests.${j}.behavior`, 'testBehavior', t.behavior)
       check(`${at}.tests.${j}.title`, 'pointTitle', t.title)
+      // A missing behavior's note is the body of the point it adds, so it answers to that cap.
+      if (t.status === 'missing') check(`${at}.tests.${j}.note`, 'pointBody', t.note)
     })
     layer.files.forEach((f, j) => {
       check(`${at}.files.${j}.note`, 'annotation', f.note)

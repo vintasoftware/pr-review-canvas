@@ -1,7 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 import { emptyState } from '../../src/contract/state.js'
-import { syntheticArtifact } from '../../src/testing/synthetic.js'
+import { syntheticArtifact, withMarkdownTitles } from '../../src/testing/synthetic.js'
 import { refreshReviewPanel, reviewPanelHtml } from './review-panel.js'
 
 const artifact = syntheticArtifact()
@@ -72,6 +72,16 @@ describe('the review tab', () => {
       '· proposed by AI Chat',
     ])
     expect(rows[4]?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/gone.ts:1-3:old')
+    // A draft names its point by the point's title, Markdown rendered.
+    document.body.innerHTML = reviewPanelHtml(state, {
+      on: ON,
+      points: withMarkdownTitles(artifact).points,
+      now: NOW,
+    })
+    expect(document.querySelector('.review-draft .review-where .muted')?.innerHTML).toBe(
+      '· from the point “<code>run()</code> sums <strong>twice</strong>”'
+    )
+    document.body.innerHTML = reviewPanelHtml(state, { on: ON, points: artifact.points, now: NOW })
     expect(rows[0]?.querySelector('a.loc')?.getAttribute('href')).toBe('#line:src/app.ts:4')
     // Each draft keeps the commands it has on the diff.
     expect([...(rows[0]?.querySelectorAll('.pending-cmt button') ?? [])].map(b => b.textContent)).toEqual([

@@ -257,16 +257,19 @@ author: the reason is theirs to give.
 - Test files come after the files they cover, inside the same layer, never in a layer of their own.
   The prompt's layering rules name the path patterns this project counts as tests; they are the
   ones the validator uses.
-- Every text is within its cap, measured on the text a reader sees (link targets and backticks do
-  not count). Rationales, notes, and annotations are one or two short sentences.
+- Every text is within its cap, measured on the text a reader sees (link targets, backticks, and
+  asterisks do not count). Write complete sentences a reviewer can read in one pass, as the prompt's Writing
+  section describes; when a field runs over its cap, leave out a detail, not the words a sentence
+  needs.
 - At most 12 attention points, counting one per `missing` test entry.
 - Every attention point names its `audience`: `author` when the author can answer it alone,
   `reviewer` when it needs someone else's judgment. When in doubt, `reviewer`.
 - A `missing` test entry may set `audience` (default `reviewer`) and an `anchor` with `path`,
   `line`, and `side` (`new` or `old`) inside one of its layer's chunks. Without an anchor, publish
   chooses the first changed row of the source matched by `testPath`, or the layer's first changed
-  row. Optional `title` uses the point-title cap; otherwise the title is shortened at a word
-  boundary. Carried entries retain their published title, audience, and anchor. Follow the
+  row. Optional `title` uses the point-title cap; otherwise the title is the behavior's name,
+  shortened at a word boundary. Its `note` is the point's body and uses the point-body cap: say
+  what no test exercises and why that matters. Carried entries retain their published title, audience, and anchor. Follow the
   printed carried coordinates when the anchor moves, so author resolutions keep their identity.
 - Write no point for a settled decision the prompt lists, and do not raise its question again;
   publish adds the ones in the diff as resolved points.

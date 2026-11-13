@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { emptyState } from '../../src/contract/state.js'
 import { toPatchMap } from '../../src/git/diff-collector.js'
 import { mapReviewComment } from '../../src/github/comments.js'
-import { GH_REVIEW_COMMENTS, SYNTHETIC_FILES, syntheticArtifact } from '../../src/testing/synthetic.js'
+import {
+  GH_REVIEW_COMMENTS,
+  SYNTHETIC_FILES,
+  syntheticArtifact,
+  withMarkdownTitles,
+} from '../../src/testing/synthetic.js'
 import { setRenderContext } from './layers.js'
 import { dotColor, refreshRail, renderRail } from './rail.js'
 
@@ -41,6 +46,10 @@ describe('rail', () => {
     expect(items[1]?.querySelector('.m')?.textContent).toBe('3 files · schema')
     expect(document.querySelector('li.other .m')?.textContent).toBe('3 files, ignored')
     expect(dotColor(7)).toBe('var(--s2)')
+    // The layers' titles render their Markdown.
+    document.body.innerHTML = renderRail(withMarkdownTitles(artifact), state)
+    expect(document.querySelector('a[href="#layer-run-path"] .t')?.innerHTML).toBe('Run <code>path</code>')
+    expect(document.querySelector('li.other .t')?.innerHTML).toBe('Other <strong>changes</strong>')
   })
 
   it('shows partial and done dots and the active item', () => {
@@ -101,6 +110,20 @@ describe('rail', () => {
       )
     expect(group()).toEqual(['[Run path]', '#point-p-1', '[Other changes]', '#point-p-2', '#point-p-3'])
     expect(document.querySelector('a[href="#point-p-1"] .lv.decide')).not.toBeNull()
+    // Titles render their Markdown in the rail too.
+    const p1 = artifact.points[0]
+    const l1 = artifact.layers[0]
+    if (p1 === undefined || l1 === undefined) throw new Error('fixture changed')
+    pointsRail({
+      ...artifact,
+      layers: [{ ...l1, title: 'How `run()` adds' }, ...artifact.layers.slice(1)],
+      points: [{ ...p1, title: 'Sum **instead** of product' }, ...artifact.points.slice(1)],
+    })
+    expect(document.querySelector('.rail-points .pt-layer .t')?.innerHTML).toBe('How <code>run()</code> adds')
+    expect(document.querySelector('a[href="#point-p-1"] .t')?.innerHTML).toBe(
+      'Sum <strong>instead</strong> of product'
+    )
+    pointsRail(artifact)
     // A layer's heading leads to the layer's opening stop.
     expect(document.querySelector('.rail-points .pt-layer a')?.getAttribute('href')).toBe('#layer-run-path')
     const dismissed = { ...state, dismissed: { 'fp-2': { at: 'x' } } }

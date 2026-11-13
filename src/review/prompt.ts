@@ -127,7 +127,7 @@ function capsMarkdown(ctx: GenerationContext): string {
     `- file note and annotation text: ${c.annotation}`,
     `- attention point title: ${c.pointTitle}`,
     `- fold title: ${c.pointTitle}, plain text counted in full`,
-    `- attention point body: ${c.pointBody}`,
+    `- attention point body, and a missing test's note, which becomes one: ${c.pointBody}`,
     `- test behavior: ${c.testBehavior}`,
     `- diagram source: ${c.diagram} characters of mermaid, counted raw`,
   ].join('\n')
