@@ -1518,6 +1518,89 @@ describe('diff layout', () => {
     vi.restoreAllMocks()
   })
 
+  it('leaves the page where it is when the line at the top is not drawn again', () => {
+    const { root } = wide()
+    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {})
+    // A row of a line the diff does not hold, as a stale row would be.
+    root
+      .querySelector('#L-src_app_ts-new-4')
+      ?.insertAdjacentHTML('afterend', '<tr id="L-src_app_ts-new-999"><td class="code">gone</td></tr>')
+    vi.spyOn(document, 'elementFromPoint').mockImplementation(() =>
+      root.querySelector('#L-src_app_ts-new-999 td')
+    )
+    key('s')
+    expect(root.querySelector('table.diff.split')).not.toBeNull()
+    expect(root.querySelector('#L-src_app_ts-new-999')).toBeNull()
+    expect(scrollBy).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
+  it('draws a card that waits to be seen in the new layout once it is seen, and none without a canvas', () => {
+    const { root } = wide()
+    // A card below the fold has no diff yet.
+    const host = root.querySelector('#file-src_new_ts .diff-host')
+    if (host !== null) host.innerHTML = '<div class="loading">Loading diff…</div>'
+    key('s')
+    expect(host?.querySelector('table.diff')).toBeNull()
+    expect(root.querySelectorAll('table.diff.split').length).toBeGreaterThan(0)
+    hydrateAll(root, /** @type {NonNullable<ReturnType<typeof getRenderContext>>} */ (getRenderContext()))
+    expect(host?.querySelector('table.diff.split')).not.toBeNull()
+    // With no canvas to draw from, a switch leaves the diffs as they are.
+    setRenderContext(null)
+    key('s')
+    expect(root.querySelector('#diff-layout-toggle')?.getAttribute('data-layout')).toBe('unified')
+    expect(root.querySelector('table.diff:not(.split)')).toBeNull()
+  })
+
+  it('switches a page whose canvas column is gone without looking for a place to hold', () => {
+    const { root } = wide()
+    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {})
+    root.querySelector('main')?.remove()
+    key('s')
+    expect(root.querySelector('#diff-layout-toggle')?.getAttribute('data-layout')).toBe('split')
+    expect(scrollBy).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
+  it('follows the layout the settings dialog saved', () => {
+    const { root, wiring } = wide()
+    setChosenDiffLayout('split')
+    wiring.applyDiffLayout()
+    expect(root.querySelectorAll('table.diff.split').length).toBeGreaterThan(0)
+    expect(root.querySelector('#diff-layout-toggle')?.textContent).toBe('layout: split')
+    setChosenDiffLayout('unified')
+    wiring.applyDiffLayout()
+    expect(root.querySelector('table.diff.split')).toBeNull()
+  })
+
+  it('holds the line under a file header that sticks over the top of the column', () => {
+    const { root } = wide()
+    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {})
+    const header = root.querySelector('article.file .file-h')
+    // The header ends 38px down and never moves; the line under it sits lower in unified.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      /** @this {Element} */
+      function () {
+        const top = this.closest('table.diff') === null ? 0 : this.closest('table.split') === null ? 300 : 120
+        const bottom = this === header ? 38 : top + 20
+        return /** @type {DOMRect} */ ({ top, left: 0, width: 800, height: 20, bottom, right: 800 })
+      }
+    )
+    const at = vi.spyOn(document, 'elementFromPoint')
+    at.mockImplementation((_x, y) =>
+      y < 38 ? (header?.querySelector('.path') ?? null) : root.querySelector('#L-src_app_ts-new-4 td.code')
+    )
+    key('s')
+    // Probed once at the top of the column, then under the header.
+    expect(at.mock.calls.map(call => call[1])).toEqual([8, 46])
+    expect(scrollBy).toHaveBeenLastCalledWith(0, 120 - 300)
+    // Under the header of a card with no line there, the card holds the place, not the header.
+    at.mockImplementation(() => header?.querySelector('.path') ?? null)
+    key('s')
+    expect(scrollBy).toHaveBeenLastCalledWith(0, 0)
+    vi.restoreAllMocks()
+  })
+
   it('keeps the threads and folds the reader opened, and a reply written in one, across a switch', () => {
     const { root } = wide()
     click(root, 'tr.thread.resolved [data-act="thread-show"]')

@@ -727,7 +727,8 @@ docked, the page draws unified and keeps the saved choice: the button is disable
 and split comes back once the column is wide enough.
 
 In split, each side has its own line numbers, comment button and selection; a selection stays on
-one side. Comments, attention points and annotations span both sides under their line.
+one side, and so does the text you drag over to copy. Comments, attention points and annotations
+span both sides under their line.
 
 ### One layer at a time
 

@@ -109,6 +109,16 @@ tr.del td {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* A wrapped line continues under its code, clear of the +/- marker in the first column. */
+.diff.split td.code[data-side] {
+  padding-left: calc(10px + 1ch);
+  text-indent: -1ch;
+}
+/* A drag selects the text of the side it starts on: the other side is another file's lines. */
+[data-select-side='old'] .diff.split td[data-side='new'],
+[data-select-side='new'] .diff.split td[data-side='old'] {
+  user-select: none;
+}
 .diff.split td.ln[data-side='new'] {
   border-left: 1px solid var(--line);
 }

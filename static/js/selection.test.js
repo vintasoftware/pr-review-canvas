@@ -5,6 +5,7 @@ import { SYNTHETIC_FILES } from '../../src/testing/synthetic.js'
 import { setDrawnDiffLayout } from './diff-layouts.js'
 import { renderDiff } from './diff-renderer.js'
 import {
+  confineTextSelection,
   lineRefFromEvent,
   markSelection,
   selectionLabel,
@@ -236,5 +237,31 @@ describe('in the split layout', () => {
     expect(document.querySelector('tr.sel-bar td.code')?.getAttribute('colspan')).toBe('4')
     markSelection(document.body, null)
     expect(document.querySelectorAll('.is-selected').length).toBe(0)
+  })
+})
+
+describe('confineTextSelection', () => {
+  it('names the side a press on split code starts on, and frees both sides on a press elsewhere', () => {
+    document.body.innerHTML =
+      '<main><p>prose</p><table class="diff split"><tbody><tr>' +
+      '<td class="code" data-side="old"><span>old</span></td><td class="code" data-side="new">new</td>' +
+      '</tr><tr><td class="code x" colspan="6">note</td></tr></tbody></table>' +
+      '<table class="diff"><tbody><tr><td class="code">unified</td></tr></tbody></table></main>'
+    const root = document.querySelector('main') ?? document.body
+    /** @param {string} selector */
+    const press = selector => {
+      const event = new Event('pointerdown', { bubbles: true })
+      root.addEventListener('pointerdown', e => confineTextSelection(root, e), { once: true })
+      document.querySelector(selector)?.dispatchEvent(event)
+      return root.getAttribute('data-select-side')
+    }
+    expect(press('td[data-side="old"] span')).toBe('old')
+    expect(press('td[data-side="new"]')).toBe('new')
+    expect(press('td.x')).toBeNull()
+    expect(press('td[data-side="old"]')).toBe('old')
+    expect(press('table:not(.split) td')).toBeNull()
+    expect(press('p')).toBeNull()
+    confineTextSelection(root, Object.assign(new Event('pointerdown'), {}))
+    expect(root.hasAttribute('data-select-side')).toBe(false)
   })
 })

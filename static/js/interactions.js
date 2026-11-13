@@ -76,7 +76,7 @@ import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './se
 import { layerProgress } from './progress.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { initLayoutSwitch, TOO_NARROW } from './layout-switch.js'
-import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
+import { confineTextSelection, lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
 import {
   fillSignoffDialog,
   openSignoffDialog,
@@ -909,27 +909,32 @@ export function wireReview(root, session, opts = {}) {
   }
 
   /**
-   * The line row, or else the element, at the top of the canvas column, and what scrolls it back to
-   * the same height once the diffs are drawn again.
+   * The line row, or else the card or the element, at the top of the canvas column, and what
+   * scrolls it back to the same height once the diffs are drawn again.
    */
   const holdReadingPlace = () => {
-    const main = root.querySelector('main')
-    const box = main?.getBoundingClientRect()
-    const hit =
-      box === undefined
-        ? null
-        : doc.elementFromPoint(box.left + box.width / 2, Math.max(box.top, stickyTop()) + FOCUS_GAP)
+    const box = root.querySelector('main')?.getBoundingClientRect()
+    if (box === undefined) {
+      return () => {}
+    }
+    const x = box.left + box.width / 2
+    const edge = Math.max(box.top, stickyTop())
+    // Mid-file the file's header sticks over the top of the column and never moves, so the
+    // reader's first line is the one under it.
+    const header = doc.elementFromPoint(x, edge + FOCUS_GAP)?.closest('.file-h')
+    const hit = doc.elementFromPoint(x, (header?.getBoundingClientRect().bottom ?? edge) + FOCUS_GAP)
     let row = hit?.closest('table.diff tr') ?? null
     while (row !== null && row.id === '') row = row.previousElementSibling
     const line = row === null ? null : parseLineId(row.id)
-    const held = line === null ? (hit?.closest('table.diff')?.closest('article.file') ?? hit) : row
+    const held = line === null ? (hit?.closest('article.file') ?? hit) : row
     if (held === null || held === undefined) {
       return () => {}
     }
     const top = held.getBoundingClientRect().top
     return () => {
       const now = line === null ? held : findRow(root, line.key, line.side, line.line)
-      if (now?.isConnected === true) doc.defaultView?.scrollBy(0, now.getBoundingClientRect().top - top)
+      // A card, or anything outside the cards, outlives the redraw; a line may not be drawn again.
+      if (now !== null) doc.defaultView?.scrollBy(0, now.getBoundingClientRect().top - top)
     }
   }
 
@@ -1373,6 +1378,7 @@ export function wireReview(root, session, opts = {}) {
 
   /** @param {PointerEvent} event */
   const onPointerDown = event => {
+    confineTextSelection(root, event)
     const target = lineRefFromEvent(event, key => session.pathForKey(key))
     if (target === null) {
       return

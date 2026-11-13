@@ -338,10 +338,40 @@ describe('liftComposer', () => {
     document.body.innerHTML = '<table class="diff" data-key="k"><tbody></tbody></table>'
     restore()
     expect(document.querySelector('.composer-box')).toBeNull()
+    // A box of no kind this knows how to place goes with the old diff.
+    document.body.innerHTML = diff('<tr><td><div class="composer-box"><textarea></textarea></div></td></tr>')
+    const stray = liftComposer(document)
+    document.body.innerHTML = diff()
+    stray()
+    expect(document.querySelector('.composer-box')).toBeNull()
     // A PR-level box is not in a diff, so a redraw leaves it where it is.
     document.body.innerHTML = composerHtml({ id: 'c3', label: 'x', kind: 'issue' })
     liftComposer(document)()
     expect(document.querySelector('.composer-box')).not.toBeNull()
+  })
+
+  it('puts the box that resolves a point back under that point’s commands, and drops it with the point', () => {
+    const point = (/** @type {string} */ inner = '') =>
+      '<tr class="ifind" data-fingerprint="fp-1"><td><span class="tbtns">' +
+      `<button data-act="point-settle" data-fingerprint="fp-1">resolve</button></span>${inner}</td></tr>`
+    const box =
+      '<div class="composer-box settle-box"><textarea></textarea>' +
+      '<button data-act="settle-save" data-fingerprint="fp-1">resolve</button></div>'
+    document.body.innerHTML = diff(point(box))
+    const area = type(document.querySelector('.settle-box') ?? document.body, 'the spec says sum')
+    let restore = liftComposer(document)
+    expect(document.querySelector('.settle-box')).toBeNull()
+    document.body.innerHTML = diff(point())
+    restore()
+    expect(document.querySelector('tr.ifind .tbtns')?.nextElementSibling?.querySelector('textarea')).toBe(
+      area
+    )
+    expect(area.value).toBe('the spec says sum')
+
+    restore = liftComposer(document)
+    document.body.innerHTML = diff()
+    restore()
+    expect(document.querySelector('.settle-box')).toBeNull()
   })
 })
 

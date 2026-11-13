@@ -331,6 +331,11 @@ describe('rowHtml and buildRows', () => {
       '<tr class="ctx" id="L-k-new-1" data-old="1"><td class="ln">1</td><td class="ln">1</td><td class="gut"><button class="plus" type="button" data-act="comment-line" data-needs-post data-key="k" data-side="new" data-line="1" aria-label="Comment on line 1">+</button></td><td class="code"> import { a } from &#39;./a&#39;</td></tr>'
     )
     expect(rowHtml(add, 'k')).toContain('<tr class="add" id="L-k-new-2">')
+    // A line with no number has no id and nothing to comment on.
+    const numberless = { .../** @type {NonNullable<typeof add.new>} */ (add.new), newLine: null }
+    expect(rowHtml({ old: null, new: numberless }, 'k')).toContain(
+      '<tr class="add"><td class="ln"></td><td class="ln"></td><td class="gut"></td>'
+    )
     expect(rowHtml(delRow, 'k')).toContain('<tr class="del" id="L-k-old-3">')
     // A deleted line is commented on the old side, at its old line number.
     expect(rowHtml(delRow, 'k')).toContain('data-side="old" data-line="3"')

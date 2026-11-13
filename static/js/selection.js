@@ -200,3 +200,20 @@ export function lineRefFromEvent(event, pathForKey) {
   }
   return { key, path, side, line }
 }
+
+/**
+ * Keeps a text selection the reader drags over split code on the side it starts on, the other
+ * side being another file's lines: the stylesheet makes that side unselectable. A press anywhere
+ * else frees both sides.
+ * @param {Element} root
+ * @param {Event} event
+ */
+export function confineTextSelection(root, event) {
+  const cell = event.target instanceof Element ? event.target.closest('table.split td[data-side]') : null
+  const side = cell?.getAttribute('data-side') ?? null
+  if (side === null) {
+    root.removeAttribute('data-select-side')
+  } else {
+    root.setAttribute('data-select-side', side)
+  }
+}
