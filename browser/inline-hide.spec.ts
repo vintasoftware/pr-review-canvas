@@ -189,6 +189,8 @@ test('hides only the kinds the settings name', async ({ page, reviewUrl }) => {
   await dialog.locator('[data-act="settings-save"]').click()
   await expect(dialog).toBeHidden()
   await page.locator('#inline-toggle').click()
+  // The toast names what the switch hid, not the kinds left on screen.
+  await expect(page.locator('.toast')).toHaveText('points and drafts hidden')
   await expect(page.locator('.inline-hint')).toContainText('points and drafts hidden')
   await expect(file.locator('tr.ifind[data-point="p-1"]')).toBeHidden()
   await expect(file.locator('tr.thread[data-thread="1001"]')).toBeVisible()

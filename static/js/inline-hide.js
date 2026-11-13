@@ -99,6 +99,19 @@ function listOf(kinds, words) {
 }
 
 /**
+ * The kinds the switch hides, in words: "points and drafts".
+ * @param {ReadonlyArray<InlineKind>} kinds
+ */
+export function inlineKindsText(kinds) {
+  return listOf(kinds, {
+    points: 'points',
+    comments: 'comments',
+    pending: 'drafts',
+    annotations: 'annotations',
+  })
+}
+
+/**
  * What is hidden, and where each kind can still be found.
  * @param {InlineHide} hide
  */
@@ -110,12 +123,7 @@ export function inlineHideHint(hide) {
   const where = []
   if (kinds.includes('points')) where.push('points stay in the summary')
   if (kinds.includes('pending')) where.push('drafts in the review panel')
-  const hidden = listOf(kinds, {
-    points: 'points',
-    comments: 'comments',
-    pending: 'drafts',
-    annotations: 'annotations',
-  })
+  const hidden = inlineKindsText(kinds)
   return where.length === 0 ? `${hidden} hidden` : `${hidden} hidden · ${where.join(', ')}`
 }
 
@@ -203,7 +211,6 @@ export function getInlineHide() {
  * @param {Window} [view]
  */
 export function setInlineHide(next, page, view = window) {
-  const was = current
   current = {
     hideInline: next.hideInline,
     hideInlineKinds: INLINE_KINDS.filter(k => next.hideInlineKinds.includes(k)),
@@ -211,7 +218,8 @@ export function setInlineHide(next, page, view = window) {
   }
   const hidden = current.hideInline ? current.hideInlineKinds.join(' ') : ''
   const html = page.ownerDocument.documentElement
-  if (hidden === (html.getAttribute(HIDE_ATTR) ?? '') && current.hideInline === was.hideInline) {
+  // Off is the empty list and on always names a kind, so the attribute alone says what shows.
+  if (hidden === (html.getAttribute(HIDE_ATTR) ?? '')) {
     return
   }
   keepReadingPosition(

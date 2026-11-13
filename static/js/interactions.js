@@ -71,7 +71,14 @@ import {
 } from './points.js'
 import { openSettleBox, resolvePoint, selfReviewActions, setSettled } from './self-review.js'
 import { layerProgress } from './progress.js'
-import { getInlineHide, isHiddenRow, itemRowSelector, setInlineHide, showRow } from './inline-hide.js'
+import {
+  getInlineHide,
+  inlineKindsText,
+  isHiddenRow,
+  itemRowSelector,
+  setInlineHide,
+  showRow,
+} from './inline-hide.js'
 import { FOLD_LEVEL_SELECT_ID, hiddenLabel, refreshFoldLevel } from './reading-level.js'
 import { lineRefFromEvent, markSelection, selectionReducer } from './selection.js'
 import {
@@ -892,7 +899,7 @@ export function wireReview(root, session, opts = {}) {
   /** @param {boolean} on */
   const switchInline = on => {
     setInlineHide({ ...getInlineHide(), hideInline: on }, root)
-    toast(root, on ? 'comments hidden' : 'comments shown')
+    toast(root, `${inlineKindsText(getInlineHide().hideInlineKinds)} ${on ? 'hidden' : 'shown'}`)
     saveSettings({ hideInline: on }).catch(() => {
       toast(root, 'could not save the inline switch; it holds for this page only')
     })

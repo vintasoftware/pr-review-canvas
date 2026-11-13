@@ -714,7 +714,7 @@ describe('the reading level control', () => {
   })
 
   it('names what each level adds and how much of the diff it hides', () => {
-    // A level that hides nothing says so rather than showing 0.
+    // A level that hides nothing beyond the renderer's own folds shows no count.
     expect(foldLevelHint('light', { total: 40, hidden: 0 })).toBe(
       'hides imports, whitespace, moved and generated code'
     )
