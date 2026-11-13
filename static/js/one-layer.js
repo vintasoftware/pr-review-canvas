@@ -269,7 +269,9 @@ export function initOneLayer(root, opts) {
 
   /**
    * Where the reader is: the stop on screen, or in the layers the section being read (the rail's
-   * mark while all show), or the stop the URL names in it, for a reader back from that stop.
+   * mark while all show), or the stop the URL names in it, for a reader back from that stop. The
+   * overview marked while all show also gives way to the URL's stop: on a narrow screen the rail,
+   * and its switch, sit above the overview, so a reader scrolls up to it to tap the switch.
    */
   const placeNow = () => {
     const at =
@@ -277,7 +279,10 @@ export function initOneLayer(root, opts) {
         ? (root.querySelector('nav.rail a[aria-current]')?.getAttribute('href') ?? '')
         : shownHash
     const named = view === 'points' ? undefined : stopNamed(stops(), win.location.hash)
-    return named !== undefined && `#${layerAnchorId(named.layer.key)}` === at ? `#${named.id}` : at
+    const holds =
+      named !== undefined &&
+      (`#${layerAnchorId(named.layer.key)}` === at || (view === 'all' && at === '#overview'))
+    return holds ? `#${named.id}` : at
   }
 
   /**

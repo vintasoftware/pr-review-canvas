@@ -295,6 +295,16 @@ describe('the one-point view on a rendered page', () => {
     expect(window.location.hash).toBe('#layer-other')
   })
 
+  it('comes back from the layers to the URL’s stop for a reader who scrolled up to the overview to reach the switch', () => {
+    view?.step(1, () => true)
+    view?.switchView('all')
+    // On a narrow screen the switch sits above the overview, which the rail then marks.
+    markRailCurrent(document, 'overview')
+    view?.switchView('points')
+    expect(window.location.hash).toBe('#point-p-1')
+    expect(lensed()?.getAttribute('data-lens')).toBe('point')
+  })
+
   it('switches to the layers on the place being read, and back to its stop', () => {
     view?.step(1, () => true)
     view?.switchView('all')
