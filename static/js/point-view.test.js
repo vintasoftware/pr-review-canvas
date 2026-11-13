@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cssEscape } from './anchors.js'
 import { toPatchMap } from '../../src/git/diff-collector.js'
 import { emptyState } from '../../src/contract/state.js'
-import { SYNTHETIC_FILES, syntheticArtifact } from '../../src/testing/synthetic.js'
+import {
+  publishedSyntheticArtifact,
+  SYNTHETIC_FILES,
+  syntheticArtifact,
+  withMarkdownTitles,
+} from '../../src/testing/synthetic.js'
 import { defineLayerElements, hunkIdForPoint, renderLayers, setRenderContext } from './layers.js'
 import { initOneLayer } from './one-layer.js'
 import { stopsOf } from './point-steps.js'
@@ -81,6 +86,21 @@ describe('stopNavHtml', () => {
       draw(stopNavHtml(ids, index, otherOnly)).querySelector('a')?.textContent
     expect(back(1)).toBe('← previous layer: Run path')
     expect(back(2)).toBe('← Other changes')
+  })
+
+  it('renders the Markdown of the layer titles it names', () => {
+    const titled = withMarkdownTitles(artifact)
+    const html = (/** @type {typeof titled} */ canvas, /** @type {number} */ index) =>
+      Array.from(draw(stopNavHtml(stopsOf(canvas), index, canvas)).querySelectorAll('a')).map(
+        a => a.innerHTML
+      )
+    expect(html(titled, -1)).toEqual(['start with Layer 1: Run <code>path</code> →'])
+    expect(html(titled, 1)).toEqual([
+      '← Run <code>path</code>',
+      'next layer: Other <strong>changes</strong> →',
+    ])
+    const otherOnly = { ...titled, points: titled.points.filter(p => p.layerId === 'other') }
+    expect(html(otherOnly, 1)[0]).toBe('← previous layer: Run <code>path</code>')
   })
 
   it('leads from the last stop to the layers, as the rail’s switch does', () => {
@@ -286,5 +306,45 @@ describe('the one-point view on a rendered page', () => {
     expect(lensed()?.getAttribute('data-lens')).toBe('layer')
     expect(window.location.hash).toBe('#layer-other')
     expect(seen).toEqual(['all', 'points'])
+  })
+})
+
+describe('a missing behavior’s row in the one-point view', () => {
+  it('leads from the layer’s stop to the point publish made for the behavior', () => {
+    const published = publishedSyntheticArtifact()
+    // The behavior's point shares its chunk with the layer's decision, which sorts first.
+    const missing = published.points.find(p => p.origin === 'tests')
+    expect(published.points[0]?.path).toBe(missing?.path)
+    setRenderContext({
+      artifact: published,
+      headSha: published.pr.headSha,
+      mergeBaseSha: published.pr.mergeBaseSha,
+      files: published.files,
+      patches: toPatchMap(SYNTHETIC_FILES),
+      comments: [],
+      state,
+      now: new Date('2026-10-21T10:00:00.000Z'),
+    })
+    defineLayerElements()
+    window.history.replaceState(null, '', '/review/7')
+    draw(
+      `${renderRail(published, state, { points: true, switchable: true })}<main><section class="panel" id="overview"></section>${renderLayers(published, published.files, state, [])}</main>`
+    )
+    const view = initOneLayer(document.body, { view: 'points', layersView: 'all' })
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    try {
+      expect(document.querySelector('[data-lens]')?.getAttribute('data-lens')).toBe('layer')
+      Array.from(document.querySelectorAll('details.test-map a'))
+        .find(a => a.textContent === 'See its attention point')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      expect(window.location.hash).toBe(`#point-${missing?.id}`)
+      expect(document.querySelector('#stop-lens')?.textContent).toContain(
+        `data-fingerprint="${cssEscape(missing?.fingerprint ?? '')}"`
+      )
+    } finally {
+      scrollTo.mockRestore()
+      view.stop()
+      setRenderContext(null)
+    }
   })
 })

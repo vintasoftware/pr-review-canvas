@@ -10,7 +10,7 @@ import { lineLink } from './links.js'
 import { pendingCommentHtml, pendingForPoint, pendingRange } from './pending.js'
 import { layerAnchorId, pointAnchorId } from './keys.js'
 import { LEVELS, levelIconHtml, pointKindText, pointLevelText } from './point-level.js'
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleHtml, titleText } from './markdown.js'
 import {
   audiencePillHtml,
   canSettle,
@@ -382,7 +382,7 @@ function pointPartsHtml(p, ctx, opts) {
   const toggle =
     status === 'open' && !opts.card
       ? ''
-      : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(p.title)}">show</button>`
+      : `<button class="cmd p-toggle" type="button" data-act="point-expand" aria-expanded="false" aria-label="Show the point: ${esc(titleText(p.title))}">show</button>`
   // data-item-link sets this link apart from code links in the point's text (see onItemLink).
   const loc = opts.card
     ? `<a class="loc" data-item-link href="${esc(pointLink(p))}">${esc(pointLocation(p))}</a>`
@@ -393,7 +393,7 @@ function pointPartsHtml(p, ctx, opts) {
       `data-sig="${esc(pointSignature(p, status, ctx))}"`,
     handled: status === 'open' ? '' : status === 'resolved' ? ' is-handled is-resolved' : ' is-handled',
     // The title, its pills and its place wrap together, so the toggle keeps to the end of the first line.
-    title: `<span class="f-head"><span class="p-title"${opts.card ? ' data-act="point-expand"' : ''}>${esc(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}</span>${toggle}`,
+    title: `<span class="f-head"><span class="p-title"${opts.card ? ' data-act="point-expand"' : ''}>${titleHtml(p.title)}</span>${impactPillHtml(p)}<span class="pill kind">${esc(pointKindText(p))}</span>${audiencePillHtml(p)}${parts.pill}${loc}</span>${toggle}`,
     rest:
       parts.summary +
       `<div class="prose">${renderMarkdown(p.body, { paths: ctx.paths })}</div>` +

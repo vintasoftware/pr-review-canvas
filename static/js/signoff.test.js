@@ -1,7 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 import { emptyState } from '../../src/contract/state.js'
-import { syntheticArtifact } from '../../src/testing/synthetic.js'
+import { syntheticArtifact, withMarkdownTitles } from '../../src/testing/synthetic.js'
 import { externalLink } from './dom.js'
 import {
   approveBlockedReason,
@@ -22,6 +22,10 @@ const BASE = emptyState('2026-09-10T12:00:00.000Z')
 describe('approveBlockedReason', () => {
   it('names the one layer that is still open', () => {
     expect(approveBlockedReason(artifact, BASE)).toBe('1 layer is not reviewed yet: Run path')
+    // The reason is a tooltip, so it names the layer in its title's words.
+    expect(approveBlockedReason(withMarkdownTitles(artifact), BASE)).toBe(
+      '1 layer is not reviewed yet: Run path'
+    )
   })
 
   it('counts them when more than one is open', () => {

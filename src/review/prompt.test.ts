@@ -214,6 +214,12 @@ describe('renderPrompt', () => {
         "toward the field's own cap. A fence in any other field is an ordinary code block and counts like\n" +
         "the rest of that field's text."
     )
+    // Over a cap, the writer cuts content rather than grammar; squeezing words out made canvases
+    // read as clipped shorthand.
+    expect(prompt).toContain(
+      "When the text doesn't fit its cap, leave out a detail, not the words a sentence needs."
+    )
+    expect(prompt).not.toContain('One or two short sentences')
     expect(prompt.indexOf('## Diagrams')).toBeLessThan(prompt.indexOf('## Links'))
   })
 

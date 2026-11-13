@@ -43,7 +43,7 @@ import { esc, flash, qs, scrollIntoViewSafe, timeAgo } from './dom.js'
 import { cssEscape } from './anchors.js'
 import { getRenderContext } from './layers.js'
 import { lineLink } from './links.js'
-import { renderMarkdown } from './markdown.js'
+import { renderMarkdown, titleHtml, titleText } from './markdown.js'
 import { pendingComments } from './pending.js'
 import { pointStatus, resolvable } from './points.js'
 import { proposalFingerprint, splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
@@ -337,7 +337,7 @@ function proposedPointHtml(id, send) {
     : ''
   // The key is what the line shows: the point, and whether it can still come off.
   const key = `${send.point.fingerprint}:${open ? 'open' : 'sent'}`
-  return `<p class="proposed-point muted small" data-key="${esc(key)}">about the point “${esc(send.point.title)}”${unlink}</p>`
+  return `<p class="proposed-point muted small" data-key="${esc(key)}">about the point “${titleHtml(send.point.title)}”${unlink}</p>`
 }
 
 /**
@@ -423,7 +423,7 @@ function proposedResolutionHtml(resolution, id, state) {
   return (
     `<div class="proposed resolution" data-proposed="${esc(id)}">` +
     '<div class="proposed-h"><span class="lbl">proposed resolution</span></div>' +
-    `<p class="proposed-point muted small">about the point “${esc(resolution.point.title)}”</p>` +
+    `<p class="proposed-point muted small">about the point “${titleHtml(resolution.point.title)}”</p>` +
     `<div class="prose">${renderMarkdown(resolution.reason)}</div>` +
     resolutionCommandsHtml(resolution, id, state) +
     '</div>'
@@ -686,9 +686,17 @@ export function wireChat(options) {
   }
   applyWidth(readChatWidth(storage))
 
-  const layerTitle = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)?.title
-  const pointTitle = /** @param {string} fp */ fp =>
-    session.artifact.points.find(p => p.fingerprint === fp)?.title
+  const layerOf = /** @param {string} id */ id => session.artifact.layers.find(l => l.id === id)
+  const pointOf = /** @param {string} fp */ fp => session.artifact.points.find(p => p.fingerprint === fp)
+  // The chat names places in plain text: its head, chips and thread names are not Markdown.
+  const layerTitle = /** @param {string} id */ id => {
+    const layer = layerOf(id)
+    return layer === undefined ? undefined : titleText(layer.title)
+  }
+  const pointTitle = /** @param {string} fp */ fp => {
+    const point = pointOf(fp)
+    return point === undefined ? undefined : titleText(point.title)
+  }
   const currentThread = () => threads.find(t => t.name === activeThread)
   /**
    * Whether a place is on the canvas on screen. A thread outlives the canvas it was made on, and a
@@ -698,9 +706,9 @@ export function wireChat(options) {
   const onCanvas = place => {
     switch (place.kind) {
       case 'point':
-        return pointTitle(place.fingerprint) !== undefined
+        return pointOf(place.fingerprint) !== undefined
       case 'layer':
-        return layerTitle(place.layerId) !== undefined
+        return layerOf(place.layerId) !== undefined
       case 'file':
       case 'lines':
         return paths.has(place.path)
@@ -735,12 +743,22 @@ export function wireChat(options) {
   const placeName = anchor =>
     anchor.kind === 'pr' ? 'whole PR' : chatContextName(anchor, layerTitle, pointTitle)
   /**
+   * The title a thread was saved with. A thread about a layer or a point was named after its title
+   * as written, Markdown and all, so it shows in words. One about a file or lines was named after a
+   * path, and a general thread keeps the reader's own words: both show as saved.
+   * @param {(typeof threads)[number]} thread
+   */
+  const savedTitle = thread =>
+    thread.anchor?.kind === 'point' || thread.anchor?.kind === 'layer'
+      ? titleText(thread.title)
+      : thread.title
+  /**
    * A thread as the head and the index name it: by its place while the canvas has it, by the title
    * it was saved with otherwise.
    * @param {(typeof threads)[number]} thread
    */
   const shownTitle = thread =>
-    thread.anchor !== undefined && onCanvas(thread.anchor) ? placeName(thread.anchor) : thread.title
+    thread.anchor !== undefined && onCanvas(thread.anchor) ? placeName(thread.anchor) : savedTitle(thread)
 
   const drawHead = () => {
     const thread = currentThread()
@@ -778,7 +796,7 @@ export function wireChat(options) {
     if (place !== undefined && onCanvas(place)) {
       return chatContextLabel(place, layerTitle, pointTitle)
     }
-    return thread !== undefined ? thread.title : 'New thread'
+    return thread !== undefined ? savedTitle(thread) : 'New thread'
   }
 
   /**

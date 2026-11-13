@@ -61,6 +61,15 @@ describe('points', () => {
     document.body.innerHTML = `<ol>${pointCardHtml(p, ctx)}</ol>`
     const li = document.querySelector('li.finding')
     expect(li?.id).toBe('point-p-1')
+    // The title renders its Markdown; the button that opens a collapsed point names it in words.
+    document.body.innerHTML = `<ol>${pointCardHtml({ ...p, title: '`run()` ignores **Show layers**' }, ctx)}</ol>`
+    expect(document.querySelector('.p-title')?.innerHTML).toBe(
+      '<code>run()</code> ignores <strong>Show layers</strong>'
+    )
+    expect(document.querySelector('.p-toggle')?.getAttribute('aria-label')).toBe(
+      'Show the point: run() ignores Show layers'
+    )
+    document.body.innerHTML = `<ol>${pointCardHtml(p, ctx)}</ol>`
     expect(li?.querySelector('.lv.decide')?.getAttribute('aria-label')).toBe('decide')
     expect(li?.querySelector('.pill.impact.high')?.textContent).toBe('high')
     expect(li?.querySelector('.pill.kind')?.textContent).toBe('design choice')

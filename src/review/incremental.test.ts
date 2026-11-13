@@ -165,7 +165,7 @@ describe('splitBasis', () => {
     }
     // A layer of untouched files only, whose test note links into the changed file.
     const gone = { path: 'src/gone.ts', hunks: ['src_gone_ts#1'], isTest: false, annotations: [] }
-    const body = 'The layer lists this behavior without a test. It calls [run](#line:src/app.ts:4).'
+    const body = 'It calls [run](#line:src/app.ts:4).'
     const split = (origin: 'model' | 'tests') =>
       splitBasis(
         {

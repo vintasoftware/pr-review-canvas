@@ -6,6 +6,7 @@
 /** @typedef {import('./contract-types.js').ReviewBodyResponse} ReviewBodyResponse */
 import { previewControlsHtml, setDisabledReason, setMarkdownPreview } from './composer.js'
 import { esc, externalLink } from './dom.js'
+import { titleText } from './markdown.js'
 import { hostLabel } from './host.js'
 import { pendingLabel } from './pending.js'
 import { layerProgress } from './progress.js'
@@ -32,7 +33,7 @@ export function approveBlockedReason(artifact, state) {
     return null
   }
   return rest.length === 0
-    ? `1 layer is not reviewed yet: ${first.title}`
+    ? `1 layer is not reviewed yet: ${titleText(first.title)}`
     : `${rest.length + 1} layers are not reviewed yet`
 }
 
