@@ -3,8 +3,12 @@
 import { emptyState } from '../../src/contract/state.js'
 import { syntheticArtifact, withMarkdownTitles } from '../../src/testing/synthetic.js'
 import { externalLink } from './dom.js'
+import { setHost } from './host.js'
 import {
   approveBlockedReason,
+  approveDisabledReason,
+  readerSignOffReason,
+  setReaderIsAuthor,
   FAILED_REASON,
   fillSignoffDialog,
   openSignoffDialog,
@@ -41,6 +45,33 @@ describe('approveBlockedReason', () => {
   it('clears once every layer that is not Other is reviewed', () => {
     const done = { ...BASE, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
     expect(approveBlockedReason(artifact, done)).toBeNull()
+  })
+})
+
+describe('the author’s reason', () => {
+  afterEach(() => {
+    setReaderIsAuthor(false)
+    setHost(undefined)
+  })
+
+  it('is absent for a reader who did not open the pull request', () => {
+    expect(readerSignOffReason()).toBeNull()
+    expect(approveDisabledReason(artifact, BASE)).toBe('1 layer is not reviewed yet: Run path')
+  })
+
+  it('comes before the unreviewed layers, and stays once they are all reviewed', () => {
+    setReaderIsAuthor(true)
+    const reason = 'You opened this pull request. Sign-off comes from another reviewer.'
+    expect(readerSignOffReason()).toBe(reason)
+    expect(approveDisabledReason(artifact, BASE)).toBe(reason)
+    const done = { ...BASE, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
+    expect(approveDisabledReason(artifact, done)).toBe(reason)
+  })
+
+  it('names a merge request on GitLab', () => {
+    setReaderIsAuthor(true)
+    setHost({ kind: 'gitlab', label: 'GitLab', noun: 'merge request', webBase: 'https://gitlab.example.com' })
+    expect(readerSignOffReason()).toBe('You opened this merge request. Sign-off comes from another reviewer.')
   })
 })
 
