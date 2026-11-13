@@ -1,11 +1,13 @@
 // @ts-check
 // The AI Chat pane: threads, the one context a message is about, the streamed answer, and the
-// comment cards an answer can propose. The scrolling rules live in chat-scroll.js and the block
-// parsing in proposed-comment.js; this file is the wiring between them and the DOM.
+// comment cards an answer can propose. Scrolling is in chat-scroll.js, block parsing in
+// proposed-comment.js, and card drawing in proposed-card.js; this file wires them to the DOM.
 /** @typedef {import('./chat-context.js').ChatContext} ChatContext */
 /** @typedef {import('./contract-types.js').ChatTurn} ChatTurn */
 /** @typedef {import('./proposed-comment.js').ProposedComment} ProposedComment */
 /** @typedef {import('./proposed-comment.js').ProposedResolution} ProposedResolution */
+/** @typedef {import('./proposed-comment.js').ProposedRange} ProposedRange */
+/** @typedef {import('./proposed-card.js').PaneState} PaneState */
 /** @typedef {import('./review-session.js').ReviewSession} ReviewSession */
 import {
   cancelChat,
@@ -38,14 +40,22 @@ import {
   unseenLabel,
 } from './chat-scroll.js'
 import { runCommand, toast } from './commands.js'
-import { isQueuedComment, postedCommentUrl, sendCommandsHtml } from './comment-link.js'
 import { esc, flash, qs, scrollIntoViewSafe, timeAgo } from './dom.js'
 import { cssEscape } from './anchors.js'
+import { applyCapabilityGating } from './composer.js'
 import { getRenderContext } from './layers.js'
 import { lineLink } from './links.js'
-import { renderMarkdown, titleHtml, titleText } from './markdown.js'
+import { renderMarkdown, titleText } from './markdown.js'
 import { pendingComments } from './pending.js'
-import { pointStatus, resolvable } from './points.js'
+import {
+  isResolution,
+  proposedCommentHtml,
+  proposedResolutionHtml,
+  redrawOnKey,
+  resolutionCommandsHtml,
+  sendStateOf,
+  withRange,
+} from './proposed-card.js'
 import { proposalFingerprint, splitChatAnswer, targetsFromFiles } from './proposed-comment.js'
 import { REVIEW_PANEL_ID } from './review-panel.js'
 import { canSettle } from './self-review.js'
@@ -276,196 +286,6 @@ export function checkoutWarningHtml(event) {
 }
 
 /**
- * `point` is the attention point the comment is tied to: once it was sent, the one what went out
- * names; before, the one the agent named, unless the reader unlinked it.
- * @typedef {{ postedUrl?: string | undefined, queued?: boolean, submitted?: boolean, point?: import('./proposed-comment.js').ProposalPoint }} SendState
- */
-
-/**
- * What the pane knows when it draws a card: where each comment went, the comments the reader
- * unlinked from their point (by proposal fingerprint), and the state the points stand in.
- * @typedef {{
- *   posted?: ReadonlyArray<import('./contract-types.js').ReviewComment & { proposalFingerprint?: string | undefined, pointFingerprint?: string | undefined }>,
- *   pending?: ReadonlyArray<import('./contract-types.js').PendingComment>,
- *   submitted?: ReadonlyArray<import('./contract-types.js').PendingComment>,
- *   unlinked?: ReadonlySet<string>,
- *   state?: import('./contract-types.js').PrState,
- * }} PaneState
- */
-
-/**
- * The commands under a card. `add to review` leads, as it does on a diff-line comment, and both
- * ways of sending go through the same paths as every other post and draft, so capability gating
- * and the pending state apply here too. `data-key` names what the send commands show, so a
- * change of state redraws only the cards it changed.
- * @param {ProposedComment} comment
- * @param {string} id the key the pane stores this card's comment under
- * @param {SendState} send
- */
-function proposedCommandsHtml(comment, id, send) {
-  const shown =
-    send.postedUrl !== undefined
-      ? 'posted'
-      : send.submitted === true
-        ? 'submitted'
-        : send.queued === true
-          ? 'queued'
-          : 'open'
-  return (
-    `<span class="tbtns" data-key="${shown}">` +
-    sendCommandsHtml({ kind: 'proposed', id, ...send, leadWithQueue: true }) +
-    `<button class="cmd" type="button" data-act="proposed-edit" data-proposed="${esc(id)}" data-needs-post data-tooltip="Edit" title="Edit">edit</button>` +
-    `<button class="cmd" type="button" data-copy="${esc(comment.body)}" title="Copy">copy</button>` +
-    '</span>'
-  )
-}
-
-/**
- * The line that says which attention point the agent tied the comment to. Sending the comment
- * carries the link to the point, which then shows the comment as its draft or its posted reply;
- * until then the reader can take the link off when the agent judged wrong.
- * @param {string} id
- * @param {SendState} send
- */
-function proposedPointHtml(id, send) {
-  if (send.point === undefined) {
-    return ''
-  }
-  const open = send.postedUrl === undefined && send.submitted !== true && send.queued !== true
-  const unlink = open
-    ? ` <button class="cmd" type="button" data-act="proposed-unlink" data-proposed="${esc(id)}">unlink</button>`
-    : ''
-  // The key is what the line shows: the point, and whether it can still come off.
-  const key = `${send.point.fingerprint}:${open ? 'open' : 'sent'}`
-  return `<p class="proposed-point muted small" data-key="${esc(key)}">about the point “${titleHtml(send.point.title)}”${unlink}</p>`
-}
-
-/**
- * The card a proposed comment renders as.
- * @param {ProposedComment} comment
- * @param {string} id the key the pane stores this card's comment under
- * @param {SendState} [send]
- */
-export function proposedCommentHtml(comment, id, send = {}) {
-  const range = comment.startLine === undefined ? `${comment.line}` : `${comment.startLine}–${comment.line}`
-  const side = comment.side === 'old' ? ' (old side)' : ''
-  return (
-    `<div class="proposed" data-proposed="${esc(id)}">` +
-    `<div class="proposed-h"><span class="lbl">proposed comment</span>` +
-    `<span class="mono">${esc(comment.path)}:${esc(range)}${side}</span></div>` +
-    proposedPointHtml(id, send) +
-    `<div class="prose">${renderMarkdown(comment.body)}</div>` +
-    proposedCommandsHtml(comment, id, send) +
-    '</div>'
-  )
-}
-
-/** @param {ProposedComment | ProposedResolution} entry */
-function isResolution(entry) {
-  return 'reason' in entry
-}
-
-/**
- * Replaces `el` with what `html` draws when its `data-key` names something else, or takes it out
- * when `html` is empty. The key names what the element shows; the live element also carries what
- * the page added since (an error after a command, a request in flight, the posting gate), which
- * the HTML does not, so it is compared by key and a command whose key held keeps all of that.
- * @param {Element} el
- * @param {string} html
- */
-function redrawOnKey(el, html) {
-  const template = document.createElement('template')
-  template.innerHTML = html
-  const next = template.content.firstElementChild
-  if (next === null) {
-    el.remove()
-  } else if (next.getAttribute('data-key') !== el.getAttribute('data-key')) {
-    el.replaceWith(next)
-  }
-}
-
-/**
- * The commands of a proposed resolution, by where its point stands: save the reason as it stands,
- * or open the point's own reason box with it, where it can change and also go out as a comment.
- * The rule is the point's own (`resolvable`), so the card offers resolve exactly where the point
- * does; a point resolved, or dismissed and waiting to be restored, says so instead. `data-key`
- * names which, so a change of state redraws only the cards it changed.
- * @param {ProposedResolution} resolution
- * @param {string} id the key the pane stores this card's resolution under
- * @param {import('./contract-types.js').PrState | undefined} state
- */
-function resolutionCommandsHtml(resolution, id, state) {
-  const status = pointStatus(resolution.point, state)
-  const shown = resolvable(status) ? 'open' : status
-  const target = `data-proposed="${esc(id)}"`
-  const acts =
-    shown === 'open'
-      ? `<button class="cmd fill" type="button" data-act="resolution-save" ${target}>resolve</button>` +
-        `<button class="cmd" type="button" data-act="resolution-edit" ${target} title="Edit">edit</button>`
-      : shown === 'resolved'
-        ? '<span class="pill status resolved">resolved</span>'
-        : shown === 'dismissed'
-          ? '<span class="muted small">dismissed: restore the point to resolve it</span>'
-          : ''
-  return (
-    `<span class="tbtns" data-key="${shown}">${acts}` +
-    `<button class="cmd" type="button" data-copy="${esc(resolution.reason)}" title="Copy">copy</button></span>`
-  )
-}
-
-/**
- * The card a proposed resolution renders as: the point it answers and the reason.
- * @param {ProposedResolution} resolution
- * @param {string} id
- * @param {import('./contract-types.js').PrState | undefined} state
- */
-function proposedResolutionHtml(resolution, id, state) {
-  return (
-    `<div class="proposed resolution" data-proposed="${esc(id)}">` +
-    '<div class="proposed-h"><span class="lbl">proposed resolution</span></div>' +
-    `<p class="proposed-point muted small">about the point “${titleHtml(resolution.point.title)}”</p>` +
-    `<div class="prose">${renderMarkdown(resolution.reason)}</div>` +
-    resolutionCommandsHtml(resolution, id, state) +
-    '</div>'
-  )
-}
-
-/**
- * Where a proposed comment stands against the posted comments and the pending review, and the
- * point it is tied to. What went out decides the tie once the comment was sent; before, the
- * agent's choice holds unless the reader unlinked it. One function answers this for the card, for
- * a redraw, and for the send itself, so the three never disagree.
- * @param {ProposedComment} comment
- * @param {PaneState} pane
- * @returns {SendState}
- */
-function sendStateOf(comment, pane) {
-  const posted = pane.posted ?? []
-  const pending = pane.pending ?? []
-  const submitted = pane.submitted ?? []
-  const fp = comment.proposalFingerprint
-  const sent =
-    fp === undefined
-      ? undefined
-      : ([...pending, ...submitted].find(d => d.proposalFingerprint === fp) ??
-        posted.find(c => c.proposalFingerprint === fp))
-  const point =
-    sent !== undefined
-      ? sent.pointFingerprint !== undefined && sent.pointFingerprint === comment.point?.fingerprint
-        ? comment.point
-        : undefined
-      : fp !== undefined && pane.unlinked?.has(fp) === true
-        ? undefined
-        : comment.point
-  return {
-    postedUrl: postedCommentUrl(comment, posted),
-    queued: isQueuedComment(comment, pending),
-    submitted: isQueuedComment(comment, submitted),
-    ...(point === undefined ? {} : { point }),
-  }
-}
-
-/**
  * One assistant answer as HTML: prose, comment and resolution cards, and a code block, with the
  * reason, for a block that claimed to be one of those but is not.
  * Card keys carry the turn they belong to, so an older answer's card still acts on its own
@@ -495,7 +315,7 @@ export function answerHtml(text, targets, sink, paths, opts = {}) {
       }
       const comment = { ...segment.comment, proposalFingerprint: proposalFingerprint(segment.comment) }
       sink.set(id, comment)
-      return proposedCommentHtml(comment, id, sendStateOf(comment, opts))
+      return proposedCommentHtml(comment, id, sendStateOf(comment, opts), targets.anchorError(comment))
     })
     .join('')
 }
@@ -582,6 +402,12 @@ export function wireChat(options) {
    * @type {Set<string>}
    */
   const unlinked = new Set()
+  /**
+   * The part of a range across two chunks the reader chose, by proposal fingerprint. It is kept
+   * only in this page: a page reload loses a choice not sent yet. A sent comment keeps its lines.
+   * @type {Map<string, ProposedRange>}
+   */
+  const chosen = new Map()
   const postedComments = () => {
     const receipts = new Map(session.state.posted.map(p => [p.commentId, p]))
     return (
@@ -600,8 +426,26 @@ export function wireChat(options) {
     pending: pendingComments(session.state),
     submitted: session.state.submitted,
     unlinked,
+    chosen,
     state: session.state,
   })
+  /**
+   * Draws a comment card again when what it shows changed, under the same posting gate as the rest
+   * of the page.
+   * @param {Element} card
+   * @param {ProposedComment} entry
+   * @param {PaneState} [now]
+   * @returns {Element | null} the card drawn in its place, or null when it stays as it was
+   */
+  const redrawCard = (card, entry, now = paneState()) => {
+    const id = card.getAttribute('data-proposed') ?? ''
+    const html = proposedCommentHtml(entry, id, sendStateOf(entry, now), targets.anchorError(entry))
+    const next = redrawOnKey(card, html)
+    if (next !== null) {
+      applyCapabilityGating(next, session.capabilities)
+    }
+    return next
+  }
   /** @type {string | null} */
   let activeThread = null
   /**
@@ -1743,17 +1587,29 @@ export function wireChat(options) {
       }
       return
     }
-    if (act === 'proposed-unlink') {
+    const fp = entry.proposalFingerprint
+    const card = el.closest('.proposed')
+    if (act === 'proposed-unlink' && fp !== undefined && card !== null) {
       // The reader overrides the agent: the comment goes out on its own, tied to no point.
-      if (entry.proposalFingerprint !== undefined) unlinked.add(entry.proposalFingerprint)
-      el.closest('.proposed-point')?.remove()
+      unlinked.add(fp)
+      redrawCard(card, entry)
+      return
+    }
+    if (act === 'proposed-range' && fp !== undefined && card !== null) {
+      chosen.set(fp, {
+        startLine: Number(el.getAttribute('data-start-line')),
+        line: Number(el.getAttribute('data-line')),
+      })
+      // The pressed button is gone with the old card, so the focus goes to add to review.
+      const queue = redrawCard(card, entry)?.querySelector('[data-act="proposed-queue"]')
+      if (queue instanceof HTMLButtonElement) queue.focus()
       return
     }
     const what = act === null ? undefined : PROPOSED_ACTS[act]
     if (what !== undefined) {
-      // The comment goes out tied to the point its card shows, and to no other.
-      const { point } = sendStateOf(entry, paneState())
-      const { point: _agents, ...rest } = entry
+      // The comment goes out with the point and the lines its card shows.
+      const { point, range } = sendStateOf(entry, paneState())
+      const { point: _agents, ...rest } = withRange(entry, range)
       options.onProposed?.(what, point === undefined ? rest : { ...rest, point }, el)
     }
   }
@@ -1929,24 +1785,15 @@ export function wireChat(options) {
       for (const card of Array.from(log.querySelectorAll('.proposed[data-proposed]'))) {
         const id = card.getAttribute('data-proposed') ?? ''
         const entry = proposed.get(id)
-        const tbtns = card.querySelector(':scope > .tbtns')
-        if (entry === undefined || tbtns === null) {
+        if (entry === undefined) {
           continue
         }
         if (isResolution(entry)) {
-          redrawOnKey(tbtns, resolutionCommandsHtml(entry, id, now.state))
+          const tbtns = card.querySelector(':scope > .tbtns')
+          if (tbtns !== null) redrawOnKey(tbtns, resolutionCommandsHtml(entry, id, now.state))
           continue
         }
-        const sendState = sendStateOf(entry, now)
-        redrawOnKey(tbtns, proposedCommandsHtml(entry, id, sendState))
-        // The point line follows the same state: put in, changed, or taken out.
-        const line = proposedPointHtml(id, sendState)
-        const drawn = card.querySelector(':scope > .proposed-point')
-        if (drawn !== null) {
-          redrawOnKey(drawn, line)
-        } else if (line !== '') {
-          card.querySelector(':scope > .proposed-h')?.insertAdjacentHTML('afterend', line)
-        }
+        redrawCard(card, entry, now)
       }
     },
     /**
