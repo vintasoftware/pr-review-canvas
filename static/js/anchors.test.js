@@ -87,7 +87,7 @@ describe('jumpTo', () => {
     stop()
   })
 
-  it('opens the details of the layer it goes to, not those of the overview', () => {
+  it('opens the details under a layer that reveal-code reaches, not those of the overview', () => {
     document.body.innerHTML =
       '<section id="overview"><details id="desc"></details></section>' +
       '<pr-layer><section id="layer-other"><details id="other"></details></section></pr-layer>'

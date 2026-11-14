@@ -1,3 +1,4 @@
+import { publishedSyntheticArtifact } from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
 test('shows one layer at a time once the setting is saved, on this page and after a reload', async ({
@@ -113,10 +114,16 @@ test.describe('compact attention points saved in the settings', () => {
 
 for (const layerView of ['all', 'one'] as const) {
   test.describe(`a missing test's link in the layers, compact, ${layerView === 'all' ? 'all at once' : 'one at a time'}`, () => {
-    test.use({ canvas: 'published', settings: { compactPoints: true, readByPoints: false, layerView } })
+    test.use({ settings: { compactPoints: true, readByPoints: false, layerView } })
 
-    test('opens its open point whole, and leaves one acted on folded', async ({ page, reviewUrl }) => {
-      await page.goto(reviewUrl + '#layer-run-path')
+    test('opens its open point whole, and leaves one acted on folded', async ({ page, chatServer }) => {
+      // As publish writes it, the missing test's point is in its layer, so the Tests table links to it.
+      const server = await chatServer({
+        setup: async ({ ctx }) => {
+          ctx.fixtureArtifact = publishedSyntheticArtifact()
+        },
+      })
+      await page.goto(server.url + '#layer-run-path')
       const tests = page.locator('#layer-run-path details.test-map')
       const link = tests.getByRole('link', { name: 'See its attention point' })
       await tests.locator('summary').click()
