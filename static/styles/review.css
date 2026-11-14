@@ -19,6 +19,10 @@
   background: var(--panel-2);
 }
 .layer-h h2 {
+  /* A long name, often one in code, breaks inside the heading instead of widening the page. */
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-size: 18px;
   margin-right: auto;
 }
