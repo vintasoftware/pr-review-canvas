@@ -172,6 +172,43 @@ test.describe('with startCollapsed', () => {
     await expect(layerBody).toBeVisible()
     await expect(fileBody).toBeVisible()
   })
+
+  test('opens Other changes that the rail, a key, or back goes to, with its files left closed', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl)
+    const other = page.locator('#layer-other')
+    const details = other.locator(':scope > details')
+    const summary = details.locator(':scope > summary')
+    const fileBody = other.locator('article.file[data-path="src/new.ts"] .file-body')
+    await expect(details).not.toHaveAttribute('open')
+
+    await page.locator('nav.rail a[href="#layer-other"]').click()
+    await expect(page).toHaveURL(/#layer-other$/)
+    await expect(details).toHaveAttribute('open')
+    await expect(fileBody).toBeHidden()
+    // The overview's own details stay closed on the way back to it.
+    await summary.click()
+    await expect(details).not.toHaveAttribute('open')
+    await page.locator('nav.rail a[href="#overview"]').click()
+    await expect(page.locator('#overview > details.pr-desc')).not.toHaveAttribute('open')
+    await page.goBack()
+    await expect(page).toHaveURL(/#layer-other$/)
+    await expect(details).toHaveAttribute('open')
+
+    // Closed again, j leads back to it from the overview.
+    await summary.click()
+    await expect(details).not.toHaveAttribute('open')
+    await page.locator('nav.rail a[href="#overview"]').click()
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    await page.keyboard.press('j')
+    await expect(page).toHaveURL(/#layer-run-path$/)
+    await page.keyboard.press('j')
+    await expect(page).toHaveURL(/#layer-other$/)
+    await expect(details).toHaveAttribute('open')
+    await expect(fileBody).toBeHidden()
+  })
 })
 
 test('hidden takes priority over component display rules', async ({ page, reviewUrl }) => {

@@ -87,6 +87,19 @@ describe('jumpTo', () => {
     stop()
   })
 
+  it('opens the details of the layer it goes to, not those of the overview', () => {
+    document.body.innerHTML =
+      '<section id="overview"><details id="desc"></details></section>' +
+      '<pr-layer><section id="layer-other"><details id="other"></details></section></pr-layer>'
+    const stop = wireCardReveal(document.body)
+    for (const id of ['overview', 'layer-other']) {
+      document.getElementById(id)?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+    }
+    expect(document.querySelector('#desc')?.hasAttribute('open')).toBe(false)
+    expect(document.querySelector('#other')?.hasAttribute('open')).toBe(true)
+    stop()
+  })
+
   it('returns false for unknown targets and malformed links', () => {
     expect(jumpTo('#hunk:src/app.ts#9')).toBe(false)
     expect(jumpTo('#nope')).toBe(false)
