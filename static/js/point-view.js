@@ -13,7 +13,7 @@ import { esc } from './dom.js'
 import { titleHtml } from './markdown.js'
 import { layerAnchorId } from './keys.js'
 import { hunkIdForPoint } from './layers.js'
-import { setPointExpanded } from './points.js'
+import { expandOpenPoint } from './points.js'
 
 const LENS_ID = 'stop-lens'
 const NAV_ID = 'stop-nav'
@@ -140,7 +140,7 @@ export function showStop(root, section, stops, stop, files, artifact) {
   }
   // An open point shows whole in its stop, in a compact list too; one acted on stays folded.
   const card = section.querySelector(`li.finding[data-fingerprint="${fp}"]`)
-  if (card !== null && !card.classList.contains('is-handled')) setPointExpanded(card, true)
+  if (card !== null) expandOpenPoint(card)
 }
 
 /** Takes the lens and the bar off the page. @param {ParentNode} root */

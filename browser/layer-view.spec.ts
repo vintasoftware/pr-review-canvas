@@ -111,6 +111,36 @@ test.describe('compact attention points saved in the settings', () => {
   })
 })
 
+for (const layerView of ['all', 'one'] as const) {
+  test.describe(`a missing test's link in the layers, compact, ${layerView === 'all' ? 'all at once' : 'one at a time'}`, () => {
+    test.use({ canvas: 'published', settings: { compactPoints: true, readByPoints: false, layerView } })
+
+    test('opens its open point whole, and leaves one acted on folded', async ({ page, reviewUrl }) => {
+      await page.goto(reviewUrl + '#layer-run-path')
+      const tests = page.locator('#layer-run-path details.test-map')
+      const link = tests.getByRole('link', { name: 'See its attention point' })
+      await tests.locator('summary').click()
+      const href = (await link.getAttribute('href')) ?? ''
+      const card = page.locator(`li.finding${href}`)
+      await expect(card.locator('.prose')).toBeHidden()
+
+      await link.click()
+      await expect(page).toHaveURL(new RegExp(`${href}$`))
+      await expect(card.locator('.prose')).toBeVisible()
+      await expect(card.locator('.p-toggle')).toHaveAttribute('aria-expanded', 'true')
+      await expect(card).toBeInViewport()
+
+      // Dismissed, the point keeps its one line when the link is followed again.
+      await card.locator('[data-act="point-dismiss"]').click()
+      await expect(card).toHaveAttribute('data-status', 'dismissed')
+      await expect(card.locator('.prose')).toBeHidden()
+      await link.click()
+      await expect(card.locator('.p-summary')).toBeVisible()
+      await expect(card.locator('.prose')).toBeHidden()
+    })
+  })
+}
+
 test.describe('reading by attention points with compact points', () => {
   test.use({ settings: { readByPoints: true, compactPoints: true } })
 

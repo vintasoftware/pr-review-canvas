@@ -206,6 +206,31 @@ describe('initOneLayer', () => {
     expect(shownIds()).toHaveLength(4)
   })
 
+  it('opens an open point a fragment names, on a click and on back or forward to a hidden layer', () => {
+    document.documentElement.dataset['points'] = 'compact'
+    section('layer-storage').insertAdjacentHTML(
+      'beforeend',
+      '<ol class="findings"><li class="finding" id="point-a" data-point="a"></li><li class="finding is-handled" id="point-b" data-point="b"></li></ol>'
+    )
+    section('overview').insertAdjacentHTML('beforeend', '<a href="#point-a">a</a><a href="#point-b">b</a>')
+    oneLayer = initOneLayer(root, { view: 'one' })
+    const [open, acted] = [section('point-a'), section('point-b')]
+    click(root.querySelector('#overview a[href="#point-a"]'))
+    click(root.querySelector('#overview a[href="#point-b"]'))
+    expect(shownIds()).toEqual(['layer-storage'])
+    expect(open.hasAttribute('data-expanded')).toBe(true)
+    expect(acted.hasAttribute('data-expanded')).toBe(false)
+    // Back to it from another layer, folded again by the reader.
+    open.removeAttribute('data-expanded')
+    showOnly(root, section('overview'))
+    open.scrollIntoView = vi.fn()
+    window.location.hash = '#point-a'
+    window.dispatchEvent(new Event('hashchange'))
+    expect(shownIds()).toEqual(['layer-storage'])
+    expect(open.hasAttribute('data-expanded')).toBe(true)
+    delete document.documentElement.dataset['points']
+  })
+
   it('goes to what back or forward names in the all view only for an entry a stop showed, whose scroll was the stop’s', () => {
     oneLayer = initOneLayer(root, { view: 'all' })
     const scrolled = vi.fn()
