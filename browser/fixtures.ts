@@ -20,6 +20,7 @@ import {
   GH_REVIEW_COMMENTS,
   ghFor42,
   gitFor42,
+  publishedSyntheticArtifact,
   syntheticArtifact,
 } from '../src/testing/synthetic.js'
 
@@ -51,12 +52,18 @@ const POSTED_INLINE = ghPost(body => ({
 export const test = base.extend<{
   /** Personal settings the server saves before the page opens, as the settings dialog would. */
   settings: SettingsInput
+  /**
+   * The canvas `reviewUrl` serves: the synthetic one as written, or as publish writes it, where
+   * the missing test's point sits in its layer and the Tests table links to it.
+   */
+  canvas: 'synthetic' | 'published'
   reviewUrl: string
   selfReviewUrl: string
   noChatUrl: string
   chatServer: (options?: ChatServerOptions) => Promise<ChatServer>
 }>({
   settings: [{}, { option: true }],
+  canvas: ['synthetic', { option: true }],
   chatServer: async ({ page, settings }, use) => {
     const stops: Array<() => Promise<void>> = []
     await use(async (options = {}) => {
@@ -101,8 +108,12 @@ export const test = base.extend<{
       await server.stop()
     }
   },
-  reviewUrl: async ({ page, settings }, use) => {
-    const server = await startServer(page, {}, settings)
+  reviewUrl: async ({ page, settings, canvas }, use) => {
+    const server = await startServer(
+      page,
+      canvas === 'published' ? { fixtureArtifact: publishedSyntheticArtifact() } : {},
+      settings
+    )
     try {
       await use(server.url)
     } finally {

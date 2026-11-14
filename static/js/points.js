@@ -613,6 +613,17 @@ export function setPointExpanded(el, expanded = !el.hasAttribute('data-expanded'
 }
 
 /**
+ * Draws an open point of a layer's list whole, for a reader who went to it; a point acted on keeps
+ * its folded line, and anything else is left as it is.
+ * @param {Element} el
+ */
+export function expandOpenPoint(el) {
+  if (el.matches('li.finding[data-point]') && !el.classList.contains('is-handled')) {
+    setPointExpanded(el, true)
+  }
+}
+
+/**
  * The three level icons with counts in the overview header. Each count links to the first layer that
  * has a point of that level, so the overview only counts and the layers hold the cards.
  * @param {ReadonlyArray<Point>} points
