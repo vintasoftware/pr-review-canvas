@@ -243,6 +243,7 @@ should make sense to them the first time they read it, without decoding.
   middle of a sentence.
 - When the text doesn't fit its cap, leave out a detail, not the words a sentence needs. A field
   that says less and reads in one pass beats one that says everything and has to be unpacked.
+- Keep each rationale, file note, and annotation to at most three short sentences.
 - Don't pad either. Skip throat-clearing ("It's worth noting that"), filler words ("seamlessly",
   "robust", "crucially"), a sentence that repeats the one before it, and a closing line that sums
   up what you just said.

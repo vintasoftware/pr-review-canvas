@@ -220,6 +220,10 @@ describe('renderPrompt', () => {
       "When the text doesn't fit its cap, leave out a detail, not the words a sentence needs."
     )
     expect(prompt).not.toContain('One or two short sentences')
+    // Without a sentence limit, complete sentences grew rationales and annotations by about 20%.
+    expect(prompt).toContain(
+      'Keep each rationale, file note, and annotation to at most three short sentences.'
+    )
     expect(prompt.indexOf('## Diagrams')).toBeLessThan(prompt.indexOf('## Links'))
   })
 

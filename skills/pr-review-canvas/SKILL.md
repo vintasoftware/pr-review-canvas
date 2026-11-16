@@ -260,7 +260,7 @@ author: the reason is theirs to give.
 - Every text is within its cap, measured on the text a reader sees (link targets, backticks, and
   asterisks do not count). Write complete sentences a reviewer can read in one pass, as the prompt's Writing
   section describes; when a field runs over its cap, leave out a detail, not the words a sentence
-  needs.
+  needs. Rationales, file notes, and annotations take at most three short sentences each.
 - At most 12 attention points, counting one per `missing` test entry.
 - Every attention point names its `audience`: `author` when the author can answer it alone,
   `reviewer` when it needs someone else's judgment. When in doubt, `reviewer`.
