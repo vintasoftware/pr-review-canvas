@@ -2,13 +2,7 @@
 // hunk index and the config; the report lists one line per problem and never fixes anything.
 import { missingTestAnchor } from './missing-tests.js'
 import type { z } from 'zod'
-import {
-  extractLinks,
-  extractOutsideLinks,
-  type LinkTargets,
-  parseLink,
-  resolveLink,
-} from '../contract/links.js'
+import { extractLinks, type LinkTargets, parseLink, resolveLink } from '../contract/links.js'
 import { diagramKind, mermaidBlocks, withoutMermaid } from '../contract/mermaid-fences.js'
 import {
   type FileEntry,
@@ -186,8 +180,8 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
     check(`points.${i}.title`, 'pointTitle', p.title)
     check(`points.${i}.body`, 'pointBody', p.body)
   })
+  // A topic name is plain text, so the schema caps it in full; only the explanation is Markdown.
   output.background.forEach((t, i) => {
-    check(`background.${i}.topic`, 'backgroundTopic', t.topic)
     check(`background.${i}.explanation`, 'backgroundExplanation', t.explanation)
   })
 }
@@ -533,12 +527,6 @@ function checkLinks(output: ModelOutput, files: readonly FileEntry[], report: Re
   const check = (where: string, label: string, text: string | undefined): void => {
     for (const href of extractLinks(text ?? '')) {
       checkLink(report, targets, where, label, href)
-    }
-    // A link that leaves the canvas sends the reader to the web, so it goes over https.
-    for (const href of extractOutsideLinks(text ?? '')) {
-      if (!href.startsWith('https://')) {
-        report.add('LINK_NOT_HTTPS', where, `${label}: ${href} must be an https link`)
-      }
     }
   }
   check('summary', 'summary', output.summary)

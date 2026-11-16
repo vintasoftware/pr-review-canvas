@@ -92,27 +92,6 @@ export function extractLinks(markdown) {
 }
 
 /**
- * Every link in a markdown text that leaves the canvas, in order: the target of `[text](target)`
- * when it is not a `#` fragment, and a bare URL standing on its own. A target may hold one level
- * of balanced parentheses, as in `[x](https://en.wikipedia.org/wiki/Foo_(bar))`.
- * @param {string} markdown
- * @returns {string[]}
- */
-export function extractOutsideLinks(markdown) {
-  /** @type {string[]} */
-  const out = []
-  const inline = /\]\(\s*<?((?:[^\s()<>]|\([^\s()<>]*\))+)/g
-  const bare = /(?:^|[\s<]|(?<!\])\()((?:[a-z][a-z0-9+.-]*:\/\/|javascript:|data:)[^\s<>)]+)/gi
-  for (const m of markdown.matchAll(inline)) {
-    if (m[1] !== undefined && !m[1].startsWith('#')) out.push(m[1])
-  }
-  for (const m of markdown.matchAll(bare)) {
-    if (m[1] !== undefined && !out.includes(m[1])) out.push(m[1])
-  }
-  return out
-}
-
-/**
  * Checks a parsed link against the artifact. The message explains what is missing so the
  * validator can print it as-is.
  * @param {ParsedLink} link

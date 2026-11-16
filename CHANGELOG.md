@@ -9,7 +9,6 @@
   short explanation and links to the code and to official documentation. It starts closed. The
   generator writes it for every new canvas; `generation.caps` takes `backgroundTopic` and
   `backgroundExplanation`.
-- Publish rejects a link in canvas text that leaves the canvas without `https`, in every field.
 - **Split diffs** draw every diff with the old code on the left and the new on the right, as
   GitHub's split view does. The layout button beside skin and theme, the `s` key, or **Diff layout**
   in the settings dialog switches it, saved as `diffLayout` in `settings.yml`. A diff column under

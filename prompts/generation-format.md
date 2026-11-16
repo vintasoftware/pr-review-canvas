@@ -447,8 +447,8 @@ Where the node id sits, one type at a time:
 ## Links
 
 Four forms, in any markdown field. Link a layer, a file, a hunk, or lines whenever you name one.
-The validator rejects a link that does not resolve, and a link that leaves the canvas unless it
-uses `https`.
+The validator rejects a link that does not resolve. A background topic's explanation may also link
+official documentation, as its section says.
 
 - `#layer:<layerKey>` — `[auth](#layer:auth-session)`
 - `#file:<path>` — `[the store](#file:packages/x/store.ts)`

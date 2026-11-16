@@ -2,11 +2,4 @@
 // the server imports the same code here.
 
 export type { LinkTargets, ParsedLink } from '../../static/js/links.js'
-export {
-  extractLinks,
-  extractOutsideLinks,
-  linkLabel,
-  linkTargetId,
-  parseLink,
-  resolveLink,
-} from '../../static/js/links.js'
+export { extractLinks, linkLabel, linkTargetId, parseLink, resolveLink } from '../../static/js/links.js'

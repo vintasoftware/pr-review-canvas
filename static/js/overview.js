@@ -1,7 +1,7 @@
 // @ts-check
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').IssueComment} IssueComment */
-/** @typedef {NonNullable<import('./contract-types.js').ReviewArtifact['background']>} Background */
+/** @typedef {import('./contract-types.js').BackgroundTopic} BackgroundTopic */
 
 import { viewCommentHtml } from './comment-link.js'
 import { detailsSummaryHtml, esc, avatarHtml, timeAgo } from './dom.js'
@@ -14,7 +14,7 @@ import { buildThreads } from './threads.js'
 /**
  * "Background": the topics the change builds on, for a reader new to the project or its stack.
  * Closed by default, so a reader who knows them reads past one line.
- * @param {Background} background
+ * @param {ReadonlyArray<BackgroundTopic>} background
  * @param {ReadonlySet<string>} paths
  * @returns {string}
  */
@@ -116,6 +116,7 @@ export function renderOverview(bundle, ctx) {
   )
   const active = artifact ? openPoints(artifact.points, bundle.state) : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
+  const background = artifact ? backgroundHtml(artifact.background, ctx.paths) : ''
   const description = bundle.pr.body.trim()
     ? `<details class="pr-desc">${detailsSummaryHtml(`<span>PR description (from ${esc(hostLabel())})</span>`, 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
     : '<div class="pr-desc body muted">No PR description.</div>'
@@ -123,7 +124,7 @@ export function renderOverview(bundle, ctx) {
     '<section class="panel" id="overview" aria-labelledby="ov-h">' +
     `<div class="panel-h"><h2 id="ov-h">Overview</h2>${artifact ? sevsumHtml(active, artifact.layers) : ''}</div>` +
     `<div class="body">${artifact ? selfReviewNoteHtml(artifact.points) + pointStatusesHtml(artifact.points, bundle.state) : ''}${summary}</div>` +
-    (artifact ? backgroundHtml(artifact.background, ctx.paths) : '') +
+    background +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
     (reviews.length

@@ -708,19 +708,27 @@ describe('validateModelOutput', () => {
     expect(errorsOf(output)).toEqual([])
   })
 
-  it('TEXT_TOO_LONG: caps a background topic name and explanation', () => {
+  it.each(['x'.repeat(TEXT_CAPS.backgroundTopic + 1), `**${'x'.repeat(TEXT_CAPS.backgroundTopic - 3)}**`])(
+    'counts the whole plain-text background topic toward its cap: %s',
+    topic => {
+      const output = clean()
+      output.background = [{ topic, kind: 'library', explanation: 'Short.' }]
+      expect(errorsOf(output)).toEqual([
+        expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'background.0.topic' }),
+      ])
+    }
+  )
+
+  it('TEXT_TOO_LONG: caps a background explanation by its visible text', () => {
     const output = clean()
     output.background = [
-      {
-        topic: 'x'.repeat(TEXT_CAPS.backgroundTopic + 1),
-        kind: 'library',
-        explanation: 'x'.repeat(TEXT_CAPS.backgroundExplanation + 1),
-      },
+      { topic: 'Zod', kind: 'library', explanation: 'x'.repeat(TEXT_CAPS.backgroundExplanation + 1) },
     ]
-    expect(errorsOf(output).map(e => [e.code, e.where])).toEqual([
-      ['TEXT_TOO_LONG', 'background.0.topic'],
-      ['TEXT_TOO_LONG', 'background.0.explanation'],
+    expect(errorsOf(output)).toEqual([
+      expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'background.0.explanation' }),
     ])
+    output.background[0]!.explanation = `[docs](https://example.com/${'x'.repeat(TEXT_CAPS.backgroundExplanation)})`
+    expect(errorsOf(output)).toEqual([])
   })
 
   it('TOO_MANY_TOPICS: at most maxBackgroundTopics background topics', () => {
@@ -735,35 +743,6 @@ describe('validateModelOutput', () => {
         code: 'TOO_MANY_TOPICS',
         where: 'background',
         message: `${LIMITS.maxBackgroundTopics + 1} background topics, cap ${LIMITS.maxBackgroundTopics}`,
-      },
-    ])
-  })
-
-  it('LINK_NOT_HTTPS: a background link that leaves the canvas must be https', () => {
-    const output = clean()
-    output.background = [
-      {
-        topic: 'Old docs',
-        kind: 'framework',
-        explanation:
-          'See [docs](http://example.com/a), [x](javascript:alert(1)), and http://example.com/b too.',
-      },
-    ]
-    expect(errorsOf(output).map(e => [e.code, e.message])).toEqual([
-      ['LINK_NOT_HTTPS', 'background topic 1 "Old docs": http://example.com/a must be an https link'],
-      ['LINK_NOT_HTTPS', 'background topic 1 "Old docs": javascript:alert(1) must be an https link'],
-      ['LINK_NOT_HTTPS', 'background topic 1 "Old docs": http://example.com/b must be an https link'],
-    ])
-  })
-
-  it('LINK_NOT_HTTPS: holds every prose field to the same rule', () => {
-    const output = clean()
-    output.summary = `${output.summary} See [old](http://example.com) and [new](https://example.com).`
-    expect(errorsOf(output)).toEqual([
-      {
-        code: 'LINK_NOT_HTTPS',
-        where: 'summary',
-        message: 'summary: http://example.com must be an https link',
       },
     ])
   })

@@ -229,17 +229,21 @@ export type TestEntry = z.infer<typeof TestEntrySchema>
 
 /**
  * One topic of the background: something the change builds on that a reader new to the project
- * or to its stack may not know, with a short explanation to start from. Markdown, so the
- * explanation can link the code (canvas links) and official documentation (https links).
+ * or to its stack may not know, with a short explanation to start from. The topic is plain text,
+ * counted in full like a fold title. The explanation is Markdown, so it can link the code (canvas
+ * links) and official documentation.
  */
-export function backgroundTopicSchema(caps: Caps) {
+export function backgroundTopicSchema(caps: Caps, topicCap: number) {
   return z.object({
-    topic: text(caps, 'backgroundTopic'),
+    topic: z.string().max(topicCap).regex(/\S/, 'A background topic must contain visible text'),
     kind: z.enum(BACKGROUND_KINDS),
     explanation: text(caps, 'backgroundExplanation'),
   })
 }
-export const BackgroundTopicSchema = backgroundTopicSchema(ARTIFACT_HARD_CAPS)
+export const BackgroundTopicSchema = backgroundTopicSchema(
+  ARTIFACT_HARD_CAPS,
+  ARTIFACT_HARD_CAPS.backgroundTopic
+)
 export type BackgroundTopic = z.infer<typeof BackgroundTopicSchema>
 
 export function annotationSchema(caps: Caps) {
@@ -455,7 +459,7 @@ export function modelOutputSchema(textCaps: TextCaps) {
       .min(1),
     points: z.array(z.object(pointBase(caps))),
     /** Defaults to none, so a project's own prompt that predates it still publishes. */
-    background: z.array(backgroundTopicSchema(caps)).default([]),
+    background: z.array(backgroundTopicSchema(caps, textCaps.backgroundTopic)).default([]),
   })
 }
 export const ModelOutputSchema = modelOutputSchema(TEXT_CAPS)

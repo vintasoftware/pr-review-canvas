@@ -498,7 +498,7 @@ Compare the rest of your templates with the new bundled ones when upgrading.
 ### Text limits
 
 Set any of these keys under `generation.caps`. Prose limits count visible characters, so Markdown
-link targets, backticks, and asterisks do not count. Fold titles are plain text and count in full.
+link targets, backticks, and asterisks do not count. Fold titles and background topic names are plain text and count in full.
 `diagram` counts raw Mermaid source characters.
 
 | Key                     | Default |
@@ -517,7 +517,8 @@ link targets, backticks, and asterisks do not count. Fold titles are plain text 
 | `diagram`               | 1500    |
 
 The canvas has a separate limit of 12 attention points, including entries generated from missing
-tests, and of 8 background topics. Increasing text caps does not increase that limit. `decisions` and `checkByHand` remain
+tests, and a separate limit of 8 background topics. Increasing text caps does not increase either
+limit. `decisions` and `checkByHand` remain
 accepted for compatibility; new canvases use attention points. Use the `diagram` field for node
 links, or a Mermaid fence in the rationale, with only one of these per layer.
 
@@ -1504,6 +1505,7 @@ Validation reports name the field, file, hunk, or line to fix. Common groups are
 | `ANNOTATION_OUTSIDE_HUNK`, `POINT_OUTSIDE_DIFF`, `FOLD_INVALID` | Locations and fold ranges fit the assigned diff                                                                                                        |
 | `FOLD_MISSING`                                                  | Using diff rows in chunks: a file over 20 unannotated rows hides something; an open file over 60 folds half; a layer over 100 hides more at aggressive |
 | `TOO_MANY_POINTS`                                               | Count explicit points and missing-test entries together                                                                                                |
+| `TOO_MANY_TOPICS`                                               | At most 8 background topics                                                                                                                            |
 | `POINT_IMPACT`                                                  | Every `decide` point has an impact, and no other point has one                                                                                         |
 | `POINT_LEVEL`                                                   | A `question` point is `decide` or `check`                                                                                                              |
 | `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                                                     |
