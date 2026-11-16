@@ -28,32 +28,29 @@ export function setAuthorSignOffReason(reason) {
 }
 
 /**
- * Why this reader cannot approve or request changes, or null when they are not the author. The
- * server applies the same rule.
- * @returns {string | null}
- */
-export function readerSignOffReason() {
-  return authorReason
-}
-
-/**
- * Why the approve command is disabled, or null when it is not. The author's reason wins, because
- * reviewing every layer does not clear it.
+ * Why this sign-off command is disabled, or null when it is not. It follows the server's order: a
+ * comment-only review is always allowed; the author cannot approve or request changes; and approve
+ * waits until every layer that is not Other is reviewed. Reviewing every layer does not clear the
+ * author's reason.
+ * @param {import('./contract-types.js').ReviewEvent} event
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
  * @returns {string | null}
  */
-export function approveDisabledReason(artifact, state) {
-  return readerSignOffReason() ?? approveBlockedReason(artifact, state)
+export function signoffDisabledReason(event, artifact, state) {
+  if (event === 'COMMENT') {
+    return null
+  }
+  return authorReason ?? (event === 'APPROVE' ? unreviewedReason(artifact, state) : null)
 }
 
 /**
- * Why approve is not allowed yet, or null when it is. Other changes never counts.
+ * Why approve waits for the layers, or null when every layer is reviewed. Other changes never counts.
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
  * @returns {string | null}
  */
-export function approveBlockedReason(artifact, state) {
+function unreviewedReason(artifact, state) {
   const [first, ...rest] = artifact.layers.filter(
     l => l.kind !== 'other' && layerProgress(l, state) !== 'done'
   )

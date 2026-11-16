@@ -13,7 +13,7 @@ import { refreshRail } from './rail.js'
 import { getInlineHide, inlineHideHintHtml, inlineHideSwitchHtml } from './inline-hide.js'
 import { foldLevelControlHtml } from './reading-level.js'
 import { diffLayoutToggleHtml } from './layout-switch.js'
-import { approveDisabledReason, readerSignOffReason } from './signoff.js'
+import { signoffDisabledReason } from './signoff.js'
 import { headerBarHtml } from './header-bar.js'
 
 /**
@@ -193,11 +193,11 @@ export function progressHtml(artifact, state, on = artifact.pr) {
   const approveTitle = `Write and preview an approving review on ${esc(hostLabel())}`
   const approve =
     `<button class="cmd" type="button" id="approve" data-tooltip="${approveTitle}" data-act="signoff" data-event="APPROVE" data-needs-post` +
-    `${signoffAttrs(approveDisabledReason(artifact, state), approveTitle)}>approve on ${esc(currentHost().kind)}</button>`
+    `${signoffAttrs(signoffDisabledReason('APPROVE', artifact, state), approveTitle)}>approve on ${esc(currentHost().kind)}</button>`
   const changesTitle = `Write and preview a review requesting changes on ${esc(hostLabel())}`
   const requestChanges =
     `<button class="cmd" type="button" id="request-changes" data-tooltip="${changesTitle}" data-act="signoff" data-event="REQUEST_CHANGES" data-needs-post` +
-    `${signoffAttrs(readerSignOffReason(), changesTitle)}>request changes</button>`
+    `${signoffAttrs(signoffDisabledReason('REQUEST_CHANGES', artifact, state), changesTitle)}>request changes</button>`
   const commentTitle = `Write and preview a review with no verdict on ${esc(hostLabel())}`
   return (
     `<div class="progress"><div class="pline" role="progressbar" aria-valuenow="${p.done}" aria-valuemin="0" aria-valuemax="${p.total}" aria-label="Layers reviewed"><span style="width:${p.percent}%"></span></div>` +
@@ -207,7 +207,7 @@ export function progressHtml(artifact, state, on = artifact.pr) {
       draftsByCommit(state, on).earlier.length
     )}</div>` +
     `<div class="signoff">${approve}${requestChanges}` +
-    `<button class="cmd" type="button" id="comment-review" data-tooltip="${commentTitle}" title="${commentTitle}" data-act="signoff" data-event="COMMENT" data-needs-post>comment</button>` +
+    `<button class="cmd" type="button" id="comment-review" data-tooltip="${commentTitle}" data-act="signoff" data-event="COMMENT" data-needs-post${signoffAttrs(signoffDisabledReason('COMMENT', artifact, state), commentTitle)}>comment</button>` +
     '<span class="capability-note" role="status"></span></div>'
   )
 }
@@ -245,7 +245,7 @@ export function refreshProgress(root, artifact, state) {
   if (text !== null) {
     text.textContent = `${p.done} of ${p.total} layers reviewed`
   }
-  setDisabledReason(root.querySelector('#approve'), approveDisabledReason(artifact, state))
+  setDisabledReason(root.querySelector('#approve'), signoffDisabledReason('APPROVE', artifact, state))
   refreshRail(root, artifact, state)
   return p
 }
