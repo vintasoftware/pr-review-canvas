@@ -209,8 +209,7 @@ export async function requirePosting(
 
 /**
  * Refuses an approval or a request for changes from the pull request's author, even when the forge
- * allows it. A comment-only review goes through. When the cached login is unknown, it reads the
- * login again once. If it is still unknown, the forge decides.
+ * allows it. A comment-only review goes through. When the login is unknown, the forge decides.
  */
 export async function refuseAuthorSignOff(
   ctx: AppContext,
@@ -220,10 +219,7 @@ export async function refuseAuthorSignOff(
   if (event === 'COMMENT') {
     return
   }
-  let { login } = await ctx.capabilities.get()
-  if (login === null) {
-    login = (await ctx.capabilities.get({ refresh: true })).login
-  }
+  const { login } = await ctx.capabilities.get()
   const reason = authorSignOffReason(login, pr, ctx.config.host.noun)
   if (reason !== null) {
     throw new AppError(

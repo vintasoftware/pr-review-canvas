@@ -1132,8 +1132,8 @@ it also applies on a project that lets authors approve their own merge requests,
 in GitLab itself. This is intentional and has no setting.
 
 The server may not know the login, for example after a transient `gh api user` failure, or with a
-GitHub App installation token that cannot read `/user`. It then reads the login once more. If the
-login is still unknown, the server sends the review and the forge applies its own rule.
+GitHub App installation token that cannot read `/user`. The server then sends the review, and the
+forge applies its own rule.
 
 On GitLab,
 **approve** calls GitLab's approve API; **request changes** and **comment** post the review body

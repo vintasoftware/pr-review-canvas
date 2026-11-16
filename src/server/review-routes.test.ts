@@ -765,27 +765,7 @@ describe('POST /api/prs/:n/review from the pull request author', () => {
     expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({ event: 'COMMENT' })
   })
 
-  it('reads an unknown login once more and refuses when it is the author', async () => {
-    let reads = 0
-    const gh = ghFor42({
-      postRoutes: POST_ROUTES,
-      routes: {
-        // The first read fails, like a transient `gh api user` failure. The refresh returns the login.
-        user: ghHandler(() => {
-          reads += 1
-          if (reads === 1) throw new Error('gh api user failed')
-          return { login: 'octocat' }
-        }),
-      },
-    })
-    t = await contextWithCanvas(gh)
-    const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event: 'REQUEST_CHANGES' }))
-    expect(res.status).toBe(403)
-    expect(reads).toBe(2)
-    expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
-  })
-
-  it('lets the forge decide when the login stays unknown after the refresh', async () => {
+  it('lets the forge decide when the login is unknown, and does not read it again', async () => {
     const gh = ghFor42({
       postRoutes: POST_ROUTES,
       // A GitHub App installation token cannot read /user.
@@ -794,16 +774,8 @@ describe('POST /api/prs/:n/review from the pull request author', () => {
     t = await contextWithCanvas(gh)
     const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event: 'REQUEST_CHANGES' }))
     expect(res.status).toBe(201)
-    expect(gh.calls.filter(c => c.kind === 'api' && c.path === 'user')).toHaveLength(2)
-    expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({ event: 'REQUEST_CHANGES' })
-  })
-
-  it('does not read the login again when it is known', async () => {
-    const gh = reviewerGh()
-    t = await contextWithCanvas(gh)
-    const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event: 'REQUEST_CHANGES' }))
-    expect(res.status).toBe(201)
     expect(gh.calls.filter(c => c.kind === 'api' && c.path === 'user')).toHaveLength(1)
+    expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({ event: 'REQUEST_CHANGES' })
   })
 })
 
