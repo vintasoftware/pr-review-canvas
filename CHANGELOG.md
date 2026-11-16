@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.11.0
+
+Changes since 0.10.0.
 
 ### Reading
 
@@ -8,6 +10,12 @@
   GitHub's split view does. The layout button beside skin and theme, the `s` key, or **Diff layout**
   in the settings dialog switches it, saved as `diffLayout` in `settings.yml`. A diff column under
   900px wide draws unified until it widens. Unified stays the default.
+- A **Hide comments** switch beside **Hide code**, or the `i` key, hides the diff's inline attention
+  points, review comments, pending drafts, and annotations, so you can read the code first. It
+  changes only the view: nothing is dismissed or deleted, and the code under your eyes stays in
+  place. It is saved as `hideInline` in `settings.yml`. In the settings dialog, **what it hides**
+  picks the kinds (`hideInlineKinds`), and **Going to a hidden item** (`hiddenItemClick`) either
+  shows only that item or turns hiding off.
 - **Full-width text** in the settings dialog, saved as `fullWidthText` in `settings.yml`, lets the
   overview summary, a layer's rationale and the PR description fill the width of their panel,
   diagrams included, instead of stopping at 100 characters. It is off by default.
@@ -127,6 +135,21 @@
   that point's body. A canvas whose missing-test note runs past the cap, such as one an incremental
   run copies from an older canvas, fails `validate` with `TEXT_TOO_LONG` until the note is
   shortened.
+
+### Upgrade from 0.10.0
+
+1. Run `pr-review upgrade` in each project. It refreshes the project's copy of the skill, which now
+   asks for complete sentences, at most three in a rationale, file note, or annotation, and for a
+   missing test's note written as the body of its attention point.
+2. Restart the running `pr-review serve`, so the review page and `pr-review generate` run the new
+   version.
+3. A project with its own prompt templates merges in the bundled changes. This release adds no
+   token, so `pr-review upgrade` and `doctor` name none of them:
+   - Its own `generation-format.md` takes the **Writing** section. Without it the generator keeps
+     the old "one or two short sentences" wording.
+   - Its own `chat-seed.md` takes the sentence about `startLine` and the chunk ranges. Without it
+     AI Chat gets the ranges through `{{LAYERS}}` but is not told to keep a proposed comment inside
+     one.
 
 ## 0.10.0
 
