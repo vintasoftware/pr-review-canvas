@@ -118,8 +118,6 @@ export interface PublicHost {
   kind: 'github' | 'gitlab'
   /** `GitHub` or `GitLab`, for the words on the page. */
   label: string
-  /** `pull request` or `merge request`, for the words on the page. */
-  noun: string
   /** `https://github.com` or the GitLab instance, for links to profiles. */
   webBase: string
 }
@@ -149,11 +147,12 @@ export interface PrBundle {
    */
   selfReview: boolean
   /**
-   * True on a pull request opened by the login that runs the server. The page then disables approve
-   * and request changes. Unlike `selfReview`, it stays true on an outdated canvas. False on local
-   * work and when the login is unknown, so the forge decides.
+   * Why the login that runs the server cannot approve or request changes: it opened this pull
+   * request. The page disables both commands with this sentence, and the server refuses them with
+   * it. Unlike `selfReview`, it stays set on an outdated canvas. Null on local work, on a pull
+   * request someone else opened, and when the login is unknown.
    */
-  readerIsAuthor: boolean
+  authorSignOffReason: string | null
   /** Set on a local review: work that has no pull request, so the forge side of the page is off. */
   local?: LocalKey
   comments: CommentsPayload

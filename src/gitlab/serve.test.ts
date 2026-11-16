@@ -193,15 +193,10 @@ describe('a GitLab origin', () => {
     ])
     const page = await app.request('/review/42', { headers: LOCAL })
     expect(await page.text()).toContain(
-      '"host":{"kind":"gitlab","label":"GitLab","noun":"merge request","webBase":"https://gitlab.example.com"}'
+      '"host":{"kind":"gitlab","label":"GitLab","webBase":"https://gitlab.example.com"}'
     )
     const health = (await (await app.request('/api/health', { headers: LOCAL })).json()) as { host: unknown }
-    expect(health.host).toEqual({
-      kind: 'gitlab',
-      label: 'GitLab',
-      noun: 'merge request',
-      webBase: 'https://gitlab.example.com',
-    })
+    expect(health.host).toEqual({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
   })
 
   it('posts an inline discussion, a reply into its thread, and a merge request note', async () => {
@@ -494,15 +489,11 @@ describe('a GitLab origin', () => {
       t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
       const app = createApp(t.ctx)
       const bundle = (await (await app.request('/api/prs/42', { headers: LOCAL })).json()) as PrBundle
-      expect(bundle.readerIsAuthor).toBe(true)
+      const reason = 'You opened this merge request. Sign-off comes from another reviewer.'
+      expect(bundle.authorSignOffReason).toBe(reason)
       const res = await app.request(...post('/api/prs/42/review', { event, body: 'mine', headSha: HEAD_SHA }))
       expect(res.status).toBe(403)
-      expect(await res.json()).toMatchObject({
-        error: {
-          code: 'SIGNOFF_BY_AUTHOR',
-          message: 'You opened this merge request. Sign-off comes from another reviewer.',
-        },
-      })
+      expect(await res.json()).toMatchObject({ error: { code: 'SIGNOFF_BY_AUTHOR', message: reason } })
       expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
     }
   )

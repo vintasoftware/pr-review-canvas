@@ -35,7 +35,7 @@ function bundle(status, over = {}) {
     chat: { enabled: true, acpx: true },
     largePr: false,
     selfReview: false,
-    readerIsAuthor: false,
+    authorSignOffReason: null,
     mentionCanvas: true,
     canvasComment: true,
     warnings: [],

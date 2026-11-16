@@ -18,7 +18,7 @@ import { type PrMeta, toPr } from '../host/pr.js'
 import { lookupCanvas } from '../review/carry-over.js'
 import { marksForCanvas } from '../review/carry-marks.js'
 import { reviewedDiff, stateForCanvas } from '../review/review-body.js'
-import { isAuthor, readerResolves } from '../review/self-review.js'
+import { authorSignOffReason, readerResolves } from '../review/self-review.js'
 import { discoverSharedCanvas, discoveryFingerprint } from '../host/attachments.js'
 import { buildSkillCommand } from '../review/skill-command.js'
 import type { CanvasLookup } from '../store/canvas-store.js'
@@ -385,7 +385,9 @@ async function bundleBase(
     ...(marks.carriedFrom === undefined ? {} : { marksCarriedFrom: marks.carriedFrom }),
     capabilities,
     selfReview: readerResolves(key, capabilities.login, input.pr, input.canvasCurrent),
-    readerIsAuthor: !isLocalKey(key) && isAuthor(capabilities.login, input.pr),
+    authorSignOffReason: isLocalKey(key)
+      ? null
+      : authorSignOffReason(capabilities.login, input.pr, ctx.config.host.noun),
     chat: {
       enabled: chatEnabled && acpx.installed,
       acpx: acpx.installed,

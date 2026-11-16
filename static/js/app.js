@@ -58,7 +58,7 @@ import { canvasChanged, openRegenerateDialog } from './regenerate.js'
 import { createReviewSession } from './review-session.js'
 import { initScrollSpy } from './scroll-spy.js'
 import { setSelfReview } from './self-review.js'
-import { setReaderIsAuthor } from './signoff.js'
+import { setAuthorSignOffReason } from './signoff.js'
 import { openSettingsDialog } from './settings.js'
 import { wireAppearanceCommands } from './appearance-commands.js'
 import { readSkin } from './skin.js'
@@ -335,7 +335,7 @@ export class PrAppElement extends HTMLElement {
     this.interactions = null
     this.stopChat()
     const now = new Date()
-    setReaderIsAuthor(bundle.readerIsAuthor)
+    setAuthorSignOffReason(bundle.authorSignOffReason)
     const header = renderHeader(bundle, {
       host: location.host,
       theme: readTheme(document.documentElement),

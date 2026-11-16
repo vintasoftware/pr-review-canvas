@@ -408,13 +408,13 @@ describe('the bundle', () => {
   })
 
   it.each([
-    ['octocat', true],
-    ['OctoCat', true],
-    ['reviewer', false],
-  ])('says whether %s, who runs the server, opened the pull request: %s', async (login, readerIsAuthor) => {
+    ['octocat', 'You opened this pull request. Sign-off comes from another reviewer.'],
+    ['OctoCat', 'You opened this pull request. Sign-off comes from another reviewer.'],
+    ['reviewer', null],
+  ])('says whether %s, who runs the server, opened the pull request', async (login, reason) => {
     t = await withCanvas(gh({ routes: { user: ghJson({ login }) } }))
     const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
-    expect(((await res.json()) as { readerIsAuthor: boolean }).readerIsAuthor).toBe(readerIsAuthor)
+    expect(await res.json()).toMatchObject({ authorSignOffReason: reason })
   })
 
   it('names the author on a canvas of another commit too, where self-review is off', async () => {
@@ -429,7 +429,11 @@ describe('the bundle', () => {
       diff: SYNTHETIC_DIFF.replace('a() + b()', 'a() * c()'),
     })
     const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
-    expect(await res.json()).toMatchObject({ status: 'stale', selfReview: false, readerIsAuthor: true })
+    expect(await res.json()).toMatchObject({
+      status: 'stale',
+      selfReview: false,
+      authorSignOffReason: 'You opened this pull request. Sign-off comes from another reviewer.',
+    })
   })
 
   it('does not name the author when the login is unknown, so the forge decides', async () => {
@@ -437,7 +441,7 @@ describe('the bundle', () => {
       gh({ routes: { user: ghError(new Error('Resource not accessible by integration')) } })
     )
     const res = await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })
-    expect(await res.json()).toMatchObject({ readerIsAuthor: false, capabilities: { login: null } })
+    expect(await res.json()).toMatchObject({ authorSignOffReason: null, capabilities: { login: null } })
   })
 
   it('does not name the author of local work, which has no sign-off', async () => {
@@ -445,7 +449,7 @@ describe('the bundle', () => {
     const res = await createApp(t.ctx).request('/api/prs/uncommitted', {
       headers: { host: 'localhost:3010' },
     })
-    expect(await res.json()).toMatchObject({ readerIsAuthor: false })
+    expect(await res.json()).toMatchObject({ authorSignOffReason: null })
   })
 
   it('says whether settling shares the canvas comment again', async () => {

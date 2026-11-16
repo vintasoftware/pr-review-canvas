@@ -47,7 +47,7 @@ function bundle(over = {}) {
     chat: { enabled: true, acpx: true, agent: 'claude', model: null },
     largePr: false,
     selfReview: false,
-    readerIsAuthor: false,
+    authorSignOffReason: null,
     mentionCanvas: true,
     canvasComment: true,
     warnings: [],

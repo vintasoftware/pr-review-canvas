@@ -36,7 +36,7 @@ import { renderRail } from './rail.js'
 import { renderOverview } from './overview.js'
 import { createReviewSession } from './review-session.js'
 import { setSelfReview } from './self-review.js'
-import { setReaderIsAuthor } from './signoff.js'
+import { setAuthorSignOffReason } from './signoff.js'
 
 const NOW = new Date('2026-09-10T12:00:00.000Z')
 const artifact = syntheticArtifact()
@@ -87,7 +87,7 @@ function bundleFor(state, canvas = artifact) {
     chat: { enabled: false, acpx: true },
     largePr: false,
     selfReview: false,
-    readerIsAuthor: false,
+    authorSignOffReason: null,
     mentionCanvas: true,
     canvasComment: true,
     warnings: [],
@@ -96,7 +96,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, readerIsAuthor?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined }} [opts]
+ * @param {{ selfReview?: boolean, authorSignOffReason?: string | null, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -105,7 +105,7 @@ function setup(opts = {}) {
   const canvas = opts.artifact ?? artifact
   const bundle = bundleFor(state, canvas)
   setSelfReview(opts.selfReview ?? false, canvas.settled)
-  setReaderIsAuthor(opts.readerIsAuthor ?? false)
+  setAuthorSignOffReason(opts.authorSignOffReason ?? null)
   const ctx = {
     artifact: canvas,
     headSha: artifact.pr.headSha,
@@ -2144,7 +2144,7 @@ describe('capability gating and sign-off', () => {
 
   it('keeps approve and request changes off for the author while posting is on and layers change', async () => {
     const reason = 'You opened this pull request. Sign-off comes from another reviewer.'
-    const { root, calls } = setup({ readerIsAuthor: true })
+    const { root, calls } = setup({ authorSignOffReason: reason })
     const approve = root.querySelector('#approve')
     const changes = root.querySelector('#request-changes')
     const comment = root.querySelector('#comment-review')

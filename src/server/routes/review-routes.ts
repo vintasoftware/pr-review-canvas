@@ -20,10 +20,9 @@ import { lookupCanvas, samePatches } from '../../review/carry-over.js'
 import { marksForCanvas } from '../../review/carry-marks.js'
 import { buildReviewBody, reviewedDiff, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
-import { isAuthor } from '../../review/self-review.js'
+import { authorSignOffReason } from '../../review/self-review.js'
 import { isReviewedId } from '../../store/state-store.js'
 import { draftDiff, marksOn, sameDiff } from '../../../static/js/diff-identity.js'
-import { authorSignOffReason } from '../../../static/js/signoff-rule.js'
 import type { Derived, DiffedCommit } from '../../store/derived-store.js'
 import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
@@ -225,10 +224,11 @@ export async function refuseAuthorSignOff(
   if (login === null) {
     login = (await ctx.capabilities.get({ refresh: true })).login
   }
-  if (isAuthor(login, pr)) {
+  const reason = authorSignOffReason(login, pr, ctx.config.host.noun)
+  if (reason !== null) {
     throw new AppError(
       'SIGNOFF_BY_AUTHOR',
-      authorSignOffReason(ctx.config.host.noun),
+      reason,
       403,
       'ask another reviewer to sign off, or post a comment-only review'
     )

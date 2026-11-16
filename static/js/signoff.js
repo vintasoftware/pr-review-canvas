@@ -7,10 +7,9 @@
 import { previewControlsHtml, setDisabledReason, setMarkdownPreview } from './composer.js'
 import { esc, externalLink } from './dom.js'
 import { titleText } from './markdown.js'
-import { currentHost, hostLabel } from './host.js'
+import { hostLabel } from './host.js'
 import { pendingLabel } from './pending.js'
 import { layerProgress } from './progress.js'
-import { authorSignOffReason } from './signoff-rule.js'
 
 export const SIGNOFF_DIALOG_ID = 'signoff-dialog'
 
@@ -20,12 +19,12 @@ export const LOADING_REASON = 'the review body is still loading'
 /** Why it waits after the body failed to load: there is nothing to post. */
 export const FAILED_REASON = 'the review body could not be loaded'
 
-/** The bundle's `readerIsAuthor`. Set it before the header renders. */
-let readerIsAuthor = false
+/** The bundle's `authorSignOffReason`. Set it before the header renders. */
+let authorReason = /** @type {string | null} */ (null)
 
-/** @param {boolean} on */
-export function setReaderIsAuthor(on) {
-  readerIsAuthor = on
+/** @param {string | null} reason */
+export function setAuthorSignOffReason(reason) {
+  authorReason = reason
 }
 
 /**
@@ -34,7 +33,7 @@ export function setReaderIsAuthor(on) {
  * @returns {string | null}
  */
 export function readerSignOffReason() {
-  return readerIsAuthor ? authorSignOffReason(currentHost().noun) : null
+  return authorReason
 }
 
 /**

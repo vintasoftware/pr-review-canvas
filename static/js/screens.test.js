@@ -20,7 +20,7 @@ import {
   statePill,
 } from './header.js'
 import { conversationHtml, renderOverview, summaryHtml } from './overview.js'
-import { setReaderIsAuthor } from './signoff.js'
+import { setAuthorSignOffReason } from './signoff.js'
 import { foldLevelControlHtml, foldLevelHint, refreshFoldLevel } from './reading-level.js'
 
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
@@ -70,7 +70,7 @@ function bundle(over = {}) {
     chat: { enabled: true, acpx: true },
     largePr: false,
     selfReview: false,
-    readerIsAuthor: false,
+    authorSignOffReason: null,
     mentionCanvas: true,
     canvasComment: true,
     warnings: [],
@@ -398,11 +398,8 @@ describe('header', () => {
 
   describe('when the reader opened the pull request', () => {
     const REASON = 'You opened this pull request. Sign-off comes from another reviewer.'
-    beforeEach(() => setReaderIsAuthor(true))
-    afterEach(() => {
-      setReaderIsAuthor(false)
-      setHost(undefined)
-    })
+    beforeEach(() => setAuthorSignOffReason(REASON))
+    afterEach(() => setAuthorSignOffReason(null))
 
     /** @param {import('./contract-types.js').PrState} state */
     function drawProgress(state) {
@@ -439,19 +436,6 @@ describe('header', () => {
       refreshProgress(root, artifact, base)
       expect(root.querySelector('#approve')?.getAttribute('title')).toBe(REASON)
       expect(root.querySelector('#request-changes')?.getAttribute('title')).toBe(REASON)
-    })
-
-    it('says merge request on GitLab', () => {
-      setHost({
-        kind: 'gitlab',
-        label: 'GitLab',
-        noun: 'merge request',
-        webBase: 'https://gitlab.example.com',
-      })
-      const root = drawProgress(emptyState('x'))
-      expect(root.querySelector('#request-changes')?.getAttribute('title')).toBe(
-        'You opened this merge request. Sign-off comes from another reviewer.'
-      )
     })
   })
 
@@ -612,7 +596,7 @@ describe('overview', () => {
     expect(panel?.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(
       'PR description (from GitHub)'
     )
-    setHost({ kind: 'gitlab', label: 'GitLab', noun: 'merge request', webBase: 'https://gitlab.example.com' })
+    setHost({ kind: 'gitlab', label: 'GitLab', webBase: 'https://gitlab.example.com' })
     try {
       document.body.innerHTML = renderOverview(bundle(), { paths, now: NOW })
       expect(document.querySelector('details.pr-desc summary .chev + span')?.textContent).toBe(
