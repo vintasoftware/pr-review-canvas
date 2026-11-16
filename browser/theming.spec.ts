@@ -240,6 +240,37 @@ for (const skin of ['terminal', 'github', 'olive'] as const) {
   })
 }
 
+for (const skin of ['terminal', 'github', 'olive'] as const) {
+  test(`in the ${skin} skin, a long layer title wraps inside its heading on a phone`, async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`${reviewUrl}?skin=${skin}`)
+    const heading = page.locator('#layer-run-path .layer-h h2')
+    // A 60-character title, as the generator may write one: one name in code, longer than the phone.
+    await heading.evaluate(el => {
+      const code = document.createElement('code')
+      code.textContent = 'readAttentionPointsForUncommittedChangesWithResolutions'
+      el.replaceChildren(el.querySelector('.lbl') ?? '', 'Read ', code)
+    })
+    // The diff's code keeps its own spacing.
+    await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()
+    await expect(page.locator('tr.add:not(.folded) > td.code').first()).toBeVisible()
+    const sizes = await heading.evaluate(el => {
+      const root = document.documentElement
+      const row = document.querySelector('tr.add:not(.folded) > td.code')
+      return {
+        page: root.scrollWidth - root.clientWidth,
+        heading: el.scrollWidth - el.clientWidth,
+        right: el.getBoundingClientRect().right <= root.clientWidth,
+        code: row === null ? null : getComputedStyle(row).whiteSpace,
+      }
+    })
+    expect(sizes).toEqual({ page: 0, heading: 0, right: true, code: 'pre' })
+  })
+}
+
 test('matches the GitHub dark screenshot palette', async ({ page, reviewUrl }, testInfo) => {
   await page.goto(`${reviewUrl}?skin=github&theme=dark`)
   await page.locator('article.file[data-path="src/app.ts"]').first().scrollIntoViewIfNeeded()

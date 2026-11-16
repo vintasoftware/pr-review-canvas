@@ -19,6 +19,7 @@ import {
   readPageDensity,
   readPointsDensity,
   applyPointsDensity,
+  expandOpenPoint,
   setMentionCanvas,
   setPointExpanded,
   setPointsDensity,
@@ -331,6 +332,24 @@ describe('where a point stands', () => {
     if (row === null) throw new Error('no row')
     setPointExpanded(row, true)
     expect(row.hasAttribute('data-expanded')).toBe(false)
+  })
+
+  it('expands an open point of a compact list that a reader goes to, and only that', () => {
+    document.documentElement.dataset['points'] = 'compact'
+    document.body.innerHTML =
+      `<ol class="findings">${pointCardHtml({ ...first, id: 'p-x', fingerprint: 'fp-x' }, ctx)}${pointCardHtml(first, { ...ctx, state: dismissed })}</ol>` +
+      `<table><tbody>${pointRowHtml(first, ctx)}</tbody></table>`
+    const [open, acted] = document.querySelectorAll('li.finding')
+    const row = document.querySelector('tr.ifind')
+    if (open === undefined || acted === undefined || row === null) throw new Error('no point')
+    expandOpenPoint(open)
+    expandOpenPoint(acted)
+    expandOpenPoint(row)
+    expandOpenPoint(document.body)
+    expect(open.hasAttribute('data-expanded')).toBe(true)
+    expect(acted.hasAttribute('data-expanded')).toBe(false)
+    expect(row.hasAttribute('data-expanded')).toBe(false)
+    delete document.documentElement.dataset['points']
   })
 
   it('draws points whole without a density, and remembers the density the reader chose', () => {

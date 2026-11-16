@@ -423,6 +423,11 @@ export function wireCardReveal(root) {
     if (target instanceof HTMLElement && target.matches('section.layer, article.file')) {
       setCardCollapsed(target, false)
     }
+    // The Other layer's body is the details right under its section, which opens the same way.
+    if (target instanceof HTMLElement && target.matches('pr-layer > section')) {
+      const details = target.querySelector(':scope > details')
+      if (details instanceof HTMLDetailsElement) details.open = true
+    }
     for (
       let node = target instanceof Element ? target.parentElement : null;
       node !== null;

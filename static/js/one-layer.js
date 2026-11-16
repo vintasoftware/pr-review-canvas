@@ -14,6 +14,7 @@ import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
 import { getRenderContext, setCardCollapsed } from './layers.js'
 import { clearStop, showStop, stopShowing, stopTarget } from './point-view.js'
+import { expandOpenPoint } from './points.js'
 import { stopsOf } from './point-steps.js'
 import { markRailCurrent } from './scroll-spy.js'
 
@@ -235,11 +236,15 @@ export function initOneLayer(root, opts) {
   /**
    * A plain fragment, such as a rail link or the `#layer-…` that `j` and `k` leave in the URL, is
    * one the browser scrolls to on its own, so nothing raises `reveal-code` on its target: it is
-   * raised here, which shows the target's section and opens the layer or file it names.
+   * raised here, which shows the target's section and opens the layer or file it names. An open
+   * point it names shows whole, in a compact list too.
    * @param {string} fragment
    */
   const revealFragment = fragment => {
-    targetFor(fragment)?.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+    const el = targetFor(fragment)
+    if (el === null) return
+    el.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+    expandOpenPoint(el)
   }
 
   const redraw = () => {
@@ -351,6 +356,7 @@ export function initOneLayer(root, opts) {
       const el = targetFor(fragment)
       if (el === null) return
       if (wasPoints || sectionOf(root, el)?.hidden === true) {
+        expandOpenPoint(el)
         scrollIntoViewSafe(el, 'start')
         return
       }
