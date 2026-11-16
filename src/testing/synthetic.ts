@@ -336,6 +336,7 @@ export function syntheticArtifact(): ReviewArtifact {
         audience: 'author',
       },
     ],
+    background: [],
     generatedAt: '2026-09-10T11:00:00.000Z',
     generator: { agent: 'claude', model: 'claude-opus-4-1', harness: 'claude-code', attempts: 1 },
     source: 'local',

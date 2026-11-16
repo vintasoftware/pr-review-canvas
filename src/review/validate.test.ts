@@ -693,6 +693,95 @@ describe('validateModelOutput', () => {
     ])
   })
 
+  it('accepts background topics with canvas links and https links', () => {
+    const output = clean()
+    output.background = [
+      {
+        topic: 'Retry policies',
+        kind: 'concept',
+        explanation:
+          'A retry policy says when to try again. See [the run path](#layer:run-path) and [the docs](https://example.com/retry).',
+      },
+    ]
+    expect(errorsOf(output)).toEqual([])
+    output.background = []
+    expect(errorsOf(output)).toEqual([])
+  })
+
+  it('TEXT_TOO_LONG: caps a background topic name and explanation', () => {
+    const output = clean()
+    output.background = [
+      {
+        topic: 'x'.repeat(TEXT_CAPS.backgroundTopic + 1),
+        kind: 'library',
+        explanation: 'x'.repeat(TEXT_CAPS.backgroundExplanation + 1),
+      },
+    ]
+    expect(errorsOf(output).map(e => [e.code, e.where])).toEqual([
+      ['TEXT_TOO_LONG', 'background.0.topic'],
+      ['TEXT_TOO_LONG', 'background.0.explanation'],
+    ])
+  })
+
+  it('TOO_MANY_TOPICS: at most maxBackgroundTopics background topics', () => {
+    const output = clean()
+    output.background = Array.from({ length: LIMITS.maxBackgroundTopics + 1 }, (_, i) => ({
+      topic: `Topic ${i}`,
+      kind: 'tool' as const,
+      explanation: 'Short.',
+    }))
+    expect(errorsOf(output)).toEqual([
+      {
+        code: 'TOO_MANY_TOPICS',
+        where: 'background',
+        message: `${LIMITS.maxBackgroundTopics + 1} background topics, cap ${LIMITS.maxBackgroundTopics}`,
+      },
+    ])
+  })
+
+  it('LINK_NOT_HTTPS: a background link that leaves the canvas must be https', () => {
+    const output = clean()
+    output.background = [
+      {
+        topic: 'Old docs',
+        kind: 'framework',
+        explanation:
+          'See [docs](http://example.com/a), [x](javascript:alert(1)), and http://example.com/b too.',
+      },
+    ]
+    expect(errorsOf(output).map(e => [e.code, e.message])).toEqual([
+      ['LINK_NOT_HTTPS', 'background topic 1 "Old docs": http://example.com/a must be an https link'],
+      ['LINK_NOT_HTTPS', 'background topic 1 "Old docs": javascript:alert(1) must be an https link'],
+      ['LINK_NOT_HTTPS', 'background topic 1 "Old docs": http://example.com/b must be an https link'],
+    ])
+  })
+
+  it('LINK_NOT_HTTPS: holds every prose field to the same rule', () => {
+    const output = clean()
+    output.summary = `${output.summary} See [old](http://example.com) and [new](https://example.com).`
+    expect(errorsOf(output)).toEqual([
+      {
+        code: 'LINK_NOT_HTTPS',
+        where: 'summary',
+        message: 'summary: http://example.com must be an https link',
+      },
+    ])
+  })
+
+  it('LINK_UNRESOLVED: a background canvas link must resolve', () => {
+    const output = clean()
+    output.background = [{ topic: 'Gone', kind: 'project', explanation: 'See [it](#layer:nope).' }]
+    expect(errorsOf(output)).toEqual([
+      expect.objectContaining({ code: 'LINK_UNRESOLVED', where: 'background:1' }),
+    ])
+  })
+
+  it('rejects a background topic with an unknown kind', () => {
+    const output = clean()
+    output.background = [{ topic: 'T', kind: 'vibe' as 'tool', explanation: 'E.' }]
+    expect(errorsOf(output)).toEqual([expect.objectContaining({ code: 'SCHEMA' })])
+  })
+
   it('TEST_PATH_UNKNOWN: covered without a path, and with a path outside the PR head', () => {
     const output = clean()
     layer(output, 0).tests = [

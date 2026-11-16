@@ -19,7 +19,7 @@ import {
   riskLineHtml,
   statePill,
 } from './header.js'
-import { conversationHtml, renderOverview, summaryHtml } from './overview.js'
+import { backgroundHtml, conversationHtml, renderOverview, summaryHtml } from './overview.js'
 import { foldLevelControlHtml, foldLevelHint, refreshFoldLevel } from './reading-level.js'
 
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
@@ -494,6 +494,46 @@ describe('overview', () => {
     )
     document.body.innerHTML = summaryHtml('## Heading\n\nbody', paths)
     expect(document.querySelector('.summary h4')?.textContent).toBe('Heading')
+  })
+
+  it('renders the background closed, with escaped topics, kinds, and safe links', () => {
+    expect(backgroundHtml([], paths)).toBe('')
+    document.body.innerHTML = backgroundHtml(
+      [
+        {
+          topic: '<Hooks>',
+          kind: 'framework',
+          explanation: 'Used in [the app](#file:src/app.ts). See [docs](https://example.com/hooks).',
+        },
+        { topic: 'Retry', kind: 'concept', explanation: 'Try again.' },
+      ],
+      paths
+    )
+    const details = document.querySelector('details.background')
+    expect(details?.hasAttribute('open')).toBe(false)
+    expect(details?.querySelector('summary .chev + span')?.textContent).toBe('Background · 2 topics')
+    const items = [...document.querySelectorAll('.background-topics > li')]
+    expect(items.map(li => li.querySelector('strong')?.textContent)).toEqual(['<Hooks>', 'Retry'])
+    expect(items.map(li => li.querySelector('.pill')?.textContent)).toEqual(['framework', 'concept'])
+    expect(items[0]?.querySelector('a[href="#file:src/app.ts"]')).not.toBeNull()
+    const external = items[0]?.querySelector('a[href="https://example.com/hooks"]')
+    expect(external?.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(external?.getAttribute('target')).toBe('_blank')
+    document.body.innerHTML = backgroundHtml([{ topic: 'One', kind: 'tool', explanation: 'x' }], paths)
+    expect(document.querySelector('details.background summary .chev + span')?.textContent).toBe(
+      'Background · 1 topic'
+    )
+  })
+
+  it('places the background after the summary in the overview, only when the canvas has one', () => {
+    document.body.innerHTML = renderOverview(bundle(), { paths, now: NOW })
+    expect(document.querySelector('#overview details.background')).toBeNull()
+    const withTopics = bundle()
+    if (!withTopics.artifact) throw new Error('no artifact')
+    withTopics.artifact.background = [{ topic: 'Retry', kind: 'concept', explanation: 'Try again.' }]
+    document.body.innerHTML = renderOverview(withTopics, { paths, now: NOW })
+    const order = [...document.querySelectorAll('#overview > *')].map(el => el.className)
+    expect(order.indexOf('background')).toBe(order.indexOf('pr-desc') - 1)
   })
 
   it('renders the conversation with bots collapsed and a comment command', () => {

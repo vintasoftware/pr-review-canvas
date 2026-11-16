@@ -81,9 +81,9 @@
 .prose {
   max-width: 100ch;
 }
-/* With the fullWidthText setting the summary, a layer's rationale and the PR description fill
+/* With the fullWidthText setting the summary, the background, a layer's rationale and the PR description fill
    their panel, diagrams included. Prose in cards and comments keeps a readable line length. */
-:root[data-full-width-text] :is(.summary, .rationale, .pr-desc .prose) {
+:root[data-full-width-text] :is(.summary, .rationale, .pr-desc .prose, .background .prose) {
   max-width: none;
 }
 .summary {
@@ -482,9 +482,29 @@ body:not(:has(.point-statuses [data-act='toggle-resolved'][aria-pressed='true'])
 .pr-desc {
   border-top: 1px solid var(--ink);
 }
+.background,
 .pr-conversation,
 .review-history {
   border-top: 1px solid var(--line);
+}
+.background-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.background-topics > li {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.background-topics > li:first-child {
+  border-top: 0;
+}
+.background-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 4px;
 }
 .review-entry > .pill {
   margin-bottom: 10px;

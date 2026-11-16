@@ -13,40 +13,27 @@ export const TEXT_CAPS = {
   pointTitle: 90,
   pointBody: 600,
   testBehavior: 120,
+  backgroundTopic: 60,
+  backgroundExplanation: 400,
   /** Mermaid source. Measured raw, since it is code and not text a reader reads. */
   diagram: 1500,
 } as const
 export type TextCaps = { -readonly [K in keyof typeof TEXT_CAPS]: number }
 
-export const LIMITS = { maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 12 } as const
+export const LIMITS = {
+  maxPoints: 12,
+  maxDiagramsPerLayer: 1,
+  maxDiagramLinks: 12,
+  maxBackgroundTopics: 8,
+} as const
 export type Limits = { -readonly [K in keyof typeof LIMITS]: number }
 
-export const TEXT_CAP_KEYS = [
-  'summary',
-  'layerTitle',
-  'rationale',
-  'decisions',
-  'checkByHand',
-  'annotation',
-  'pointTitle',
-  'pointBody',
-  'testBehavior',
-  'diagram',
-] as const satisfies ReadonlyArray<keyof TextCaps>
+/** The text caps by name, in `TEXT_CAPS` order. A new cap is one entry there and nowhere else. */
+export const TEXT_CAP_KEYS = Object.keys(TEXT_CAPS) as ReadonlyArray<keyof TextCaps>
 
-function mapCaps(fn: (key: keyof TextCaps) => number): TextCaps {
-  return {
-    summary: fn('summary'),
-    layerTitle: fn('layerTitle'),
-    rationale: fn('rationale'),
-    decisions: fn('decisions'),
-    checkByHand: fn('checkByHand'),
-    annotation: fn('annotation'),
-    pointTitle: fn('pointTitle'),
-    pointBody: fn('pointBody'),
-    testBehavior: fn('testBehavior'),
-    diagram: fn('diagram'),
-  }
+/** One value per text cap, keyed like `TEXT_CAPS`: numbers here, zod fields in the config schemas. */
+export function mapCaps<T>(fn: (key: keyof TextCaps) => T): { [K in keyof TextCaps]: T } {
+  return Object.fromEntries(TEXT_CAP_KEYS.map(key => [key, fn(key)])) as { [K in keyof TextCaps]: T }
 }
 
 /** The project config may raise or lower a cap; the result is what the validator and the prompt use. */
@@ -71,6 +58,7 @@ export function hardCaps(caps: TextCaps): TextCaps {
  */
 export const ARTIFACT_HARD_CAPS: TextCaps = hardCaps(TEXT_CAPS)
 export const ARTIFACT_MAX_POINTS = LIMITS.maxPoints * HARD_CAP_FACTOR
+export const ARTIFACT_MAX_BACKGROUND_TOPICS = LIMITS.maxBackgroundTopics * HARD_CAP_FACTOR
 
 export const FILE_STATUSES = ['added', 'modified', 'deleted', 'renamed', 'binary'] as const
 export const POINT_KINDS = ['decision', 'risk', 'drift', 'tests', 'debt', 'question'] as const
@@ -87,6 +75,8 @@ export const POINT_IMPACTS = ['critical', 'high', 'low'] as const
 export const POINT_AUDIENCES = ['author', 'reviewer'] as const
 export const TEST_STATUSES = ['covered', 'missing', 'not-needed'] as const
 export const HARNESSES = ['claude-code', 'codex', 'other'] as const
+/** What a background topic is about: this project, or the stack the change is written in. */
+export const BACKGROUND_KINDS = ['project', 'language', 'framework', 'library', 'tool', 'concept'] as const
 
 export const SideSchema = z.enum(['new', 'old'])
 export type Side = z.infer<typeof SideSchema>
@@ -236,6 +226,21 @@ export function testEntrySchema(caps: Caps) {
 }
 export const TestEntrySchema = testEntrySchema(ARTIFACT_HARD_CAPS)
 export type TestEntry = z.infer<typeof TestEntrySchema>
+
+/**
+ * One topic of the background: something the change builds on that a reader new to the project
+ * or to its stack may not know, with a short explanation to start from. Markdown, so the
+ * explanation can link the code (canvas links) and official documentation (https links).
+ */
+export function backgroundTopicSchema(caps: Caps) {
+  return z.object({
+    topic: text(caps, 'backgroundTopic'),
+    kind: z.enum(BACKGROUND_KINDS),
+    explanation: text(caps, 'backgroundExplanation'),
+  })
+}
+export const BackgroundTopicSchema = backgroundTopicSchema(ARTIFACT_HARD_CAPS)
+export type BackgroundTopic = z.infer<typeof BackgroundTopicSchema>
 
 export function annotationSchema(caps: Caps) {
   return z.object({
@@ -398,6 +403,8 @@ export const ReviewArtifactSchema = z.object({
   risk: z.array(RiskTagSchema),
   layers: z.array(LayerSchema).min(1),
   points: z.array(PointSchema).max(ARTIFACT_MAX_POINTS),
+  /** Topics a newcomer may need to read the change. None on a canvas written before it existed. */
+  background: z.array(BackgroundTopicSchema).max(ARTIFACT_MAX_BACKGROUND_TOPICS).default([]),
   generatedAt: z.string(),
   generator: GeneratorSchema,
   source: z.enum(['local', 'import']),
@@ -447,6 +454,8 @@ export function modelOutputSchema(textCaps: TextCaps) {
       )
       .min(1),
     points: z.array(z.object(pointBase(caps))),
+    /** Defaults to none, so a project's own prompt that predates it still publishes. */
+    background: z.array(backgroundTopicSchema(caps)).default([]),
   })
 }
 export const ModelOutputSchema = modelOutputSchema(TEXT_CAPS)

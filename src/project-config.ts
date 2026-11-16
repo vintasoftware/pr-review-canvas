@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
-import type { TextCaps } from './contract/review-artifact.js'
+import { mapCaps } from './contract/review-artifact.js'
 import { DEFAULT_TEST_PATTERNS } from './review/test-paths.js'
 import { readText } from './store/atomic-json.js'
 
@@ -31,21 +31,8 @@ export const SharingSchema = z.object({
 })
 export type Sharing = z.infer<typeof SharingSchema>
 
-const cap = () => z.number().int().positive().optional()
-
-/** One optional override per text cap. `satisfies` fails the build when TEXT_CAPS gains a key. */
-const capsShape = {
-  summary: cap(),
-  layerTitle: cap(),
-  rationale: cap(),
-  decisions: cap(),
-  checkByHand: cap(),
-  annotation: cap(),
-  pointTitle: cap(),
-  pointBody: cap(),
-  testBehavior: cap(),
-  diagram: cap(),
-} satisfies Record<keyof TextCaps, z.ZodOptional<z.ZodNumber>>
+/** One optional override per text cap. */
+const capsShape = mapCaps(() => z.number().int().positive().optional())
 
 export const PromptOverridesSchema = z
   .object({

@@ -32,7 +32,7 @@ function context(over: Partial<GenerationContext> = {}): GenerationContext {
     rulebook: { path: 'RULES.md', text: '---\nname: r\n---\n# Rules\n\n## One\n\ntext\n#### Deep\n' },
     highRisk: [{ pattern: '**/*auth*', label: 'auth' }],
     caps: TEXT_CAPS,
-    limits: { maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 12 },
+    limits: { maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 12, maxBackgroundTopics: 8 },
     generation: { mode: 'strict', maxRepairRounds: 3, inlineDiffMaxLines: 1500, smallPrHunks: 10 },
     tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
     smallPr: true,
@@ -197,7 +197,9 @@ describe('renderPrompt', () => {
     // The cap is the one the context carries, not a number written into the template.
     expect(
       renderPrompt(
-        context({ limits: { maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 4 } }),
+        context({
+          limits: { maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 4, maxBackgroundTopics: 8 },
+        }),
         PATCHES,
         sources
       )

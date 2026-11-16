@@ -1,6 +1,7 @@
 // @ts-check
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').IssueComment} IssueComment */
+/** @typedef {NonNullable<import('./contract-types.js').ReviewArtifact['background']>} Background */
 
 import { viewCommentHtml } from './comment-link.js'
 import { detailsSummaryHtml, esc, avatarHtml, timeAgo } from './dom.js'
@@ -9,6 +10,32 @@ import { renderMarkdown } from './markdown.js'
 import { openPoints, pointStatusesHtml, sevsumHtml } from './points.js'
 import { selfReviewNoteHtml } from './self-review.js'
 import { buildThreads } from './threads.js'
+
+/**
+ * "Background": the topics the change builds on, for a reader new to the project or its stack.
+ * Closed by default, so a reader who knows them reads past one line.
+ * @param {Background} background
+ * @param {ReadonlySet<string>} paths
+ * @returns {string}
+ */
+export function backgroundHtml(background, paths) {
+  if (background.length === 0) {
+    return ''
+  }
+  const count = `${background.length} ${background.length === 1 ? 'topic' : 'topics'}`
+  const items = background
+    .map(
+      t =>
+        `<li><div class="background-h"><strong>${esc(t.topic)}</strong><span class="pill">${esc(t.kind)}</span></div>` +
+        `<div class="prose">${renderMarkdown(t.explanation, { paths })}</div></li>`
+    )
+    .join('')
+  return (
+    `<details class="background">${detailsSummaryHtml(`<span>Background · ${count}</span>`, 'Toggle background')}` +
+    `<div class="body"><p class="muted">Topics this change builds on, to start reading about if they are new to you.</p>` +
+    `<ul class="background-topics">${items}</ul></div></details>`
+  )
+}
 
 /**
  * @param {PrBundle['comments']['reviewComments']} comments
@@ -96,6 +123,7 @@ export function renderOverview(bundle, ctx) {
     '<section class="panel" id="overview" aria-labelledby="ov-h">' +
     `<div class="panel-h"><h2 id="ov-h">Overview</h2>${artifact ? sevsumHtml(active, artifact.layers) : ''}</div>` +
     `<div class="body">${artifact ? selfReviewNoteHtml(artifact.points) + pointStatusesHtml(artifact.points, bundle.state) : ''}${summary}</div>` +
+    (artifact ? backgroundHtml(artifact.background, ctx.paths) : '') +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
     (reviews.length

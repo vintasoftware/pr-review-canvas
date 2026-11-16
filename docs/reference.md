@@ -501,21 +501,23 @@ Set any of these keys under `generation.caps`. Prose limits count visible charac
 link targets, backticks, and asterisks do not count. Fold titles are plain text and count in full.
 `diagram` counts raw Mermaid source characters.
 
-| Key            | Default |
-| -------------- | ------- |
-| `summary`      | 1200    |
-| `layerTitle`   | 60      |
-| `rationale`    | 300     |
-| `decisions`    | 600     |
-| `checkByHand`  | 400     |
-| `annotation`   | 240     |
-| `pointTitle`   | 90      |
-| `pointBody`    | 600     |
-| `testBehavior` | 120     |
-| `diagram`      | 1500    |
+| Key                     | Default |
+| ----------------------- | ------- |
+| `summary`               | 1200    |
+| `layerTitle`            | 60      |
+| `rationale`             | 300     |
+| `decisions`             | 600     |
+| `checkByHand`           | 400     |
+| `annotation`            | 240     |
+| `pointTitle`            | 90      |
+| `pointBody`             | 600     |
+| `testBehavior`          | 120     |
+| `backgroundTopic`       | 60      |
+| `backgroundExplanation` | 400     |
+| `diagram`               | 1500    |
 
 The canvas has a separate limit of 12 attention points, including entries generated from missing
-tests. Increasing text caps does not increase that limit. `decisions` and `checkByHand` remain
+tests, and of 8 background topics. Increasing text caps does not increase that limit. `decisions` and `checkByHand` remain
 accepted for compatibility; new canvases use attention points. Use the `diagram` field for node
 links, or a Mermaid fence in the rationale, with only one of these per layer.
 
@@ -648,6 +650,15 @@ Append a fragment to `<project>/review/<pr-number>`:
 Use the layer key and file path from the canvas. Links open the target file when needed; if a
 line is unavailable, navigation uses the nearest visible row. Recipients need their own running
 server and the corresponding canvas to use a localhost link.
+
+### Background
+
+The overview's **Background** block, under the summary, lists the topics the change builds on for
+a reader new to the project or its stack: project concepts, languages, frameworks, libraries, and
+tools. Each topic has a short explanation of what it is and how the change uses it, with links to
+the code and, when the generator is sure of one, to official documentation. The block starts
+closed. A canvas generated before this feature, or for a change that builds on nothing unusual,
+has no Background block. External links open in a new tab.
 
 ### Collapsed diffs
 

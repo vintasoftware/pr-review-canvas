@@ -1,5 +1,12 @@
 // @vitest-environment node
-import { extractLinks, linkLabel, linkTargetId, parseLink, resolveLink } from './links.js'
+import {
+  extractLinks,
+  extractOutsideLinks,
+  linkLabel,
+  linkTargetId,
+  parseLink,
+  resolveLink,
+} from './links.js'
 
 const keyFor = (p: string): string => p.replace(/[^a-zA-Z0-9]/g, '_')
 
@@ -163,5 +170,27 @@ describe('linkTargetId and linkLabel', () => {
     expect(linkLabel({ kind: 'line', path: 'a/b.ts', start: 5, end: 9, side: 'old' })).toBe(
       'a/b.ts:5-9 (old)'
     )
+  })
+})
+
+describe('extractOutsideLinks', () => {
+  it('finds inline and bare links that leave the canvas, and skips canvas links', () => {
+    expect(
+      extractOutsideLinks(
+        'See [docs](https://example.com/a), [x](javascript:alert(1)), [here](#file:src/a.ts), ' +
+          '[wiki](https://en.wikipedia.org/wiki/Foo_(bar)) and http://example.com/b (or ftp://h/c).'
+      )
+    ).toEqual([
+      'https://example.com/a',
+      'javascript:alert(1)',
+      'https://en.wikipedia.org/wiki/Foo_(bar)',
+      'http://example.com/b',
+      'ftp://h/c',
+    ])
+  })
+
+  it('reads an angle-bracket target and lists a repeated bare link once', () => {
+    expect(extractOutsideLinks('[a](<https://x.org/p>) and https://x.org/p')).toEqual(['https://x.org/p'])
+    expect(extractOutsideLinks('plain text, no links')).toEqual([])
   })
 })

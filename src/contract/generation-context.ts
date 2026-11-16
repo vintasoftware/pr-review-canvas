@@ -8,8 +8,9 @@ import {
   POINT_KINDS,
   PrSchema,
   RepoSchema,
+  mapCaps,
   SideSchema,
-  type TextCaps,
+  TEXT_CAPS,
 } from './review-artifact.js'
 
 /**
@@ -41,18 +42,8 @@ export type PrepareTargetInput =
   | Extract<PrepareTarget, { kind: 'pr' } | { kind: 'refs' }>
   | { kind: 'local'; base?: string | undefined; source: LocalKey }
 
-const capsShape = {
-  summary: z.number().int().positive(),
-  layerTitle: z.number().int().positive(),
-  rationale: z.number().int().positive(),
-  decisions: z.number().int().positive(),
-  checkByHand: z.number().int().positive(),
-  annotation: z.number().int().positive(),
-  pointTitle: z.number().int().positive(),
-  pointBody: z.number().int().positive(),
-  testBehavior: z.number().int().positive(),
-  diagram: z.number().int().positive(),
-} satisfies Record<keyof TextCaps, z.ZodNumber>
+// A context prepared by an older release lacks the caps added since; those read as the default.
+const capsShape = mapCaps(key => z.number().int().positive().default(TEXT_CAPS[key]))
 
 /** Which files the head changes relative to the basis canvas's diff, by path. */
 export const FileDeltaSchema = z.object({
@@ -185,6 +176,7 @@ export const GenerationContextSchema = z.object({
     maxPoints: z.number().int().positive(),
     maxDiagramsPerLayer: z.number().int().positive(),
     maxDiagramLinks: z.number().int().positive().default(LIMITS.maxDiagramLinks),
+    maxBackgroundTopics: z.number().int().positive().default(LIMITS.maxBackgroundTopics),
   }),
   generation: z.object({
     mode: GenerationModeSchema.default('strict'),

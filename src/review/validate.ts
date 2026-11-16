@@ -2,7 +2,13 @@
 // hunk index and the config; the report lists one line per problem and never fixes anything.
 import { missingTestAnchor } from './missing-tests.js'
 import type { z } from 'zod'
-import { extractLinks, type LinkTargets, parseLink, resolveLink } from '../contract/links.js'
+import {
+  extractLinks,
+  extractOutsideLinks,
+  type LinkTargets,
+  parseLink,
+  resolveLink,
+} from '../contract/links.js'
 import { diagramKind, mermaidBlocks, withoutMermaid } from '../contract/mermaid-fences.js'
 import {
   type FileEntry,
@@ -180,6 +186,21 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
     check(`points.${i}.title`, 'pointTitle', p.title)
     check(`points.${i}.body`, 'pointBody', p.body)
   })
+  output.background.forEach((t, i) => {
+    check(`background.${i}.topic`, 'backgroundTopic', t.topic)
+    check(`background.${i}.explanation`, 'backgroundExplanation', t.explanation)
+  })
+}
+
+/** The background holds at most `maxBackgroundTopics` topics. */
+function checkBackground(output: ModelOutput, limits: Limits, report: Report): void {
+  if (output.background.length > limits.maxBackgroundTopics) {
+    report.add(
+      'TOO_MANY_TOPICS',
+      'background',
+      `${output.background.length} background topics, cap ${limits.maxBackgroundTopics}`
+    )
+  }
 }
 
 /**
@@ -513,6 +534,12 @@ function checkLinks(output: ModelOutput, files: readonly FileEntry[], report: Re
     for (const href of extractLinks(text ?? '')) {
       checkLink(report, targets, where, label, href)
     }
+    // A link that leaves the canvas sends the reader to the web, so it goes over https.
+    for (const href of extractOutsideLinks(text ?? '')) {
+      if (!href.startsWith('https://')) {
+        report.add('LINK_NOT_HTTPS', where, `${label}: ${href} must be an https link`)
+      }
+    }
   }
   check('summary', 'summary', output.summary)
   for (const layer of output.layers) {
@@ -533,6 +560,9 @@ function checkLinks(output: ModelOutput, files: readonly FileEntry[], report: Re
   }
   output.points.forEach((p, i) => {
     check(`point:${i + 1}`, `point ${i + 1} "${p.title}"`, p.body)
+  })
+  output.background.forEach((t, i) => {
+    check(`background:${i + 1}`, `background topic ${i + 1} "${t.topic}"`, t.explanation)
   })
 }
 
@@ -614,6 +644,7 @@ export function validateModelOutput(raw: unknown, input: ValidationInput): Valid
     report.add(error.code, error.where ?? 'folds', error.message)
   }
   checkPoints(output, index, input.limits, report, input.storedArtifact === true)
+  checkBackground(output, input.limits, report)
   checkLinks(output, input.files, report)
   checkDiagramLinks(output, input.files, input.limits, report)
   return report.errors.length === 0

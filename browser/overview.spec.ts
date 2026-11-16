@@ -1,3 +1,4 @@
+import { syntheticArtifact } from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
 test('toggles details when clicking directly on the chevron', async ({ page, reviewUrl }) => {
@@ -56,4 +57,33 @@ test.describe('with fullWidthText', () => {
       .evaluate(element => Number.parseFloat(getComputedStyle(element).paddingLeft) * 2)
     expect(Math.abs(summary.width - (body.width - padding))).toBeLessThan(2)
   })
+})
+
+test('shows the background closed under the summary, and its links reach the code', async ({
+  page,
+  chatServer,
+}) => {
+  const server = await chatServer({
+    setup: async ({ ctx }) => {
+      ctx.fixtureArtifact = {
+        ...syntheticArtifact(),
+        background: [
+          {
+            topic: 'Retry policies',
+            kind: 'concept',
+            explanation: 'Read [the later hunk](#hunk:src/app.ts#2). See [docs](https://example.com/retry).',
+          },
+        ],
+      }
+    },
+  })
+  await page.goto(server.url)
+  const background = page.locator('#overview details.background')
+  await expect(background).not.toHaveAttribute('open')
+  await expect(background.locator(':scope > summary')).toContainText('Background · 1 topic')
+  await background.locator(':scope > summary').click()
+  await expect(background.getByText('Retry policies')).toBeVisible()
+  await expect(background.getByRole('link', { name: 'docs' })).toHaveAttribute('rel', 'noopener noreferrer')
+  await background.getByRole('link', { name: 'the later hunk' }).click()
+  await expect(page.locator('#hunk-src_app_ts-2')).toBeInViewport()
 })
