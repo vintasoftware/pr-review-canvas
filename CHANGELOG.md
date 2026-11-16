@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Prompt templates
+
+- `pr-review upgrade` and `pr-review doctor` now catch any change to a bundled prompt template a
+  project has its own copy of, not only a new token. A copy's first line names the bundled template
+  it was copied from, as `<!-- pr-review-canvas 0.11.1 generation-format.md 8da76a1e136d -->`.
+  When the installed template differs, they link the changes on GitHub and give the new line to
+  paste once you merge them. The line never reaches a prompt. A copy without one counts as copied
+  from 0.10.0, the last release before these lines.
+- The Writing rules moved to their own template, `writing.md`, which `generation-format.md` takes
+  as `{{WRITING}}`. A project can override it under `prompts`. Generated prompts are unchanged.
+
+### Upgrade from 0.10.0
+
+A project with its own prompt templates follows what `pr-review upgrade` prints, then `doctor`:
+
+- Its own `generation-format.md` replaces the old "One or two short sentences…" paragraph with a
+  `## Writing` section holding `{{WRITING}}`, and merges the other changes from the link.
+- Its own `chat-seed.md` takes the sentence about `startLine` and the chunk ranges.
+- Each copy it merged gets the first line `doctor` prints. Copies of templates that did not change
+  since 0.10.0 need nothing.
+
 ## 0.11.0
 
 Changes since 0.10.0.

@@ -54,6 +54,8 @@ const AT_0_9_0: Record<keyof PromptOverrides, readonly string[]> = {
   'judging-surfacing.md': ['FORMAT', 'QUALITY_STANDARDS', 'RULEBOOK'],
   'layering-guidance.md': [],
   'quality-standards.md': [],
+  // Bundled from 0.11.1, with no tokens.
+  'writing.md': [],
 }
 
 const templates = Object.keys(AT_0_9_0) as Array<keyof PromptOverrides>
@@ -67,7 +69,8 @@ describe('ADDED_TOKENS', () => {
   it.each(templates)('lists every token %s gained since 0.9.0, and none it does not have', async template => {
     const tokens = await tokensOf(template)
     const added = ADDED_TOKENS.filter(t => t.template === template).map(t => t.token)
-    expect([...tokens].filter(t => !AT_0_9_0[template].includes(t))).toEqual(added)
+    // Sorted: a token added later can sit above an older one in the template.
+    expect([...tokens].filter(t => !AT_0_9_0[template].includes(t)).sort()).toEqual(added.sort())
   })
 
   it('stamps each token with a version no newer than a release that ships it', async () => {

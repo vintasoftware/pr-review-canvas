@@ -316,7 +316,8 @@ other copy is current. Refresh copies with `pr-review upgrade` or `pr-review ins
 any custom directory flags used during installation). Automatic discovery checks the two default directories.
 
 `doctor`'s `prompts` check fails when one of the project's own prompt templates lacks a token any
-release up to the running one added to the bundled template, and its hint says where to add it.
+release up to the running one added to the bundled template, or its [base line](#prompt-templates)
+names another version of the bundled template. Its hint says what to add or merge.
 
 `serve` runs this skill check automatically and prints failures with a repair hint to stderr.
 Warnings do not prevent the server from starting. Use `doctor --all-checks` for full diagnostics.
@@ -347,7 +348,9 @@ Last, `upgrade` checks the project's own [prompt templates](#prompt-templates). 
 release after the old version added to a bundled template, a custom copy that lacks it is named
 with the token and the heading the bundled template has it under, for you to add. Run at the
 latest version with nothing to upgrade, it names the tokens that version added; so does a run
-whose plan is declined or not applied. It never edits a template.
+whose plan is declined or not applied. It also names each copy whose [base line](#prompt-templates)
+names another version of the bundled template, with a link to what changed and the line to paste
+once you merge it. It never edits a template.
 
 - `--only` limits the run to the named kinds. Skipped kinds are listed in `notes`.
 - `upgrade` does not install a missing acpx or add a missing skill copy. It prints the command
@@ -474,6 +477,7 @@ The `prompts` map in `pr-review.config.yml` accepts these keys:
 | `judging-surfacing.md`                | Surfacing mode's judging rules, shared by both of its tasks |
 | `quality-standards.md`                | Bundled code standards                                      |
 | `layering-guidance.md`                | Guidance for grouping related changes                       |
+| `writing.md`                          | How generated text is written                               |
 | `chat-seed.md`                        | Opening AI Chat instructions                                |
 
 Each configured file replaces a whole template. Paths resolve from the project root,
@@ -491,9 +495,20 @@ validation rules enforced by the tool.
 
 Run `prepare` again to apply generation edits (use `--force` for an existing canvas).
 Restart the server after changing the config; chat template edits apply to new threads.
-Custom templates persist across tool upgrades. When a release adds a token to a bundled template,
-`pr-review upgrade` and `pr-review doctor` name each custom copy that lacks it and where it goes.
-Compare the rest of your templates with the new bundled ones when upgrading.
+Custom templates persist across tool upgrades. A copy's first line names the bundled template it
+was copied from, with the start of that file's SHA-256:
+
+```markdown
+<!-- pr-review-canvas 0.11.1 generation-format.md 8da76a1e136d -->
+```
+
+pr-review drops the line before rendering, so prompts are the same with or without it.
+`pr-review upgrade` and `pr-review doctor` compare it with the installed bundled template. When
+that template changed, they link the changes on GitHub and give the new line to paste once you
+merge them. A copy without a line counts as copied from 0.10.0, the last release before these
+lines. After copying templates from a later release, run `pr-review doctor` and give each copy it
+names the line it prints. When a release adds a token to a bundled template, they also name each
+copy that lacks it and where it goes.
 
 ### Text limits
 

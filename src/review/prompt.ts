@@ -31,6 +31,7 @@ export interface PromptSources {
   format: string
   layeringGuidance: string
   qualityStandards: string
+  writing: string
 }
 
 export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectPrompts): Promise<PromptSources> {
@@ -38,6 +39,7 @@ export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectProm
     format,
     layeringGuidance,
     qualityStandards,
+    writing,
     strict,
     surfacing,
     strictInc,
@@ -48,6 +50,7 @@ export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectProm
     loadPromptFile('generation-format.md', dir, project),
     loadPromptFile('layering-guidance.md', dir, project),
     loadPromptFile('quality-standards.md', dir, project),
+    loadPromptFile('writing.md', dir, project),
     loadPromptFile('generation-strict.md', dir, project),
     loadPromptFile('generation-surfacing.md', dir, project),
     loadPromptFile('generation-strict-incremental.md', dir, project),
@@ -59,6 +62,7 @@ export async function loadPromptSources(dir = PROMPTS_DIR, project?: ProjectProm
     format,
     layeringGuidance,
     qualityStandards,
+    writing,
     generation: { strict, surfacing },
     incremental: { strict: strictInc, surfacing: surfacingInc },
     judging: { strict: judgingStrict, surfacing: judgingSurfacing },
@@ -405,6 +409,7 @@ export function renderPrompt(
     HIGH_RISK: highRiskMarkdown(ctx),
     RULEBOOK: rulebookMarkdown(ctx),
     QUALITY_STANDARDS: sources.qualityStandards.trim(),
+    WRITING: sources.writing.trim(),
     SCHEMA: schemaMarkdown(ctx),
     LARGE_PR: largePrMarkdown(ctx),
     TEST_PATTERNS: testPatternsMarkdown(ctx),

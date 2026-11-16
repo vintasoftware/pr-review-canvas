@@ -12,6 +12,7 @@ version: 1
 #   generation-surfacing.md: review-prompts/generation-surfacing.md
 #   quality-standards.md: review-prompts/quality-standards.md
 #   layering-guidance.md: review-prompts/layering-guidance.md
+#   writing.md: review-prompts/writing.md
 #   chat-seed.md: review-prompts/chat-seed.md
 
 # Optional layer guidance. Omit or leave empty for agent-chosen semantic sections.
