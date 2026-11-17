@@ -19,13 +19,34 @@ export const LOADING_REASON = 'the review body is still loading'
 /** Why it waits after the body failed to load: there is nothing to post. */
 export const FAILED_REASON = 'the review body could not be loaded'
 
+/** The bundle's `authorSignOffReason`. Set it before the header renders. */
+let authorReason = /** @type {string | null} */ (null)
+
+/** @param {string | null} reason */
+export function setAuthorSignOffReason(reason) {
+  authorReason = reason
+}
+
 /**
- * Why approve is not allowed yet, or null when it is. Other changes never counts.
+ * Why approve or request changes is disabled, or null when it is not. It follows the server's
+ * order: the author cannot approve or request changes; and approve waits until every layer that is
+ * not Other is reviewed. Reviewing every layer does not clear the author's reason.
+ * @param {'APPROVE' | 'REQUEST_CHANGES'} event
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
  * @returns {string | null}
  */
-export function approveBlockedReason(artifact, state) {
+export function signoffDisabledReason(event, artifact, state) {
+  return authorReason ?? (event === 'APPROVE' ? unreviewedReason(artifact, state) : null)
+}
+
+/**
+ * Why approve waits for the layers, or null when every layer is reviewed. Other changes never counts.
+ * @param {ReviewArtifact} artifact
+ * @param {PrState} state
+ * @returns {string | null}
+ */
+function unreviewedReason(artifact, state) {
   const [first, ...rest] = artifact.layers.filter(
     l => l.kind !== 'other' && layerProgress(l, state) !== 'done'
   )

@@ -15,11 +15,12 @@ import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import { resolveSharing } from '../../contract/settings.js'
 import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
-import { PostReviewInputSchema } from '../../contract/reviews.js'
+import { PostReviewInputSchema, type ReviewEvent } from '../../contract/reviews.js'
 import { lookupCanvas, samePatches } from '../../review/carry-over.js'
 import { marksForCanvas } from '../../review/carry-marks.js'
 import { buildReviewBody, reviewedDiff, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
+import { authorSignOffReason } from '../../review/self-review.js'
 import { isReviewedId } from '../../store/state-store.js'
 import { draftDiff, marksOn, sameDiff } from '../../../static/js/diff-identity.js'
 import type { Derived, DiffedCommit } from '../../store/derived-store.js'
@@ -207,6 +208,30 @@ export async function requirePosting(
 }
 
 /**
+ * Refuses an approval or a request for changes from the pull request's author, even when the forge
+ * allows it. A comment-only review goes through. When the login is unknown, the forge decides.
+ */
+export async function refuseAuthorSignOff(
+  ctx: AppContext,
+  pr: Pick<Pr, 'author'>,
+  event: ReviewEvent
+): Promise<void> {
+  if (event === 'COMMENT') {
+    return
+  }
+  const { login } = await ctx.capabilities.get()
+  const reason = authorSignOffReason(login, pr, ctx.config.host.noun)
+  if (reason !== null) {
+    throw new AppError(
+      'SIGNOFF_BY_AUTHOR',
+      reason,
+      403,
+      'ask another reviewer to sign off, or post a comment-only review'
+    )
+  }
+}
+
+/**
  * Posts one comment on the pull request's current head, keeps the cached comments in step, and
  * records it in the state, tied to its attention point when it came from one.
  */
@@ -388,6 +413,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     await requirePosting(ctx)
     const pr = await loader.currentPr(number)
     requireSameDiff(input, pr)
+    await refuseAuthorSignOff(ctx, pr, input.event)
     const { artifact, state } = await canvasForSignOff(ctx, number, pr)
     if (input.event === 'APPROVE') {
       const missing = unreviewedLayers(artifact, state)

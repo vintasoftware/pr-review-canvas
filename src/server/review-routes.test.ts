@@ -9,6 +9,7 @@ import {
   createFakeGh,
   type FakeGh,
   type FakeGhOptions,
+  ghError,
   ghJson,
   ghHandler,
   moveFakeHead,
@@ -84,6 +85,10 @@ const POST_ROUTES: FakeGhOptions['postRoutes'] = {
   'repos/acme/widgets/issues/42/comments': ghPost(() => POSTED_ISSUE),
   'repos/acme/widgets/pulls/42/reviews': ghPost(() => POSTED_REVIEW),
 }
+
+/** PR #42 read by a reviewer who is not its author. */
+const reviewerGh = (): FakeGh =>
+  ghFor42({ postRoutes: POST_ROUTES, routes: { user: ghJson({ login: 'reviewer' }) } })
 
 /** A context for PR #42 whose canvas is published for the current head. */
 async function contextWithCanvas(gh: FakeGh): Promise<TestContext> {
@@ -527,7 +532,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('refuses to approve while a layer is unreviewed', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     const res = await app.request(...post('/api/prs/42/review', { event: 'APPROVE' }))
@@ -539,7 +544,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('counts more than one open layer in the refusal', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     const artifact = syntheticArtifact()
     const first = artifact.layers[0]
     if (first === undefined) {
@@ -559,7 +564,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('approves with the generated body once every layer is reviewed', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     await app.request('/api/prs/42', { headers: LOCAL })
@@ -585,7 +590,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('fetches the comments for the body it generates when none are cached', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     await app.request('/api/prs/42', { headers: LOCAL })
@@ -597,7 +602,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('requests changes at any time, with the body the dialog sends', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     const res = await app.request(
@@ -612,7 +617,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('refuses a sign-off while the canvas on screen is for another commit', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     const t2 = await makeTestContext({ git: gitFor42(), gh })
     t = t2
     const app = createApp(t.ctx)
@@ -622,7 +627,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('refuses a sign-off whose dialog named another commit', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     const res = await app.request(
@@ -634,7 +639,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('refuses to approve on marks that were made on another commit', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
@@ -649,7 +654,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('refuses to approve on marks whose commit is unknown', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     // A state file written before the tool recorded the commit of a mark.
@@ -660,7 +665,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('refuses a reviewed mark that names another commit', async () => {
-    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    t = await contextWithCanvas(reviewerGh())
     const app = createApp(t.ctx)
     const res = await app.request(
       ...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true, headSha: 'c'.repeat(40) })
@@ -671,7 +676,7 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('hides marks of another commit from the page and from the review body', async () => {
-    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    t = await contextWithCanvas(reviewerGh())
     const app = createApp(t.ctx)
     await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
     await t.ctx.state.update(42, state => ({ ...state, reviewedCanvasSha: 'c'.repeat(40) }))
@@ -686,21 +691,21 @@ describe('POST /api/prs/:n/review', () => {
   })
 
   it('records the commit the layers were read on', async () => {
-    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    t = await contextWithCanvas(reviewerGh())
     const app = createApp(t.ctx)
     await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
     expect((await t.ctx.state.read(42)).reviewedCanvasSha).toBe(HEAD_SHA)
   })
 
   it('refuses an event it does not know', async () => {
-    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
+    t = await contextWithCanvas(reviewerGh())
     const app = createApp(t.ctx)
     const res = await app.request(...post('/api/prs/42/review', { event: 'MERGE' }))
     expect(res.status).toBe(400)
   })
 
   it('posts a review with no verdict without asking that every layer was read', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    const gh = reviewerGh()
     t = await contextWithCanvas(gh)
     const app = createApp(t.ctx)
     await app.request('/api/prs/42', { headers: LOCAL })
@@ -708,6 +713,53 @@ describe('POST /api/prs/:n/review', () => {
     const res = await app.request(...post('/api/prs/42/review', { event: 'COMMENT' }))
     expect(res.status).toBe(201)
     expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({ event: 'COMMENT' })
+  })
+})
+
+describe('POST /api/prs/:n/review from the pull request author', () => {
+  let t: TestContext
+  afterEach(async () => {
+    await t?.cleanup()
+  })
+
+  const AUTHOR_REFUSAL = {
+    error: {
+      code: 'SIGNOFF_BY_AUTHOR',
+      message: 'You opened this pull request. Sign-off comes from another reviewer.',
+      hint: 'ask another reviewer to sign off, or post a comment-only review',
+    },
+  }
+
+  it.each(['APPROVE', 'REQUEST_CHANGES'] as const)('refuses %s and sends nothing to GitHub', async event => {
+    // GH_PULL is by octocat, and so is the login ghFor42 answers with.
+    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    t = await contextWithCanvas(gh)
+    // No layer is reviewed: the author check comes before the layer check.
+    const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event, body: 'mine' }))
+    expect(res.status).toBe(403)
+    expect(await json(res)).toEqual(AUTHOR_REFUSAL)
+    expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
+  })
+
+  it('lets the author post a review with no verdict', async () => {
+    const gh = ghFor42({ postRoutes: POST_ROUTES })
+    t = await contextWithCanvas(gh)
+    const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event: 'COMMENT' }))
+    expect(res.status).toBe(201)
+    expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({ event: 'COMMENT' })
+  })
+
+  it('lets the forge decide when the login is unknown, and does not read it again', async () => {
+    const gh = ghFor42({
+      postRoutes: POST_ROUTES,
+      // A GitHub App installation token cannot read /user.
+      routes: { user: ghError(new Error('Resource not accessible by integration')) },
+    })
+    t = await contextWithCanvas(gh)
+    const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event: 'REQUEST_CHANGES' }))
+    expect(res.status).toBe(201)
+    expect(gh.calls.filter(c => c.kind === 'api' && c.path === 'user')).toHaveLength(1)
+    expect(gh.calls.find(c => c.kind === 'post')?.body).toMatchObject({ event: 'REQUEST_CHANGES' })
   })
 })
 

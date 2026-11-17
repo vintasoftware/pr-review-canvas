@@ -35,6 +35,7 @@ export const ERROR_CODES = [
   'NOT_AUTHOR',
   'COMMENT_LINE_NOT_IN_DIFF',
   'SIGNOFF_INCOMPLETE',
+  'SIGNOFF_BY_AUTHOR',
   'CHAT_BUSY',
   'GENERATION_BUSY',
   'GENERATION_FAILED',
@@ -145,6 +146,13 @@ export interface PrBundle {
    * describes the current head. The page then offers to settle attention points.
    */
   selfReview: boolean
+  /**
+   * Why the login that runs the server cannot approve or request changes: it opened this pull
+   * request. The page disables both commands with this sentence, and the server refuses them with
+   * it. Unlike `selfReview`, it stays set on an outdated canvas. Null on local work, on a pull
+   * request someone else opened, and when the login is unknown.
+   */
+  authorSignOffReason: string | null
   /** Set on a local review: work that has no pull request, so the forge side of the page is off. */
   local?: LocalKey
   comments: CommentsPayload

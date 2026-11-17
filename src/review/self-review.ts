@@ -109,6 +109,19 @@ export function isAuthor(login: string | null, pr: Pick<Pr, 'author'>): boolean 
 }
 
 /**
+ * Why the signed-in login cannot approve or request changes, or null when it did not write the pull
+ * request. The page shows this sentence on both commands, and the review route refuses with it.
+ * @param noun `pull request` or `merge request`, as the host names it
+ */
+export function authorSignOffReason(
+  login: string | null,
+  pr: Pick<Pr, 'author'>,
+  noun: string
+): string | null {
+  return isAuthor(login, pr) ? `You opened this ${noun}. Sign-off comes from another reviewer.` : null
+}
+
+/**
  * Whether the reader may resolve the attention points of the canvas on screen: it is their own
  * work (local work always is, a pull request when they wrote it), and the canvas describes the
  * current head, as the settle route requires. The page offers resolve to this reader, and AI Chat
