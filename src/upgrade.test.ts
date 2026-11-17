@@ -1,8 +1,10 @@
 // @vitest-environment node
-import { appendFile, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type CliIo, outputMode, splitCommonFlags } from './commands.js'
+import { PROMPTS_DIR } from './paths.js'
+import { baseLine } from './prompt-bases.js'
 import { findSkillCopies } from './review/install-skill.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, installSkill } from './review/install-skill.js'
 import { makeTempDir } from './testing/fakes.js'
@@ -406,7 +408,12 @@ describe('runUpgrade', () => {
   it('does not call everything current while a template lacks a token', async () => {
     await installCopies()
     await mkdir(path.join(repo, 'review-prompts'), { recursive: true })
-    await writeFile(path.join(repo, 'review-prompts', 'format.md'), '## Attention points\n\nno token here\n')
+    // Copied from this version's bundled template, so the missing token is all there is to say.
+    const bundled = await readFile(path.join(PROMPTS_DIR, 'generation-format.md'), 'utf8')
+    await writeFile(
+      path.join(repo, 'review-prompts', 'format.md'),
+      `${baseLine('generation-format.md', '0.6.0', bundled)}\n## Attention points\n\nno token here\n`
+    )
     await writeFile(
       path.join(repo, 'pr-review.config.yml'),
       'prompts:\n  generation-format.md: review-prompts/format.md\n'
@@ -420,8 +427,32 @@ describe('runUpgrade', () => {
     const { io, err } = capture(false)
     expect(await runUpgrade(deps, [], io)).toBe(0)
     expect(err).not.toContain('Everything is up to date.')
-    expect(err.at(-1)).toBe('Nothing to upgrade; add the tokens above.')
+    expect(err.at(-1)).toBe('Nothing to upgrade; update your templates as above.')
     expect(err.at(-2)).toMatch(/^ {2}- add \{\{RESOLVED\}\} to review-prompts\/format\.md/)
+  })
+
+  it('names the own templates copied from another version, as the new pr-review sees them', async () => {
+    await mkdir(path.join(repo, 'review-prompts'), { recursive: true })
+    await writeFile(
+      path.join(repo, 'review-prompts', 'format.md'),
+      '<!-- pr-review-canvas 0.5.0 generation-format.md 000000000000 -->\nmine\n'
+    )
+    await writeFile(
+      path.join(repo, 'pr-review.config.yml'),
+      'prompts:\n  generation-format.md: review-prompts/format.md\n'
+    )
+    const { deps } = fake({ latest: { [NAME]: '0.6.0', acpx: '0.13.2' }, addedTokens: [] })
+    const { io, out, err } = capture()
+    expect(await runUpgrade(deps, ['--yes'], io)).toBe(0)
+    // The new pr-review's own bundled template and version, reported back through the hand-off.
+    const bundled = await readFile(path.join(PROMPTS_DIR, 'generation-format.md'), 'utf8')
+    const message =
+      "review-prompts/format.md: pr-review's generation-format.md changed after 0.5.0, the version this copy counts as copied from. " +
+      'Merge what you want from https://github.com/vintasoftware/pr-review-canvas/compare/v0.5.0...v0.6.0, ' +
+      `then make \`${baseLine('generation-format.md', '0.6.0', bundled)}\` its first line`
+    expect(JSON.parse(out[0] ?? '').templates).toEqual([{ file: 'review-prompts/format.md', message }])
+    expect(err).toContain("Your own prompt templates were copied from another version of pr-review's:")
+    expect(err).toContain(`  - ${message}`)
   })
 
   it('takes only the kinds of step --only names, and says what it left out', async () => {
@@ -507,6 +538,7 @@ describe('runUpgrade', () => {
       steps: [],
       notes: expect.any(Array),
       prompts: [],
+      templates: [],
     })
   })
 })

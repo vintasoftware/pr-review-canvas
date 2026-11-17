@@ -9,10 +9,62 @@
   short explanation and links to the code and to official documentation. It starts closed. The
   generator writes it for every new canvas; `generation.caps` takes `backgroundTopic` and
   `backgroundExplanation`.
+
+## 0.11.1
+
+Changes since 0.11.0.
+
+### Canvas generation
+
+- A project whose `pr-review.config.yml` sets no `rulebook`, or that has no config, uses the first
+  of `REVIEW.md`, `code_review.md`, and `code-review.md` at the repository root as its rulebook, in
+  any letter case. The settings dialog names the file it found.
+
+### Prompt templates
+
+- `pr-review upgrade` and `pr-review doctor` now catch any change to a bundled prompt template a
+  project has its own copy of, not only a new token. A copy's first line names the bundled template
+  it was copied from, as `<!-- pr-review-canvas 0.11.1 generation-format.md 8da76a1e136d -->`.
+  When the installed template differs, they link the changes on GitHub and give the new line to
+  paste once you merge them. The line never reaches a prompt. A copy without one counts as copied
+  from 0.10.0, the last release before these lines. `pr-review serve` prints the same check on
+  start, beside the skill check.
+- The Writing rules moved to their own template, `writing.md`, which `generation-format.md` takes
+  as `{{WRITING}}`. A project can override it under `prompts`. Generated prompts are unchanged.
+
+### Upgrade from 0.10.0
+
+This replaces step 3 of 0.11.0's notes. `pr-review upgrade` starts in 0.10.0, which names only the
+missing `{{WRITING}}`. The restarted `pr-review serve`, like `pr-review doctor`, names each of a
+project's own prompt templates whose bundled template changed since 0.10.0, with the link to the
+changes and the line to paste. A project with its own prompt templates:
+
+- Has its own `generation-format.md` replace the old "One or two short sentences…" paragraph with
+  a `## Writing` section holding `{{WRITING}}`, and merge the other changes from the link.
+- Has its own `chat-seed.md` take the sentence about `startLine` and the chunk ranges.
+- Gives each copy it merged the first line `doctor` prints. Copies of templates that did not change
+  since 0.10.0 need nothing.
+
+Teammates on 0.11.0 or older cannot generate from a template that holds `{{WRITING}}`, and fall
+back to the default settings when `pr-review.config.yml` names `writing.md`. Commit either once
+the whole team runs 0.11.1.
+
+## 0.11.0
+
+Changes since 0.10.0.
+
+### Reading
+
 - **Split diffs** draw every diff with the old code on the left and the new on the right, as
   GitHub's split view does. The layout button beside skin and theme, the `s` key, or **Diff layout**
   in the settings dialog switches it, saved as `diffLayout` in `settings.yml`. A diff column under
   900px wide draws unified until it widens. Unified stays the default.
+- A **Hide comments** switch beside **Hide code**, or the `i` key, hides the diff's inline attention
+  points, review comments, pending drafts, and annotations, so you can read the code first. It
+  changes only the view: nothing is dismissed or deleted, and the code under your eyes stays in
+  place. It is saved as `hideInline` in `settings.yml`. In the settings dialog, **what it hides**
+  picks the kinds (`hideInlineKinds`), and **Going to a hidden item** (`hiddenItemClick`) either
+  shows only that item or turns hiding off.
 - **Full-width text** in the settings dialog, saved as `fullWidthText` in `settings.yml`, lets the
   overview summary, a layer's rationale and the PR description fill the width of their panel,
   diagrams included, instead of stopping at 100 characters. It is off by default.
@@ -132,6 +184,21 @@
   that point's body. A canvas whose missing-test note runs past the cap, such as one an incremental
   run copies from an older canvas, fails `validate` with `TEXT_TOO_LONG` until the note is
   shortened.
+
+### Upgrade from 0.10.0
+
+1. Run `pr-review upgrade` in each project. It refreshes the project's copy of the skill, which now
+   asks for complete sentences, at most three in a rationale, file note, or annotation, and for a
+   missing test's note written as the body of its attention point.
+2. Restart the running `pr-review serve`, so the review page and `pr-review generate` run the new
+   version.
+3. A project with its own prompt templates merges in the bundled changes. This release adds no
+   token, so `pr-review upgrade` and `doctor` name none of them:
+   - Its own `generation-format.md` takes the **Writing** section. Without it the generator keeps
+     the old "one or two short sentences" wording.
+   - Its own `chat-seed.md` takes the sentence about `startLine` and the chunk ranges. Without it
+     AI Chat gets the ranges through `{{LAYERS}}` but is not told to keep a proposed comment inside
+     one.
 
 ## 0.10.0
 

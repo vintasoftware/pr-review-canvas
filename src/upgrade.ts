@@ -1,13 +1,15 @@
 // `pr-review upgrade`: brings pr-review, acpx, and the project's copy of the skill up to date. It
 // says what it will change and asks first. Once pr-review itself moves, the new version checks the
 // skill, so the skill it ships is stamped by the code that ships it, and the project's own prompt
-// templates, so it names the tokens its release added that they lack.
+// templates, so it names the tokens its release added that they lack and the copies made from
+// another version of its templates.
 import { realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { z } from 'zod'
 import { type CliIo, EXIT, printJson, UsageError } from './commands.js'
 import { loadProjectConfig } from './project-config.js'
+import { type TemplateNotice, TemplateNoticeSchema, templateNotices } from './prompt-bases.js'
 import {
   ADDED_TOKENS,
   type AddedToken,
@@ -78,6 +80,8 @@ const AppliedReportSchema = z.object({
   steps: z.array(StepOutcomeSchema),
   /** Absent from a version before prompt checks. */
   prompts: z.array(TokenGapSchema).default([]),
+  /** Absent from a version before base lines; one before 0.11.1 drops it. */
+  templates: z.array(TemplateNoticeSchema).default([]),
 })
 type AppliedReport = z.infer<typeof AppliedReportSchema>
 
@@ -214,8 +218,8 @@ async function applySkillStep(
 /**
  * The new pr-review's own `upgrade --yes --json --from <this version> --only <kinds>`: it plans again
  * with its own code, runs only the kinds of step the user confirmed, none when nothing is left, and
- * checks the project's prompt templates for the tokens added since this version. Its report joins
- * this one's, so this process stays the one that prints it.
+ * checks the project's prompt templates against its own: the tokens added since this version, and
+ * the base each copy names. Its report joins this one's, so this process stays the one that prints it.
  */
 async function handOff(deps: UpgradeDeps, kinds: StepKind[]): Promise<AppliedReport> {
   const result = await deps.runInstalled([
@@ -249,19 +253,20 @@ async function handOff(deps: UpgradeDeps, kinds: StepKind[]): Promise<AppliedRep
       },
     ],
     prompts: [],
+    templates: [],
   }
 }
 
 /**
  * Runs every step in order. A failed npm install does not stop the rest. Once pr-review itself is
  * upgraded, the new version plans and runs whatever is left, so the skill it ships is checked and
- * copied by its own code, and checks the prompt templates against its own tokens. `prompts` is null
+ * copied by its own code, and checks the prompt templates against its own. `own` is null
  * when no new version reported, and this one's own check stands.
  */
 export async function applyUpgrade(
   plan: UpgradePlan,
   deps: UpgradeDeps
-): Promise<{ steps: StepOutcome[]; prompts: TokenGap[] | null }> {
+): Promise<{ steps: StepOutcome[]; own: OwnTemplates | null }> {
   const outcomes: StepOutcome[] = []
   for (const [index, step] of plan.steps.entries()) {
     if (step.kind === 'skill') {
@@ -280,34 +285,50 @@ export async function applyUpgrade(
         deps,
         plan.steps.slice(index + 1).map(later => later.kind)
       )
-      return { steps: [...outcomes, ...report.steps], prompts: report.prompts }
+      const { prompts, templates } = report
+      return { steps: [...outcomes, ...report.steps], own: { prompts, templates } }
     }
   }
-  return { steps: outcomes, prompts: null }
+  return { steps: outcomes, own: null }
+}
+
+/** What the project's own prompt templates need from this version's bundled ones. */
+interface OwnTemplates {
+  /** The tokens they lack. */
+  prompts: TokenGap[]
+  /** The copies whose base is not this version's bundled template. */
+  templates: TemplateNotice[]
 }
 
 /**
- * The tokens the project's own templates lack: those added after `from` up to this version, or
- * without `from`, the ones this version added.
+ * The tokens the project's own templates lack, those added after `from` up to this version or
+ * without `from` the ones this version added, and the copies made from another bundled template.
  */
-async function ownPromptGaps(deps: UpgradeDeps, from: string | undefined): Promise<TokenGap[]> {
-  if (deps.repoRoot === null) return []
+async function ownTemplates(deps: UpgradeDeps, from: string | undefined): Promise<OwnTemplates> {
+  if (deps.repoRoot === null) return { prompts: [], templates: [] }
+  const { config } = await loadProjectConfig(deps.repoRoot)
   const added = (deps.addedTokens ?? ADDED_TOKENS).filter(
     t =>
       !isNewer(t.since, deps.version) &&
       (from === undefined ? !isNewer(deps.version, t.since) : isNewer(t.since, from))
   )
-  if (added.length === 0) return []
-  const { config } = await loadProjectConfig(deps.repoRoot)
-  return promptGaps(deps.repoRoot, config.prompts, added)
+  return {
+    prompts: await promptGaps(deps.repoRoot, config.prompts, added),
+    templates: await templateNotices(deps.repoRoot, config.prompts, deps.version),
+  }
 }
 
-function printPromptGaps(io: CliIo, gaps: readonly TokenGap[]): void {
-  if (gaps.length === 0) return
-  io.stderr(
-    'Your own prompt templates lack tokens this pr-review added, so generation leaves out what they fill in. Add each one:'
-  )
-  for (const gap of gaps) io.stderr(`  - ${describeGap(gap)}`)
+function printOwnTemplates(io: CliIo, { prompts, templates }: OwnTemplates): void {
+  if (prompts.length > 0) {
+    io.stderr(
+      'Your own prompt templates lack tokens this pr-review added, so generation leaves out what they fill in. Add each one:'
+    )
+    for (const gap of prompts) io.stderr(`  - ${describeGap(gap)}`)
+  }
+  if (templates.length > 0) {
+    io.stderr("Your own prompt templates were copied from another version of pr-review's:")
+    for (const notice of templates) io.stderr(`  - ${notice.message}`)
+  }
 }
 
 /** `--only package,acpx,skill`: the kinds of step this run may take. */
@@ -323,7 +344,7 @@ function parseOnly(raw: string | undefined): ReadonlySet<StepKind> | null {
 
 /**
  * `upgrade [--yes] [--only <kinds>] [--from <version>] [--json]`: the plan and each step's outcome on
- * stderr, with a confirmation in between, then the tokens the project's own prompt templates lack.
+ * stderr, with a confirmation in between, then what the project's own prompt templates need.
  * `--from` is the version a hand-off upgraded from. With `io.json`, stdout then gets one JSON line
  * with what happened.
  */
@@ -349,13 +370,15 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
         }
   for (const note of plan.notes) io.stderr(`  ${note}`)
   if (plan.steps.length === 0) {
-    const prompts = await ownPromptGaps(deps, values.from)
-    printPromptGaps(io, prompts)
+    const own = await ownTemplates(deps, values.from)
+    printOwnTemplates(io, own)
     // The templates are the one thing left, so the last line does not call everything current.
     io.stderr(
-      prompts.length === 0 ? 'Everything is up to date.' : 'Nothing to upgrade; add the tokens above.'
+      own.prompts.length + own.templates.length === 0
+        ? 'Everything is up to date.'
+        : 'Nothing to upgrade; update your templates as above.'
     )
-    if (io.json) printJson(io, { applied: false, steps: [], notes: plan.notes, prompts })
+    if (io.json) printJson(io, { applied: false, steps: [], notes: plan.notes, ...own })
     return EXIT.ok
   }
   io.stderr('pr-review upgrade will:')
@@ -366,17 +389,17 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
 
   const confirmed = values.yes === true ? true : await deps.confirm('Proceed? [y/N] ')
   if (confirmed !== true) {
-    // Declining the upgrade leaves the templates as they are, so their gaps still stand.
-    const prompts = await ownPromptGaps(deps, values.from)
-    printPromptGaps(io, prompts)
+    // Declining the upgrade leaves the templates as they are, so what they need still stands.
+    const own = await ownTemplates(deps, values.from)
+    printOwnTemplates(io, own)
     io.stderr(confirmed === null ? 'Nothing changed. Re-run with --yes to apply.' : 'Nothing changed.')
-    if (io.json) printJson(io, { applied: false, steps: plan.steps, notes: plan.notes, prompts })
+    if (io.json) printJson(io, { applied: false, steps: plan.steps, notes: plan.notes, ...own })
     return EXIT.ok
   }
 
   const applied = await applyUpgrade(plan, deps)
   const outcomes = applied.steps
-  const prompts = applied.prompts ?? (await ownPromptGaps(deps, values.from))
+  const own = applied.own ?? (await ownTemplates(deps, values.from))
   for (const outcome of outcomes) {
     io.stderr(
       `  ${outcome.status}: ${describeStep(outcome)}${outcome.detail ? `\n    ${outcome.detail}` : ''}`
@@ -387,10 +410,10 @@ export async function runUpgrade(deps: UpgradeDeps, argv: string[], io: CliIo): 
   if (refreshed.length > 0) {
     io.stderr(`The project skill changed. Commit and push ${refreshed.join(' and ')} so your team gets it.`)
   }
-  printPromptGaps(io, prompts)
+  printOwnTemplates(io, own)
   const ok = outcomes.every(o => o.status !== 'failed')
   if (io.json) {
-    printJson(io, { applied: true, ok, steps: outcomes, notes: plan.notes, prompts })
+    printJson(io, { applied: true, ok, steps: outcomes, notes: plan.notes, ...own })
   } else {
     io.stderr(ok ? 'Upgrade complete.' : 'Upgrade finished with failed steps; see above.')
   }
