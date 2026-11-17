@@ -319,7 +319,8 @@ any custom directory flags used during installation). Automatic discovery checks
 release up to the running one added to the bundled template, or its [base line](#prompt-templates)
 names another version of the bundled template. Its hint says what to add or merge.
 
-`serve` runs this skill check automatically and prints failures with a repair hint to stderr.
+`serve` runs the skill and `prompts` checks automatically and prints failures with a repair hint
+to stderr.
 Warnings do not prevent the server from starting. Use `doctor --all-checks` for full diagnostics.
 The `.gitignore` update always applies to the selected repository root, even with custom skill
 directories.
@@ -461,8 +462,9 @@ mkdir -p review-prompts
 cp "$(npm root -g)/@vintasoftware/pr-review-canvas/prompts/"*.md review-prompts/
 ```
 
-Edit the copies and configure the templates you want to replace. Commit the config and
-referenced files together.
+Edit the copies and configure the templates you want to replace. Then run `pr-review doctor` and
+give each copy it names the first line it prints for that copy. Commit the config and referenced
+files together.
 
 The `prompts` map in `pr-review.config.yml` accepts these keys:
 
@@ -506,9 +508,8 @@ pr-review drops the line before rendering, so prompts are the same with or witho
 `pr-review upgrade` and `pr-review doctor` compare it with the installed bundled template. When
 that template changed, they link the changes on GitHub and give the new line to paste once you
 merge them. A copy without a line counts as copied from 0.10.0, the last release before these
-lines. After copying templates from a later release, run `pr-review doctor` and give each copy it
-names the line it prints. When a release adds a token to a bundled template, they also name each
-copy that lacks it and where it goes.
+lines. When a release adds a token to a bundled template, they also name each copy that lacks it
+and where it goes.
 
 ### Text limits
 

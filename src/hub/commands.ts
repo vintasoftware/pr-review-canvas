@@ -13,6 +13,7 @@ import type { ServerInfo } from './home.js'
 import type { RegisterInput, RegisterResponse } from './hub-app.js'
 import type { ProjectFlags } from '../load-context.js'
 import type { ProjectRegistration } from './hub.js'
+import type { DoctorCheck } from '../review/doctor.js'
 
 export interface HubCommandDeps {
   cwd: string
@@ -41,7 +42,8 @@ export interface ServeDeps extends HubCommandDeps {
     registration: ProjectRegistration | null
     advertise: boolean
   }) => Promise<StartedServer>
-  checkSkill: (repoRoot: string) => Promise<{ ok: boolean; detail: string; hint?: string | undefined }>
+  checkSkill: (repoRoot: string) => Promise<DoctorCheck>
+  checkPrompts: (repoRoot: string, version: string) => Promise<DoctorCheck>
 }
 
 /** The set variables of the shell, which the server runs this project's host CLI and agent under. */
@@ -225,8 +227,10 @@ export async function runServe(deps: ServeDeps, argv: string[], io: CliIo): Prom
     chatModel: values['chat-model'] ?? values.model,
   })
   if (repoRoot !== null) {
-    const skill = await deps.checkSkill(repoRoot)
-    if (!skill.ok) io.stderr(`pr-review doctor: ${skill.detail}. ${skill.hint ?? ''}`)
+    // The templates too: an upgrade from 0.10.0 cannot name the copies to merge, and a restart follows.
+    for (const check of [await deps.checkSkill(repoRoot), await deps.checkPrompts(repoRoot, deps.version)]) {
+      if (!check.ok) io.stderr(`pr-review doctor: ${check.detail}. ${check.hint ?? ''}`)
+    }
   }
   const open = shouldOpen(deps.env, values['no-open'])
 

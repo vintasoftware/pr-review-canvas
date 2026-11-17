@@ -43,8 +43,9 @@ export const TemplateNoticeSchema = z.object({
 })
 export type TemplateNotice = z.infer<typeof TemplateNoticeSchema>
 
+/** Normalizes checkout line endings, as `skillContent` does, so Git's CRLF conversion keeps the hash. */
 function hashOf(text: string): string {
-  return createHash('sha256').update(text).digest('hex').slice(0, 12)
+  return createHash('sha256').update(text.replace(/\r\n/g, '\n')).digest('hex').slice(0, 12)
 }
 
 /** The line a copy of this bundled template starts with. */
@@ -90,7 +91,7 @@ export async function templateNotices(
     let message: string
     if (base !== null && isNewer(version, base.version)) {
       message =
-        `pr-review's ${template} changed after ${base.version}, the version this copy came from. ` +
+        `pr-review's ${template} changed after ${base.version}, the version this copy counts as copied from. ` +
         `Merge what you want from ${REPO_URL}/compare/v${base.version}...v${version}, then ${line}`
     } else if (base !== null && isNewer(base.version, version)) {
       message = `this copy came from pr-review ${base.version}, newer than this ${version}; run \`pr-review upgrade\``

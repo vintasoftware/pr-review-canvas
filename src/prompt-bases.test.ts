@@ -30,6 +30,10 @@ describe('base lines', () => {
     expect(baseLine('generation-format.md', '0.11.1', bundledV2)).not.toBe(
       baseLine('generation-format.md', '0.11.1', `${bundledV2}More.\n`)
     )
+    // A checkout that turned LF into CRLF keeps the hash.
+    expect(baseLine('generation-format.md', '0.11.1', bundledV2.replaceAll('\n', '\r\n'))).toBe(
+      baseLine('generation-format.md', '0.11.1', bundledV2)
+    )
   })
 
   it('drops the line only when it comes first', () => {
@@ -57,7 +61,7 @@ describe('templateNotices', () => {
       {
         file: 'format.md',
         message:
-          "format.md: pr-review's generation-format.md changed after 0.11.1, the version this copy came from. " +
+          "format.md: pr-review's generation-format.md changed after 0.11.1, the version this copy counts as copied from. " +
           'Merge what you want from https://github.com/vintasoftware/pr-review-canvas/compare/v0.11.1...v0.12.0, ' +
           `then make \`${baseLine('generation-format.md', '0.12.0', bundledV2)}\` its first line`,
       },

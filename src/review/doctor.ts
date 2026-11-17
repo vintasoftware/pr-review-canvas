@@ -110,7 +110,7 @@ export async function checkSkill(repoRoot: string | null, readSkill?: ReadSkill)
 /**
  * The project's own prompt templates, against every token a release up to this one added and the
  * bundled template each names as its base. Unlike `upgrade`, which names only the tokens its
- * release added, it cannot tell which release a copy came from, so it names every missing one.
+ * release added, it names every missing one.
  */
 export async function checkPrompts(
   repoRoot: string | null,
@@ -132,7 +132,7 @@ export async function checkPrompts(
   )
   const notices = await templateNotices(repoRoot, config.prompts, version)
   if (gaps.length + notices.length === 0) {
-    return { ok: true, detail: `own templates match this pr-review's: ${own.join(', ')}` }
+    return { ok: true, detail: `own templates are based on this pr-review's: ${own.join(', ')}` }
   }
   const detail = [
     gaps.length === 0

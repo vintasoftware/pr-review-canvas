@@ -447,7 +447,7 @@ describe('runUpgrade', () => {
     // The new pr-review's own bundled template and version, reported back through the hand-off.
     const bundled = await readFile(path.join(PROMPTS_DIR, 'generation-format.md'), 'utf8')
     const message =
-      "review-prompts/format.md: pr-review's generation-format.md changed after 0.5.0, the version this copy came from. " +
+      "review-prompts/format.md: pr-review's generation-format.md changed after 0.5.0, the version this copy counts as copied from. " +
       'Merge what you want from https://github.com/vintasoftware/pr-review-canvas/compare/v0.5.0...v0.6.0, ' +
       `then make \`${baseLine('generation-format.md', '0.6.0', bundled)}\` its first line`
     expect(JSON.parse(out[0] ?? '').templates).toEqual([{ file: 'review-prompts/format.md', message }])

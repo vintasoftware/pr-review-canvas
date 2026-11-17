@@ -121,7 +121,7 @@ describe('runDoctorChecks', () => {
     )
     expect(fixed.checks.prompts).toEqual({
       ok: true,
-      detail: "own templates match this pr-review's: generation-format.md",
+      detail: "own templates are based on this pr-review's: generation-format.md",
     })
   })
 

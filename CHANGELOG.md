@@ -9,19 +9,27 @@
   it was copied from, as `<!-- pr-review-canvas 0.11.1 generation-format.md 8da76a1e136d -->`.
   When the installed template differs, they link the changes on GitHub and give the new line to
   paste once you merge them. The line never reaches a prompt. A copy without one counts as copied
-  from 0.10.0, the last release before these lines.
+  from 0.10.0, the last release before these lines. `pr-review serve` prints the same check on
+  start, beside the skill check.
 - The Writing rules moved to their own template, `writing.md`, which `generation-format.md` takes
   as `{{WRITING}}`. A project can override it under `prompts`. Generated prompts are unchanged.
 
 ### Upgrade from 0.10.0
 
-A project with its own prompt templates follows what `pr-review upgrade` prints, then `doctor`:
+This replaces step 3 of 0.11.0's notes. `pr-review upgrade` starts in 0.10.0, which names only the
+missing `{{WRITING}}`. The restarted `pr-review serve`, like `pr-review doctor`, names each of a
+project's own prompt templates whose bundled template changed since 0.10.0, with the link to the
+changes and the line to paste. A project with its own prompt templates:
 
-- Its own `generation-format.md` replaces the old "One or two short sentences…" paragraph with a
-  `## Writing` section holding `{{WRITING}}`, and merges the other changes from the link.
-- Its own `chat-seed.md` takes the sentence about `startLine` and the chunk ranges.
-- Each copy it merged gets the first line `doctor` prints. Copies of templates that did not change
+- Has its own `generation-format.md` replace the old "One or two short sentences…" paragraph with
+  a `## Writing` section holding `{{WRITING}}`, and merge the other changes from the link.
+- Has its own `chat-seed.md` take the sentence about `startLine` and the chunk ranges.
+- Gives each copy it merged the first line `doctor` prints. Copies of templates that did not change
   since 0.10.0 need nothing.
+
+Teammates still on 0.10.0 cannot generate from a template that holds `{{WRITING}}`, and fall back
+to the default settings when `pr-review.config.yml` names `writing.md`. Commit either once the
+whole team runs 0.11.1.
 
 ## 0.11.0
 
