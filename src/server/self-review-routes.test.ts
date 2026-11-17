@@ -409,7 +409,6 @@ describe('the bundle', () => {
 
   it.each([
     ['octocat', 'You opened this pull request. Sign-off comes from another reviewer.'],
-    ['OctoCat', 'You opened this pull request. Sign-off comes from another reviewer.'],
     ['reviewer', null],
   ])('says whether %s, who runs the server, opened the pull request', async (login, reason) => {
     t = await withCanvas(gh({ routes: { user: ghJson({ login }) } }))

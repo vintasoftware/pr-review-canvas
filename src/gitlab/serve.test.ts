@@ -497,15 +497,6 @@ describe('a GitLab origin', () => {
       expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
     }
   )
-  it('lets the merge request author post a review with no verdict', async () => {
-    const gh = glabFor42()
-    t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
-    const res = await createApp(t.ctx).request(
-      ...post('/api/prs/42/review', { event: 'COMMENT', body: 'a note', headSha: HEAD_SHA })
-    )
-    expect(res.status).toBe(201)
-    expect(gh.calls.filter(c => c.kind === 'post').map(c => c.path)).toEqual([`${MR_API}/notes`])
-  })
   it.each(['changed head', 'concurrent draft', 'replaced draft', 'cleanup failure'])(
     'retains local drafts after %s prevents GitLab submission',
     async failure => {

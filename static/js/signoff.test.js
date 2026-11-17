@@ -50,17 +50,15 @@ describe('signoffDisabledReason for the author', () => {
   const done = { ...BASE, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
   afterEach(() => setAuthorSignOffReason(null))
 
-  it('leaves request changes and comment on for a reader who did not open the pull request', () => {
+  it('leaves request changes on for a reader who did not open the pull request', () => {
     expect(signoffDisabledReason('REQUEST_CHANGES', artifact, BASE)).toBeNull()
-    expect(signoffDisabledReason('COMMENT', artifact, BASE)).toBeNull()
   })
 
-  it('comes before the unreviewed layers, stays once they are all reviewed, and leaves comment on', () => {
+  it('comes before the unreviewed layers and stays once they are all reviewed', () => {
     setAuthorSignOffReason(reason)
     expect(signoffDisabledReason('APPROVE', artifact, BASE)).toBe(reason)
     expect(signoffDisabledReason('APPROVE', artifact, done)).toBe(reason)
     expect(signoffDisabledReason('REQUEST_CHANGES', artifact, done)).toBe(reason)
-    expect(signoffDisabledReason('COMMENT', artifact, BASE)).toBeNull()
   })
 })
 

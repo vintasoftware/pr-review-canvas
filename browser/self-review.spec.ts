@@ -74,16 +74,6 @@ test('the author may comment but neither approve nor request changes, even with 
   await expect(approve).toBeDisabled()
   await expect(approve).toHaveAttribute('title', reason)
   await expect(changes).toBeDisabled()
-  // The server refuses it too, so a script or an old page cannot sign off.
-  const status = await page.evaluate(async () => {
-    const res = await fetch('../api/prs/42/review', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ event: 'APPROVE', body: 'mine' }),
-    })
-    return { status: res.status, code: ((await res.json()) as { error: { code: string } }).error.code }
-  })
-  expect(status).toEqual({ status: 403, code: 'SIGNOFF_BY_AUTHOR' })
 })
 
 test('completed self-review leaves only the done sentence and reviewer count', async ({

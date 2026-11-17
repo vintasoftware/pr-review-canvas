@@ -28,19 +28,15 @@ export function setAuthorSignOffReason(reason) {
 }
 
 /**
- * Why this sign-off command is disabled, or null when it is not. It follows the server's order: a
- * comment-only review is always allowed; the author cannot approve or request changes; and approve
- * waits until every layer that is not Other is reviewed. Reviewing every layer does not clear the
- * author's reason.
- * @param {import('./contract-types.js').ReviewEvent} event
+ * Why approve or request changes is disabled, or null when it is not. It follows the server's
+ * order: the author cannot approve or request changes; and approve waits until every layer that is
+ * not Other is reviewed. Reviewing every layer does not clear the author's reason.
+ * @param {'APPROVE' | 'REQUEST_CHANGES'} event
  * @param {ReviewArtifact} artifact
  * @param {PrState} state
  * @returns {string | null}
  */
 export function signoffDisabledReason(event, artifact, state) {
-  if (event === 'COMMENT') {
-    return null
-  }
   return authorReason ?? (event === 'APPROVE' ? unreviewedReason(artifact, state) : null)
 }
 

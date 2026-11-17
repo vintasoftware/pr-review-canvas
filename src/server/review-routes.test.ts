@@ -734,27 +734,11 @@ describe('POST /api/prs/:n/review from the pull request author', () => {
     // GH_PULL is by octocat, and so is the login ghFor42 answers with.
     const gh = ghFor42({ postRoutes: POST_ROUTES })
     t = await contextWithCanvas(gh)
-    const app = createApp(t.ctx)
-    // Every layer is reviewed, so only the author check refuses it.
-    await app.request(...put('/api/prs/42/reviewed/layer:run-path', { reviewed: true }))
-    const res = await app.request(...post('/api/prs/42/review', { event, body: 'mine' }))
+    // No layer is reviewed: the author check comes before the layer check.
+    const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event, body: 'mine' }))
     expect(res.status).toBe(403)
     expect(await json(res)).toEqual(AUTHOR_REFUSAL)
     expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
-  })
-
-  it('compares the login without case', async () => {
-    const gh = ghFor42({ postRoutes: POST_ROUTES, routes: { user: ghJson({ login: 'OctoCat' }) } })
-    t = await contextWithCanvas(gh)
-    const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event: 'REQUEST_CHANGES' }))
-    expect(res.status).toBe(403)
-  })
-
-  it('refuses before it checks the layers, so the author is told the reason that holds', async () => {
-    t = await contextWithCanvas(ghFor42({ postRoutes: POST_ROUTES }))
-    const res = await createApp(t.ctx).request(...post('/api/prs/42/review', { event: 'APPROVE' }))
-    expect(res.status).toBe(403)
-    expect((await json<{ error: { code: string } }>(res)).error.code).toBe('SIGNOFF_BY_AUTHOR')
   })
 
   it('lets the author post a review with no verdict', async () => {

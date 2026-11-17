@@ -207,7 +207,7 @@ export function progressHtml(artifact, state, on = artifact.pr) {
       draftsByCommit(state, on).earlier.length
     )}</div>` +
     `<div class="signoff">${approve}${requestChanges}` +
-    `<button class="cmd" type="button" id="comment-review" data-tooltip="${commentTitle}" data-act="signoff" data-event="COMMENT" data-needs-post${signoffAttrs(signoffDisabledReason('COMMENT', artifact, state), commentTitle)}>comment</button>` +
+    `<button class="cmd" type="button" id="comment-review" data-tooltip="${commentTitle}" title="${commentTitle}" data-act="signoff" data-event="COMMENT" data-needs-post>comment</button>` +
     '<span class="capability-note" role="status"></span></div>'
   )
 }
