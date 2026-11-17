@@ -2381,7 +2381,7 @@
     {
       "topic": "Compare-and-swap",
       "kind": "concept",
-      "explanation": "Compare-and-swap writes a new value only if the current value is still the one you read, so two concurrent writers cannot both win. The manifest swap in [the storage lifecycle](#layer:storage-lifecycle) uses it to publish a new file generation. See [Compare-and-swap](https://en.wikipedia.org/wiki/Compare-and-swap)."
+      "explanation": "Compare-and-swap writes a new value only if the current value is still the one you read, so two concurrent writers cannot both win. The manifest swap in [the storage lifecycle](#layer:storage-lifecycle) uses it to publish a new file generation."
     },
     {
       "topic": "Scheduled cleanup jobs",

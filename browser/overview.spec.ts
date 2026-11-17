@@ -59,31 +59,41 @@ test.describe('with fullWidthText', () => {
   })
 })
 
-test('shows the background closed under the summary, and its links reach the code', async ({
-  page,
-  chatServer,
-}) => {
-  const server = await chatServer({
-    setup: async ({ ctx }) => {
-      ctx.fixtureArtifact = {
-        ...syntheticArtifact(),
-        background: [
-          {
-            topic: 'Retry policies',
-            kind: 'concept',
-            explanation: 'Read [the later hunk](#hunk:src/app.ts#2). See [docs](https://example.com/retry).',
-          },
-        ],
-      }
-    },
+for (const [view, settings] of [
+  ['all layers', { layerView: 'all' }],
+  ['one layer', { layerView: 'one' }],
+  ['attention points', { readByPoints: true }],
+] as const) {
+  test(`opens Background on request and follows its code link when reading by ${view}`, async ({
+    page,
+    chatServer,
+  }) => {
+    const server = await chatServer({
+      setup: async ({ ctx }) => {
+        await ctx.settings.write(settings)
+        ctx.fixtureArtifact = {
+          ...syntheticArtifact(),
+          background: [
+            {
+              topic: 'Retry policies',
+              kind: 'concept',
+              explanation:
+                'Read [the later hunk](#hunk:src/app.ts#2). See [docs](https://example.com/retry).',
+            },
+          ],
+        }
+      },
+    })
+    await page.goto(server.url + '#overview')
+    const background = page.locator('#overview details.background')
+    await expect(background).toBeVisible()
+    await expect(background).not.toHaveAttribute('open')
+    const toggle = background.locator(':scope > summary')
+    await expect(toggle).toContainText('Background · 1 topic')
+    await toggle.click()
+    await expect(background.getByText('Retry policies')).toBeVisible()
+    await expect(background.getByRole('link', { name: 'docs' })).toHaveAttribute('rel', 'noopener noreferrer')
+    await background.getByRole('link', { name: 'the later hunk' }).click()
+    await expect(page.locator('#hunk-src_app_ts-2')).toBeInViewport()
   })
-  await page.goto(server.url)
-  const background = page.locator('#overview details.background')
-  await expect(background).not.toHaveAttribute('open')
-  await expect(background.locator(':scope > summary')).toContainText('Background · 1 topic')
-  await background.locator(':scope > summary').click()
-  await expect(background.getByText('Retry policies')).toBeVisible()
-  await expect(background.getByRole('link', { name: 'docs' })).toHaveAttribute('rel', 'noopener noreferrer')
-  await background.getByRole('link', { name: 'the later hunk' }).click()
-  await expect(page.locator('#hunk-src_app_ts-2')).toBeInViewport()
-})
+}

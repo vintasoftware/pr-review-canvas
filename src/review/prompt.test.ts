@@ -94,7 +94,13 @@ describe('renderPrompt', () => {
   })
 
   it('exposes effective visible caps beside raw ceilings and uses the exact fold cap', () => {
-    const caps = { ...TEXT_CAPS, pointTitle: 75, annotation: 200 }
+    const caps = {
+      ...TEXT_CAPS,
+      pointTitle: 75,
+      annotation: 200,
+      backgroundTopic: 250,
+      backgroundExplanation: 500,
+    }
     const schema = JSON.parse(schemaMarkdown(context({ caps })).slice(8, -4))
     const layer = schema.properties.layers.items.properties
     const file = layer.files.items.properties
@@ -103,6 +109,10 @@ describe('renderPrompt', () => {
     expect(file.note['x-visibleMaxLength']).toBe(caps.annotation)
     expect(file.annotations.items.properties.text['x-visibleMaxLength']).toBe(caps.annotation)
     expect(file.folds.items.properties.title.maxLength).toBe(caps.pointTitle)
+    const topic = schema.properties.background.items.properties
+    expect(topic.topic.maxLength).toBe(240)
+    expect(topic.explanation.maxLength).toBe(1600)
+    expect(topic.explanation['x-visibleMaxLength']).toBe(caps.backgroundExplanation)
     expect(schema.properties.points.items.properties.title['x-visibleMaxLength']).toBe(caps.pointTitle)
   })
 

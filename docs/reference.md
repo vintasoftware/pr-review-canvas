@@ -515,7 +515,9 @@ and where it goes.
 
 Set any of these keys under `generation.caps`. Prose limits count visible characters, so Markdown
 link targets, backticks, and asterisks do not count. Fold titles and background topic names are plain text and count in full.
-`diagram` counts raw Mermaid source characters.
+`diagram` counts raw Mermaid source characters. For Background, stored canvases allow up to 240
+characters per topic name and 1,600 raw Markdown characters per explanation, including link targets.
+These ceilings also apply when a project raises its generation caps.
 
 | Key                     | Default |
 | ----------------------- | ------- |
@@ -1524,4 +1526,4 @@ Validation reports name the field, file, hunk, or line to fix. Common groups are
 | `TOO_MANY_TOPICS`                                               | At most 10 background topics                                                                                                                           |
 | `POINT_IMPACT`                                                  | Every `decide` point has an impact, and no other point has one                                                                                         |
 | `POINT_LEVEL`                                                   | A `question` point is `decide` or `check`                                                                                                              |
-| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Link targets, diagram node IDs, and diagram counts                                                                                                     |
+| `LINK_UNRESOLVED`, `DIAGRAM_NODE_UNKNOWN`, `DIAGRAM_LIMIT`      | Canvas link targets, a code link in each background explanation, diagram node IDs, and diagram counts                                                  |

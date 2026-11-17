@@ -12,7 +12,7 @@ import { toast } from './commands.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
-import { getRenderContext, setCardCollapsed } from './layers.js'
+import { getRenderContext, openCard } from './layers.js'
 import { clearStop, showStop, stopShowing, stopTarget } from './point-view.js'
 import { expandOpenPoint } from './points.js'
 import { stopsOf } from './point-steps.js'
@@ -146,9 +146,7 @@ export function initOneLayer(root, opts) {
   /** @param {HTMLElement} section */
   const showSection = section => {
     showOnly(root, section)
-    if (section.matches('section.layer')) setCardCollapsed(section, false)
-    const details = section.querySelector(':scope > details')
-    if (details instanceof HTMLDetailsElement) details.open = true
+    openCard(section)
     shownHash = `#${section.id}`
   }
 

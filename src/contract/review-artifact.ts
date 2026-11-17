@@ -40,7 +40,7 @@ export function mapCaps<T>(fn: (key: keyof TextCaps) => T): { [K in keyof TextCa
 export function effectiveCaps(
   overrides: { [K in keyof TextCaps]?: number | undefined } | undefined
 ): TextCaps {
-  return mapCaps(key => overrides?.[key] ?? TEXT_CAPS[key])
+  return mapCaps(key => Math.min(overrides?.[key] ?? TEXT_CAPS[key], ARTIFACT_HARD_CAPS[key]))
 }
 
 /**
@@ -58,7 +58,6 @@ export function hardCaps(caps: TextCaps): TextCaps {
  */
 export const ARTIFACT_HARD_CAPS: TextCaps = hardCaps(TEXT_CAPS)
 export const ARTIFACT_MAX_POINTS = LIMITS.maxPoints * HARD_CAP_FACTOR
-export const ARTIFACT_MAX_BACKGROUND_TOPICS = LIMITS.maxBackgroundTopics * HARD_CAP_FACTOR
 
 export const FILE_STATUSES = ['added', 'modified', 'deleted', 'renamed', 'binary'] as const
 export const POINT_KINDS = ['decision', 'risk', 'drift', 'tests', 'debt', 'question'] as const
@@ -199,7 +198,7 @@ function textOrEmpty(caps: Caps, key: keyof TextCaps): z.ZodString {
       : ''
   return z
     .string()
-    .max(caps[key])
+    .max(Math.min(caps[key], ARTIFACT_HARD_CAPS[key]))
     .meta({
       description: `At most ${visibleCap} visible characters. Link targets, backticks, asterisks, and code-fence lines do not count. maxLength is only the raw Markdown ceiling.${diagrams}`,
       'x-visibleMaxLength': visibleCap,
@@ -235,7 +234,10 @@ export type TestEntry = z.infer<typeof TestEntrySchema>
  */
 export function backgroundTopicSchema(caps: Caps, topicCap: number) {
   return z.object({
-    topic: z.string().max(topicCap).regex(/\S/, 'A background topic must contain visible text'),
+    topic: z
+      .string()
+      .max(Math.min(topicCap, ARTIFACT_HARD_CAPS.backgroundTopic))
+      .regex(/\S/, 'A background topic must contain visible text'),
     kind: z.enum(BACKGROUND_KINDS),
     explanation: text(caps, 'backgroundExplanation'),
   })
@@ -408,7 +410,7 @@ export const ReviewArtifactSchema = z.object({
   layers: z.array(LayerSchema).min(1),
   points: z.array(PointSchema).max(ARTIFACT_MAX_POINTS),
   /** Topics a newcomer may need to read the change. None on a canvas written before it existed. */
-  background: z.array(BackgroundTopicSchema).max(ARTIFACT_MAX_BACKGROUND_TOPICS).default([]),
+  background: z.array(BackgroundTopicSchema).max(LIMITS.maxBackgroundTopics).default([]),
   generatedAt: z.string(),
   generator: GeneratorSchema,
   source: z.enum(['local', 'import']),
@@ -438,8 +440,8 @@ export const ReviewArtifactSchema = z.object({
 export type ReviewArtifact = z.infer<typeof ReviewArtifactSchema>
 
 /**
- * What the agent writes to model.json. The schema bounds raw text at the hard limit (4x the cap);
- * the validator measures the visible text against the cap itself. Ids, fingerprints, layerId,
+ * What the agent writes to model.json. Raw Markdown must fit both the project's hard limit
+ * (4x its visible cap) and the stored canvas. The validator measures visible text. Ids, fingerprints, layerId,
  * isTest, and config risk are added by publish. A layer may list no files here so the validator
  * can name the problem (`LAYER_EMPTY`) instead of a schema failure; the point count is checked by
  * the validator too, together with the points that missing tests add.

@@ -406,6 +406,19 @@ function chevronLabel(kind, collapsed) {
 }
 
 /**
+ * Opens a layer or file the reader navigated to. The Other layer wraps its body in a disclosure.
+ * @param {Element} target
+ */
+export function openCard(target) {
+  if (target.matches('section.layer, article.file')) {
+    setCardCollapsed(target, false)
+  } else if (target.matches('pr-layer > section')) {
+    const details = target.querySelector(':scope > details')
+    if (details instanceof HTMLDetailsElement) details.open = true
+  }
+}
+
+/**
  * Opens the collapsed cards and closed details around whatever `scrollIntoViewSafe` scrolls to,
  * so a key or a link never lands on something hidden. Returns the function that stops it.
  * @param {HTMLElement} root
@@ -418,15 +431,7 @@ export function wireCardReveal(root) {
     // into it, shows that one point.
     if (target instanceof Element) {
       target.closest('[data-point].is-resolved')?.setAttribute('data-revealed', '')
-    }
-    // Layers and files start closed, so a key or a link that lands on one opens it as well.
-    if (target instanceof HTMLElement && target.matches('section.layer, article.file')) {
-      setCardCollapsed(target, false)
-    }
-    // The Other layer's body is the details right under its section, which opens the same way.
-    if (target instanceof HTMLElement && target.matches('pr-layer > section')) {
-      const details = target.querySelector(':scope > details')
-      if (details instanceof HTMLDetailsElement) details.open = true
+      openCard(target)
     }
     for (
       let node = target instanceof Element ? target.parentElement : null;

@@ -139,6 +139,51 @@ describe('publish', () => {
     expect(attemptsSincePrepare('x prepared a\nx published attempts=1 prepared \n')).toBe(1)
   })
 
+  it('publishes raised Background caps only up to the lengths the stored canvas can read', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const project = t.ctx.projectConfig.config
+    t.ctx.projectConfig = {
+      ...t.ctx.projectConfig,
+      config: {
+        ...project,
+        generation: { ...project.generation, caps: { backgroundTopic: 250, backgroundExplanation: 500 } },
+      },
+    }
+    const { canvasDir } = await prepare(
+      t.ctx,
+      { kind: 'pr', number: 42 },
+      { force: false, log: () => undefined }
+    )
+    const model = artifactToModelOutput(syntheticArtifact())
+    const topic = {
+      topic: 'T'.repeat(240),
+      kind: 'concept' as const,
+      explanation:
+        ('See [the run path](#layer:run-path). ' + 'x'.repeat(420) + ' [docs](https://example.com/').padEnd(
+          1599,
+          'a'
+        ) + ')',
+    }
+    model.background = [topic]
+    await writeModel(canvasDir, model)
+    await publish(t.ctx, canvasDir, { ...OPTS, share: false })
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.background).toEqual([topic])
+
+    await writeModel(canvasDir, {
+      ...model,
+      background: [{ ...topic, topic: topic.topic + '!', explanation: topic.explanation + '.' }],
+    })
+    await expect(publish(t.ctx, canvasDir, { ...OPTS, share: false })).rejects.toMatchObject({
+      report: {
+        errors: [
+          expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'background.0.topic' }),
+          expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'background.0.explanation' }),
+        ],
+      },
+    })
+    expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.background).toEqual([topic])
+  })
+
   it('shares the validated ZIP and preserves a usable fallback when sharing fails', async () => {
     const canvasDir = await prepared()
     await createApp(t.ctx).request('/api/prs/42', { headers: { host: 'localhost:3010' } })

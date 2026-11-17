@@ -700,7 +700,7 @@ describe('validateModelOutput', () => {
         topic: 'Retry policies',
         kind: 'concept',
         explanation:
-          'A retry policy says when to try again. See [the run path](#layer:run-path) and [the docs](https://example.com/retry).',
+          'A retry policy says when to try again. See [the run path][run] and [the docs](https://example.com/retry).\n\n[run]: #layer:run-path',
       },
     ]
     expect(errorsOf(output)).toEqual([])
@@ -722,12 +722,16 @@ describe('validateModelOutput', () => {
   it('TEXT_TOO_LONG: caps a background explanation by its visible text', () => {
     const output = clean()
     output.background = [
-      { topic: 'Zod', kind: 'library', explanation: 'x'.repeat(TEXT_CAPS.backgroundExplanation + 1) },
+      {
+        topic: 'Zod',
+        kind: 'library',
+        explanation: '[run](#layer:run-path) ' + 'x'.repeat(TEXT_CAPS.backgroundExplanation),
+      },
     ]
     expect(errorsOf(output)).toEqual([
       expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'background.0.explanation' }),
     ])
-    output.background[0]!.explanation = `[docs](https://example.com/${'x'.repeat(TEXT_CAPS.backgroundExplanation)})`
+    output.background[0]!.explanation = `[run](#layer:run-path) and [docs](https://example.com/${'x'.repeat(TEXT_CAPS.backgroundExplanation)})`
     expect(errorsOf(output)).toEqual([])
   })
 
@@ -736,7 +740,7 @@ describe('validateModelOutput', () => {
     output.background = Array.from({ length: LIMITS.maxBackgroundTopics + 1 }, (_, i) => ({
       topic: `Topic ${i}`,
       kind: 'tool' as const,
-      explanation: 'Short.',
+      explanation: 'See [the run path](#layer:run-path).',
     }))
     expect(errorsOf(output)).toEqual([
       {
@@ -750,6 +754,20 @@ describe('validateModelOutput', () => {
   it('LINK_UNRESOLVED: a background canvas link must resolve', () => {
     const output = clean()
     output.background = [{ topic: 'Gone', kind: 'project', explanation: 'See [it](#layer:nope).' }]
+    expect(errorsOf(output)).toEqual([
+      expect.objectContaining({ code: 'LINK_UNRESOLVED', where: 'background:1' }),
+    ])
+  })
+
+  it.each([
+    'No links.',
+    'Read [the docs](https://example.com).',
+    'Try `[run](#layer:run-path)`.',
+    'See #layer:run-path.',
+    '![[run](#layer:run-path)](https://example.com/logo.png)',
+  ])('requires a clickable canvas link in a background explanation: %s', explanation => {
+    const output = clean()
+    output.background = [{ topic: 'Retry', kind: 'concept', explanation }]
     expect(errorsOf(output)).toEqual([
       expect.objectContaining({ code: 'LINK_UNRESOLVED', where: 'background:1' }),
     ])

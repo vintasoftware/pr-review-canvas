@@ -2,7 +2,13 @@
 // hunk index and the config; the report lists one line per problem and never fixes anything.
 import { missingTestAnchor } from './missing-tests.js'
 import type { z } from 'zod'
-import { extractLinks, type LinkTargets, parseLink, resolveLink } from '../contract/links.js'
+import {
+  extractLinks,
+  type LinkTargets,
+  markdownFragmentLinks,
+  parseLink,
+  resolveLink,
+} from '../contract/links.js'
 import { diagramKind, mermaidBlocks, withoutMermaid } from '../contract/mermaid-fences.js'
 import {
   type FileEntry,
@@ -550,7 +556,13 @@ function checkLinks(output: ModelOutput, files: readonly FileEntry[], report: Re
     check(`point:${i + 1}`, `point ${i + 1} "${p.title}"`, p.body)
   })
   output.background.forEach((t, i) => {
-    check(`background:${i + 1}`, `background topic ${i + 1} "${t.topic}"`, t.explanation)
+    const where = `background:${i + 1}`
+    const label = `background topic ${i + 1} "${t.topic}"`
+    const links = markdownFragmentLinks(t.explanation)
+    if (links.length === 0) {
+      report.add('LINK_UNRESOLVED', where, `${label}: add a Markdown link to the code this topic explains`)
+    }
+    for (const href of links) checkLink(report, targets, where, label, href)
   })
 }
 
