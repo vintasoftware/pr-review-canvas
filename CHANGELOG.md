@@ -27,9 +27,9 @@ changes and the line to paste. A project with its own prompt templates:
 - Gives each copy it merged the first line `doctor` prints. Copies of templates that did not change
   since 0.10.0 need nothing.
 
-Teammates still on 0.10.0 cannot generate from a template that holds `{{WRITING}}`, and fall back
-to the default settings when `pr-review.config.yml` names `writing.md`. Commit either once the
-whole team runs 0.11.1.
+Teammates on 0.11.0 or older cannot generate from a template that holds `{{WRITING}}`, and fall
+back to the default settings when `pr-review.config.yml` names `writing.md`. Commit either once
+the whole team runs 0.11.1.
 
 ## 0.11.0
 

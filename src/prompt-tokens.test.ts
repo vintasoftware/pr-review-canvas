@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { PACKAGE_ROOT, PROMPTS_DIR } from './paths.js'
 import type { PromptOverrides } from './project-config.js'
-import { ADDED_TOKENS } from './prompt-tokens.js'
+import { ADDED_TOKENS, TokenGapSchema } from './prompt-tokens.js'
 import { isNewer } from './version.js'
 
 /** The tokens each bundled template had at 0.9.0, before `ADDED_TOKENS` began. Frozen history. */
@@ -85,5 +85,12 @@ describe('ADDED_TOKENS', () => {
       expect(isNewer(entry.since, version), `${entry.token} is stamped ${entry.since}`).toBe(false)
       expect(isNewer(entry.since, '0.9.0'), `${entry.token} is stamped ${entry.since}`).toBe(true)
     }
+  })
+})
+
+describe('TokenGapSchema', () => {
+  it('reads a gap in a template newer than this release, as an upgrade reads the new version’s report', () => {
+    const gap = { since: '0.13.0', template: 'later.md', token: 'LATER', file: 'later.md', heading: null }
+    expect(TokenGapSchema.safeParse(gap).success).toBe(true)
   })
 })
