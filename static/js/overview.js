@@ -32,8 +32,7 @@ export function backgroundHtml(background, paths) {
     .join('')
   return (
     `<details class="background">${detailsSummaryHtml(`<span>Background · ${count}</span>`, 'Toggle background')}` +
-    `<div class="body"><p class="muted">Topics this change builds on, to start reading about if they are new to you.</p>` +
-    `<ul class="background-topics">${items}</ul></div></details>`
+    `<div class="body"><ul class="background-topics">${items}</ul></div></details>`
   )
 }
 
