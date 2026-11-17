@@ -40,7 +40,7 @@ import { hubHome } from './hub/home.js'
 import { createHubApp } from './hub/hub-app.js'
 import { createHub, type ProjectRegistration } from './hub/hub.js'
 import { loadContext } from './load-context.js'
-import { checkSkill } from './review/doctor.js'
+import { checkPrompts, checkSkill } from './review/doctor.js'
 import { type AppContext, readPackageVersion, resolveVendorRoots } from './server/context.js'
 import { startHubServer } from './server/node-server.js'
 import { openBrowser } from './server/open-browser.js'
@@ -269,7 +269,7 @@ export async function main(argv: string[]): Promise<number> {
   try {
     switch (command) {
       case 'serve':
-        return await runServe({ ...hubDeps(), startServer, checkSkill }, rest, io)
+        return await runServe({ ...hubDeps(), startServer, checkSkill, checkPrompts }, rest, io)
       case 'open':
         return await runOpen(hubDeps(), rest, io)
       case 'generate':

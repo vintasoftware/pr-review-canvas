@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { PACKAGE_ROOT, PROMPTS_DIR } from './paths.js'
 import type { PromptOverrides } from './project-config.js'
-import { ADDED_TOKENS } from './prompt-tokens.js'
+import { ADDED_TOKENS, TokenGapSchema } from './prompt-tokens.js'
 import { isNewer } from './version.js'
 
 /** The tokens each bundled template had at 0.9.0, before `ADDED_TOKENS` began. Frozen history. */
@@ -54,6 +54,8 @@ const AT_0_9_0: Record<keyof PromptOverrides, readonly string[]> = {
   'judging-surfacing.md': ['FORMAT', 'QUALITY_STANDARDS', 'RULEBOOK'],
   'layering-guidance.md': [],
   'quality-standards.md': [],
+  // Bundled from 0.11.1, with no tokens.
+  'writing.md': [],
 }
 
 const templates = Object.keys(AT_0_9_0) as Array<keyof PromptOverrides>
@@ -67,7 +69,8 @@ describe('ADDED_TOKENS', () => {
   it.each(templates)('lists every token %s gained since 0.9.0, and none it does not have', async template => {
     const tokens = await tokensOf(template)
     const added = ADDED_TOKENS.filter(t => t.template === template).map(t => t.token)
-    expect([...tokens].filter(t => !AT_0_9_0[template].includes(t))).toEqual(added)
+    // Sorted: a token added later can sit above an older one in the template.
+    expect([...tokens].filter(t => !AT_0_9_0[template].includes(t)).sort()).toEqual(added.sort())
   })
 
   it('stamps each token with a version no newer than a release that ships it', async () => {
@@ -82,5 +85,12 @@ describe('ADDED_TOKENS', () => {
       expect(isNewer(entry.since, version), `${entry.token} is stamped ${entry.since}`).toBe(false)
       expect(isNewer(entry.since, '0.9.0'), `${entry.token} is stamped ${entry.since}`).toBe(true)
     }
+  })
+})
+
+describe('TokenGapSchema', () => {
+  it('reads a gap in a template newer than this release, as an upgrade reads the new version’s report', () => {
+    const gap = { since: '0.13.0', template: 'later.md', token: 'LATER', file: 'later.md', heading: null }
+    expect(TokenGapSchema.safeParse(gap).success).toBe(true)
   })
 })

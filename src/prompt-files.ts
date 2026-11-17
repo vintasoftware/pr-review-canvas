@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { PROMPTS_DIR } from './paths.js'
+import { stripBaseLine } from './prompt-bases.js'
 import type { PromptOverrides } from './project-config.js'
 
 export interface ProjectPrompts {
@@ -8,7 +9,10 @@ export interface ProjectPrompts {
   overrides?: PromptOverrides | undefined
 }
 
-/** Explicit overrides must be readable; only omitted entries use bundled templates. */
+/**
+ * Explicit overrides must be readable; only omitted entries use bundled templates. An override's
+ * base line is dropped, so the prompt is the same with or without it.
+ */
 export async function loadPromptFile(
   name: keyof PromptOverrides,
   dir = PROMPTS_DIR,
@@ -20,7 +24,7 @@ export async function loadPromptFile(
       ? path.resolve(project.repoRoot, override)
       : path.join(dir, name)
   try {
-    return await readFile(file, 'utf8')
+    return stripBaseLine(await readFile(file, 'utf8'))
   } catch (cause) {
     throw new Error(`Cannot read prompt ${name} from ${file}`, { cause })
   }
