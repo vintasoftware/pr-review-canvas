@@ -1,3 +1,4 @@
+import { readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
@@ -218,7 +219,23 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
   return { config, warnings }
 }
 
+/** The names a rulebook at the repository root goes by when the config names none: first wins, any case. */
+const RULEBOOK_NAMES = ['review.md', 'code_review.md', 'code-review.md']
+
+/** The project config, with a rulebook found at the repository root when it names none. */
 export async function loadProjectConfig(repoRoot: string): Promise<LoadedProjectConfig> {
+  const loaded = await readProjectConfig(repoRoot)
+  if (loaded.config.rulebook !== undefined) return loaded
+  // Sorted, so a case-sensitive file system with both REVIEW.md and review.md picks the same one each time.
+  const names = (await readdir(repoRoot).catch(() => [])).sort()
+  for (const wanted of RULEBOOK_NAMES) {
+    const rulebook = names.find(name => name.toLowerCase() === wanted)
+    if (rulebook !== undefined) return { ...loaded, config: { ...loaded.config, rulebook } }
+  }
+  return loaded
+}
+
+async function readProjectConfig(repoRoot: string): Promise<LoadedProjectConfig> {
   const file = path.join(repoRoot, PROJECT_CONFIG_FILE)
   const text = await readText(file)
   if (text === null) {

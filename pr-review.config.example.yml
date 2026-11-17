@@ -2,6 +2,7 @@
 version: 1
 
 # Markdown reference for project standards. The generation mode controls how the generator uses it.
+# Unset, the first of REVIEW.md, code_review.md, and code-review.md at the root, in any case, is used.
 # rulebook: docs/CODE_REVIEW.md
 
 # Optional full-template replacements, resolved from this project's root.
