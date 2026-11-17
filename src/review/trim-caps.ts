@@ -7,7 +7,7 @@
  * telling the writer where the cap actually falls in their own text.
  */
 
-import { visibleLength, visibleText } from './text-length.js'
+import { visibleLength } from './text-length.js'
 
 /** Separators that introduce an explainer after a name: "Storage: how it works". */
 const EXPLAINER = /\s+[:—–-]\s+|:\s+/
@@ -16,8 +16,7 @@ const EXPLAINER = /\s+[:—–-]\s+|:\s+/
  * The visible prefix that fits in `cap`, ending on a word boundary when one is near the cut.
  * Used to tell a writer where their text crosses the cap, never to rewrite prose for them.
  */
-export function visiblePrefix(text: string, cap: number): string {
-  const visible = visibleText(text)
+export function visiblePrefix(visible: string, cap: number): string {
   if (visible.length <= cap) {
     return visible
   }

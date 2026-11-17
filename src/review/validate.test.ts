@@ -693,19 +693,47 @@ describe('validateModelOutput', () => {
     ])
   })
 
-  it('accepts background topics with canvas links and https links', () => {
+  it('counts the labels of Background reference links and resolves their destinations', () => {
     const output = clean()
     output.background = [
       {
         topic: 'Retry policies',
         kind: 'concept',
         explanation:
-          'A retry policy says when to try again. See [the run path][run] and [the docs](https://example.com/retry).\n\n[run]: #layer:run-path',
+          'See [the run path][run] and [official docs][docs].\n\n[run]: #layer:run-path\n[docs]: https://example.com/official-docs',
       },
     ]
-    expect(errorsOf(output)).toEqual([])
+    const caps = { ...TEXT_CAPS, backgroundExplanation: 35 }
+    expect(errorsOf(output, { caps })).toEqual([])
+    caps.backgroundExplanation = 34
+    expect(errorsOf(output, { caps })).toEqual([
+      {
+        code: 'TEXT_TOO_LONG',
+        where: 'background.0.explanation',
+        message:
+          'background.0.explanation: 35 visible chars, cap 34; what fits ends at "...See the run path and official"',
+      },
+    ])
     output.background = []
     expect(errorsOf(output)).toEqual([])
+  })
+
+  it('measures formatted and automatic labels on reference links inside a list', () => {
+    const output = clean()
+    output.background = [
+      {
+        topic: 'Run path',
+        kind: 'project',
+        explanation: '- Use *[the **run** path][run]*.\n- See [][run].\n\n[run]: #layer:run-path',
+      },
+    ]
+    const visible = 'Use the run path.\nSee run-path.'
+    const caps = { ...TEXT_CAPS, backgroundExplanation: visible.length }
+    expect(errorsOf(output, { caps })).toEqual([])
+    caps.backgroundExplanation -= 1
+    expect(errorsOf(output, { caps })).toEqual([
+      expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'background.0.explanation' }),
+    ])
   })
 
   it.each(['x'.repeat(TEXT_CAPS.backgroundTopic + 1), `**${'x'.repeat(TEXT_CAPS.backgroundTopic - 3)}**`])(

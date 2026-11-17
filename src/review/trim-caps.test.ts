@@ -31,8 +31,8 @@ describe('visiblePrefix', () => {
     expect(visiblePrefix('short', 60)).toBe('short')
   })
 
-  it('measures the text a reader sees, not the markdown', () => {
-    expect(visiblePrefix('[label](#file:a/very/long/path.ts) tail', 5)).toBe('label')
+  it('keeps a word that ends exactly at the cut', () => {
+    expect(visiblePrefix('label tail', 5)).toBe('label')
   })
 
   it('ends on a word boundary when one is near the cut', () => {

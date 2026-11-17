@@ -2,13 +2,7 @@
 // hunk index and the config; the report lists one line per problem and never fixes anything.
 import { missingTestAnchor } from './missing-tests.js'
 import type { z } from 'zod'
-import {
-  extractLinks,
-  type LinkTargets,
-  markdownFragmentLinks,
-  parseLink,
-  resolveLink,
-} from '../contract/links.js'
+import { extractLinks, type LinkTargets, parseLink, resolveLink } from '../contract/links.js'
 import { diagramKind, mermaidBlocks, withoutMermaid } from '../contract/mermaid-fences.js'
 import {
   type FileEntry,
@@ -26,7 +20,7 @@ import type { HighRiskRule } from '../project-config.js'
 import { diagramNodeIds } from './diagram-nodes.js'
 import { matchesGlob } from './glob.js'
 import { coveredStem, DEFAULT_TEST_PATTERNS, isTestPath, sourceStem } from './test-paths.js'
-import { visibleLength } from './text-length.js'
+import { backgroundProse, visibleText } from './text-length.js'
 import { visiblePrefix } from './trim-caps.js'
 import { validateFolds } from './validate-folds.js'
 
@@ -130,6 +124,16 @@ function layerLabel(layer: ModelLayer): string {
   return layer.kind === 'other' ? 'other' : `layer ${layer.key}`
 }
 
+function checkVisibleLength(where: string, text: string, cap: number, report: Report): void {
+  if (text.length <= cap) return
+  const fits = visiblePrefix(text, cap)
+  report.add(
+    'TEXT_TOO_LONG',
+    where,
+    `${where}: ${text.length} visible chars, cap ${cap}; what fits ends at "...${fits.slice(-40)}"`
+  )
+}
+
 /**
  * Every capped field, measured as the reader sees it: link targets and code markers do not count.
  * The two fields that draw diagrams are measured without their mermaid source, since the reader
@@ -140,17 +144,7 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
     if (text === undefined) {
       return
     }
-    const measured = drawn ? withoutMermaid(text) : text
-    const length = visibleLength(measured)
-    if (length > caps[key]) {
-      // Name where the cap falls in their own words, so the rewrite is not guessed at twice.
-      const fits = visiblePrefix(measured, caps[key])
-      report.add(
-        'TEXT_TOO_LONG',
-        where,
-        `${where}: ${length} visible chars, cap ${caps[key]}; what fits ends at "...${fits.slice(-40)}"`
-      )
-    }
+    checkVisibleLength(where, visibleText(drawn ? withoutMermaid(text) : text), caps[key], report)
   }
   check('summary', 'summary', output.summary, true)
   output.layers.forEach((layer, i) => {
@@ -186,14 +180,14 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
     check(`points.${i}.title`, 'pointTitle', p.title)
     check(`points.${i}.body`, 'pointBody', p.body)
   })
-  // A topic name is plain text, so the schema caps it in full; only the explanation is Markdown.
-  output.background.forEach((t, i) => {
-    check(`background.${i}.explanation`, 'backgroundExplanation', t.explanation)
-  })
 }
 
-/** The background holds at most `maxBackgroundTopics` topics. */
-function checkBackground(output: ModelOutput, limits: Limits, report: Report): void {
+/** A topic name is plain text and capped by the schema. Its explanation is Markdown. */
+function checkBackground(
+  output: ModelOutput,
+  { caps, limits, files }: ValidationInput,
+  report: Report
+): void {
   if (output.background.length > limits.maxBackgroundTopics) {
     report.add(
       'TOO_MANY_TOPICS',
@@ -201,6 +195,17 @@ function checkBackground(output: ModelOutput, limits: Limits, report: Report): v
       `${output.background.length} background topics, cap ${limits.maxBackgroundTopics}`
     )
   }
+  const targets = { layers: output.layers, files }
+  output.background.forEach((t, i) => {
+    const where = `background:${i + 1}`
+    const label = `background topic ${i + 1} "${t.topic}"`
+    const { text, links } = backgroundProse(t.explanation)
+    checkVisibleLength(`background.${i}.explanation`, text, caps.backgroundExplanation, report)
+    if (links.length === 0) {
+      report.add('LINK_UNRESOLVED', where, `${label}: add a Markdown link to the code this topic explains`)
+    }
+    for (const href of links) checkLink(report, targets, where, label, href)
+  })
 }
 
 /**
@@ -555,15 +560,6 @@ function checkLinks(output: ModelOutput, files: readonly FileEntry[], report: Re
   output.points.forEach((p, i) => {
     check(`point:${i + 1}`, `point ${i + 1} "${p.title}"`, p.body)
   })
-  output.background.forEach((t, i) => {
-    const where = `background:${i + 1}`
-    const label = `background topic ${i + 1} "${t.topic}"`
-    const links = markdownFragmentLinks(t.explanation)
-    if (links.length === 0) {
-      report.add('LINK_UNRESOLVED', where, `${label}: add a Markdown link to the code this topic explains`)
-    }
-    for (const href of links) checkLink(report, targets, where, label, href)
-  })
 }
 
 /**
@@ -644,7 +640,7 @@ export function validateModelOutput(raw: unknown, input: ValidationInput): Valid
     report.add(error.code, error.where ?? 'folds', error.message)
   }
   checkPoints(output, index, input.limits, report, input.storedArtifact === true)
-  checkBackground(output, input.limits, report)
+  checkBackground(output, input, report)
   checkLinks(output, input.files, report)
   checkDiagramLinks(output, input.files, input.limits, report)
   return report.errors.length === 0
