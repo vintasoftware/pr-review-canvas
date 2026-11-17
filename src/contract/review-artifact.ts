@@ -24,7 +24,7 @@ export const LIMITS = {
   maxPoints: 12,
   maxDiagramsPerLayer: 1,
   maxDiagramLinks: 12,
-  maxBackgroundTopics: 8,
+  maxBackgroundTopics: 10,
 } as const
 export type Limits = { -readonly [K in keyof typeof LIMITS]: number }
 

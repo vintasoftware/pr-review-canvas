@@ -277,7 +277,7 @@ describe('constants', () => {
       maxPoints: 12,
       maxDiagramsPerLayer: 1,
       maxDiagramLinks: 12,
-      maxBackgroundTopics: 8,
+      maxBackgroundTopics: 10,
     })
   })
 })
