@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { copyFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { TEXT_CAPS } from './contract/review-artifact.js'
 import {
@@ -180,6 +180,38 @@ describe('loadProjectConfig', () => {
     const bad = await loadProjectConfig(dir)
     expect(bad.config).toEqual(DEFAULT_PROJECT_CONFIG)
     expect(bad.warnings[0]).toMatch(/^pr-review\.config\.yml is not valid YAML, using defaults: /)
+  })
+
+  it('takes REVIEW.md, code_review.md, or code-review.md at the root, in any case, as the rulebook', async () => {
+    // A directory by one of those names is not a rulebook.
+    await mkdir(path.join(dir, 'review.md'))
+    await writeFile(path.join(dir, 'Code-Review.md'), 'hyphen')
+    expect((await loadProjectConfig(dir)).config.rulebook).toBe('Code-Review.md')
+    await writeFile(path.join(dir, 'CODE_REVIEW.MD'), 'underscore')
+    expect((await loadProjectConfig(dir)).config.rulebook).toBe('CODE_REVIEW.MD')
+    await rm(path.join(dir, 'review.md'), { recursive: true })
+    await writeFile(path.join(dir, 'REVIEW.md'), 'review')
+    expect((await loadProjectConfig(dir)).config.rulebook).toBe('REVIEW.md')
+    // With review.md beside it on a case-sensitive file system, still REVIEW.md, every time.
+    await writeFile(path.join(dir, 'review.md'), 'review')
+    expect((await loadProjectConfig(dir)).config.rulebook).toBe('REVIEW.md')
+    // The defaults stay as they are for every other project.
+    expect(DEFAULT_PROJECT_CONFIG.rulebook).toBeUndefined()
+  })
+
+  it('keeps the configured rulebook, and finds one when the config sets none or is invalid', async () => {
+    await writeFile(path.join(dir, 'REVIEW.md'), 'review')
+    await writeFile(path.join(dir, 'pr-review.config.yml'), 'rulebook: docs/STANDARDS.md\n')
+    expect((await loadProjectConfig(dir)).config.rulebook).toBe('docs/STANDARDS.md')
+    await writeFile(path.join(dir, 'pr-review.config.yml'), 'chat:\n  enabled: false\n')
+    expect((await loadProjectConfig(dir)).config).toMatchObject({
+      rulebook: 'REVIEW.md',
+      chat: { enabled: false },
+    })
+    await writeFile(path.join(dir, 'pr-review.config.yml'), 'rulebook: ""\n')
+    const invalid = await loadProjectConfig(dir)
+    expect(invalid.config.rulebook).toBe('REVIEW.md')
+    expect(invalid.warnings[0]).toContain('invalid')
   })
 
   it('loads the shipped example without warnings', async () => {

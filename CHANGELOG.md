@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Canvas generation
+
+- A project whose `pr-review.config.yml` sets no `rulebook`, or that has no config, uses the first
+  of `REVIEW.md`, `code_review.md`, and `code-review.md` at the repository root as its rulebook, in
+  any letter case. The settings dialog names the file it found.
+
 ### Prompt templates
 
 - `pr-review upgrade` and `pr-review doctor` now catch any change to a bundled prompt template a
