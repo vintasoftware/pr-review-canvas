@@ -227,8 +227,11 @@ const RULEBOOK_NAMES = ['review.md', 'code_review.md', 'code-review.md']
 export async function loadProjectConfig(repoRoot: string): Promise<LoadedProjectConfig> {
   const loaded = await readProjectConfig(repoRoot)
   if (loaded.config.rulebook !== undefined) return loaded
-  // Sorted, so a case-sensitive file system with both REVIEW.md and review.md picks the same one each time.
-  const names = (await readdir(repoRoot).catch(() => [])).sort()
+  // Files only, sorted, so a case-sensitive file system with both REVIEW.md and review.md picks the same one each time.
+  const names = (await readdir(repoRoot, { withFileTypes: true }).catch(() => []))
+    .filter(entry => !entry.isDirectory())
+    .map(entry => entry.name)
+    .sort()
   for (const wanted of RULEBOOK_NAMES) {
     const rulebook = names.find(name => name.toLowerCase() === wanted)
     if (rulebook !== undefined) return { ...loaded, config: { ...loaded.config, rulebook } }

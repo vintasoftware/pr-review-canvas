@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { copyFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { TEXT_CAPS } from './contract/review-artifact.js'
 import {
@@ -183,12 +183,18 @@ describe('loadProjectConfig', () => {
   })
 
   it('takes REVIEW.md, code_review.md, or code-review.md at the root, in any case, as the rulebook', async () => {
+    // A directory by one of those names is not a rulebook.
+    await mkdir(path.join(dir, 'review.md'))
     await writeFile(path.join(dir, 'Code-Review.md'), 'hyphen')
     expect((await loadProjectConfig(dir)).config.rulebook).toBe('Code-Review.md')
     await writeFile(path.join(dir, 'CODE_REVIEW.MD'), 'underscore')
     expect((await loadProjectConfig(dir)).config.rulebook).toBe('CODE_REVIEW.MD')
+    await rm(path.join(dir, 'review.md'), { recursive: true })
+    await writeFile(path.join(dir, 'REVIEW.md'), 'review')
+    expect((await loadProjectConfig(dir)).config.rulebook).toBe('REVIEW.md')
+    // With review.md beside it on a case-sensitive file system, still REVIEW.md, every time.
     await writeFile(path.join(dir, 'review.md'), 'review')
-    expect((await loadProjectConfig(dir)).config.rulebook).toBe('review.md')
+    expect((await loadProjectConfig(dir)).config.rulebook).toBe('REVIEW.md')
     // The defaults stay as they are for every other project.
     expect(DEFAULT_PROJECT_CONFIG.rulebook).toBeUndefined()
   })
