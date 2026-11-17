@@ -6,9 +6,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 import { PROMPTS_DIR } from './paths.js'
-import { type PromptOverrides, PromptOverridesSchema } from './project-config.js'
-
-const TemplateNameSchema = PromptOverridesSchema.keyof()
+import type { PromptOverrides } from './project-config.js'
 
 export interface AddedToken {
   /** The release whose bundled template has it first. */
@@ -25,11 +23,13 @@ export interface AddedToken {
 export const ADDED_TOKENS: readonly AddedToken[] = [
   { since: '0.10.0', template: 'generation-format.md', token: 'RESOLVED' },
   { since: '0.10.0', template: 'generation-format.md', token: 'SETTLED_DECISIONS' },
+  { since: '0.11.1', template: 'generation-format.md', token: 'WRITING' },
 ]
 
 export const TokenGapSchema = z.object({
   since: z.string(),
-  template: TemplateNameSchema,
+  /** Any name, so a parent reads gaps in templates added after its own release. */
+  template: z.string(),
   token: z.string(),
   /** The project's own template, as `pr-review.config.yml` names it. */
   file: z.string(),

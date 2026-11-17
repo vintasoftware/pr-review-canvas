@@ -26,11 +26,24 @@ it('overrides all generation sources individually, with bundled fallback for omi
     ['judging-surfacing.md', (s: typeof bundled) => s.judging.surfacing],
     ['layering-guidance.md', (s: typeof bundled) => s.layeringGuidance],
     ['quality-standards.md', (s: typeof bundled) => s.qualityStandards],
+    ['writing.md', (s: typeof bundled) => s.writing],
   ] as const) {
     const result = await loadPromptSources(undefined, { repoRoot: root, overrides: { [name]: 'custom.md' } })
     expect(select(result)).toBe('custom')
     if (name !== 'generation-format.md') expect(result.format).toBe(bundled.format)
   }
+})
+
+it('drops the base line of an override, so the prompt is the same with or without it', async () => {
+  await writeFile(
+    path.join(root, 'writing.md'),
+    '<!-- pr-review-canvas 0.11.1 writing.md 3f9a0c2e1b7d -->\nWrite plainly.\n'
+  )
+  const sources = await loadPromptSources(undefined, {
+    repoRoot: root,
+    overrides: { 'writing.md': 'writing.md' },
+  })
+  expect(sources.writing).toBe('Write plainly.\n')
 })
 
 it('loads chat overrides relative to the repository or from an absolute path', async () => {

@@ -58,6 +58,7 @@ export const PromptOverridesSchema = z
     'judging-surfacing.md': z.string().min(1).optional(),
     'quality-standards.md': z.string().min(1).optional(),
     'layering-guidance.md': z.string().min(1).optional(),
+    'writing.md': z.string().min(1).optional(),
     'chat-seed.md': z.string().min(1).optional(),
   })
   .strict()
