@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.11.1
+
+Changes since 0.11.0.
 
 ### Canvas generation
 
