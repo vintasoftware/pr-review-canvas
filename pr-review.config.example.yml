@@ -2,6 +2,7 @@
 version: 1
 
 # Markdown reference for project standards. The generation mode controls how the generator uses it.
+# Unset, the first of REVIEW.md, code_review.md, and code-review.md at the root, in any case, is used.
 # rulebook: docs/CODE_REVIEW.md
 
 # Optional full-template replacements, resolved from this project's root.
@@ -12,6 +13,7 @@ version: 1
 #   generation-surfacing.md: review-prompts/generation-surfacing.md
 #   quality-standards.md: review-prompts/quality-standards.md
 #   layering-guidance.md: review-prompts/layering-guidance.md
+#   writing.md: review-prompts/writing.md
 #   chat-seed.md: review-prompts/chat-seed.md
 
 # Optional layer guidance. Omit or leave empty for agent-chosen semantic sections.

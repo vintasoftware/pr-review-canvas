@@ -10,6 +10,7 @@ import { CLI_INFO, type HostCli, type HostClient } from '../host/client.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import { parseOriginRemote } from '../host/remote.js'
 import { loadProjectConfig } from '../project-config.js'
+import { templateNotices } from '../prompt-bases.js'
 import { ADDED_TOKENS, type AddedToken, describeGap, promptGaps } from '../prompt-tokens.js'
 import { ensureDataDir, resolveDataDir } from '../store/data-dir.js'
 import { isNewer } from '../version.js'
@@ -107,8 +108,9 @@ export async function checkSkill(repoRoot: string | null, readSkill?: ReadSkill)
 }
 
 /**
- * The project's own prompt templates, against every token a release up to this one added. Unlike
- * `upgrade`, which names only what its release added, it cannot tell which release a copy came from.
+ * The project's own prompt templates, against every token a release up to this one added and the
+ * bundled template each names as its base. Unlike `upgrade`, which names only the tokens its
+ * release added, it names every missing one.
  */
 export async function checkPrompts(
   repoRoot: string | null,
@@ -128,13 +130,22 @@ export async function checkPrompts(
     config.prompts,
     added.filter(t => !isNewer(t.since, version))
   )
-  if (gaps.length === 0) {
-    return { ok: true, detail: `own templates have every token a release added: ${own.join(', ')}` }
+  const notices = await templateNotices(repoRoot, config.prompts, version)
+  if (gaps.length + notices.length === 0) {
+    return { ok: true, detail: `own templates are based on this pr-review's: ${own.join(', ')}` }
   }
+  const detail = [
+    gaps.length === 0
+      ? null
+      : `own templates lack tokens: ${gaps.map(g => `{{${g.token}}} in ${g.file}`).join(', ')}`,
+    notices.length === 0
+      ? null
+      : `copied from another version of pr-review's templates: ${notices.map(n => n.file).join(', ')}`,
+  ]
   return {
     ok: false,
-    detail: `own templates lack tokens: ${gaps.map(g => `{{${g.token}}} in ${g.file}`).join(', ')}`,
-    hint: gaps.map(describeGap).join('; '),
+    detail: detail.filter(part => part !== null).join('; '),
+    hint: [...gaps.map(describeGap), ...notices.map(n => n.message)].join('; '),
   }
 }
 

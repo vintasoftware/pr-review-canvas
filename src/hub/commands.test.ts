@@ -1,7 +1,11 @@
+import { writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import type { CliIo } from '../commands.js'
 import { UsageError } from '../commands.js'
 import { ConfigError } from '../config.js'
+import { checkPrompts } from '../review/doctor.js'
 import { AppError } from '../server/errors.js'
+import { makeTempDir } from '../testing/fakes.js'
 import type { RunningServer } from './client.js'
 import { runOpen, runServe, type ServeDeps } from './commands.js'
 import type { RegisterInput, RegisterResponse } from './hub-app.js'
@@ -76,6 +80,7 @@ function fakeDeps(
       })
     },
     checkSkill: () => Promise.resolve(opts.skill ?? { ok: true, detail: 'installed' }),
+    checkPrompts,
   }
 }
 
@@ -327,7 +332,21 @@ describe('runServe', () => {
     expect(noHint.err).toEqual(['pr-review doctor: skill missing. '])
   })
 
-  it('skips the skill check outside a repository', async () => {
+  it('warns when the project’s own templates were copied from another version', async () => {
+    const repo = await makeTempDir()
+    await writeFile(path.join(repo, 'seed.md'), 'mine\n')
+    await writeFile(path.join(repo, 'pr-review.config.yml'), 'prompts:\n  chat-seed.md: seed.md\n')
+    const io = fakeIo()
+    await runServe(fakeDeps({ repoRoot: repo, server: null }), [], io)
+    // A copy without a base line counts as copied from 0.10.0, and chat-seed.md changed since.
+    expect(io.err).toEqual([
+      expect.stringMatching(
+        /^pr-review doctor: copied from another version of pr-review's templates: seed\.md\. seed\.md: pr-review's chat-seed\.md changed after 0\.10\.0, /
+      ),
+    ])
+  })
+
+  it('skips the checks outside a repository', async () => {
     const io = fakeIo()
     await runServe(
       fakeDeps({ repoRoot: null, server: null, skill: { ok: false, detail: 'skill missing' } }),

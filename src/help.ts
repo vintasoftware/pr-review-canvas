@@ -168,7 +168,7 @@ const COMMANDS: CommandHelp[] = [
     ],
     notes: [
       'Updates pr-review and acpx with npm, and refreshes skill copies in the project. Lists the changes and asks first, unless --yes.',
-      'Then names each token the new release added to a bundled prompt template that the project’s own copy lacks.',
+      'Then names each token the new release added to a bundled prompt template that the project’s own copy lacks, and each own copy made from another version of the bundled template.',
     ],
   },
 ]

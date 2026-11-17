@@ -4,6 +4,8 @@ import path from 'node:path'
 import { type CliIo, runDoctor } from '../commands.js'
 import { ORIGIN_HINT } from '../config.js'
 import type { Host } from '../host/host.js'
+import { PROMPTS_DIR } from '../paths.js'
+import { baseLine } from '../prompt-bases.js'
 import { createFakeGh, createFakeGit, createFakeTerminal, makeTempDir } from '../testing/fakes.js'
 import { type DoctorDeps, runDoctorChecks } from './doctor.js'
 import { CLAUDE_SKILLS_DIR, CODEX_SKILLS_DIR, SKILL_NAME, SKILL_SOURCE_DIR } from './install-skill.js'
@@ -82,7 +84,10 @@ describe('runDoctorChecks', () => {
 
   it('names the tokens the project’s own templates lack, from every release up to this one', async () => {
     const repo = await makeTempDir()
-    await writeFile(path.join(repo, 'format.md'), '## Attention points\n')
+    // Copied from this version's bundled template, so the missing tokens are all there is to say.
+    const format = await readFile(path.join(PROMPTS_DIR, 'generation-format.md'), 'utf8')
+    const line = baseLine('generation-format.md', '0.6.0', format)
+    await writeFile(path.join(repo, 'format.md'), `${line}\n## Attention points\n`)
     await writeFile(path.join(repo, 'pr-review.config.yml'), 'prompts:\n  generation-format.md: format.md\n')
     const addedTokens = [
       { since: '0.5.0', template: 'generation-format.md', token: 'MAX_POINTS' },
@@ -105,7 +110,7 @@ describe('runDoctorChecks', () => {
         'add {{MAX_POINTS}} to format.md under "## Attention points", where pr-review 0.5.0\'s generation-format.md has it; ' +
         'add {{RESOLVED}} to format.md under "## Attention points", where pr-review 0.6.0\'s generation-format.md has it',
     })
-    await writeFile(path.join(repo, 'format.md'), '{{MAX_POINTS}} {{RESOLVED}}\n')
+    await writeFile(path.join(repo, 'format.md'), `${line}\n{{MAX_POINTS}} {{RESOLVED}}\n`)
     const fixed = await runDoctorChecks(
       deps({
         git: createFakeGit({ topLevel: repo, commonDir: path.join(repo, '.git'), remotes: {} }),
@@ -116,8 +121,29 @@ describe('runDoctorChecks', () => {
     )
     expect(fixed.checks.prompts).toEqual({
       ok: true,
-      detail: 'own templates have every token a release added: generation-format.md',
+      detail: "own templates are based on this pr-review's: generation-format.md",
     })
+  })
+
+  it('names the own templates copied from another version of the bundled ones', async () => {
+    const repo = await makeTempDir()
+    await writeFile(path.join(repo, 'format.md'), '{{RESOLVED}} {{SETTLED_DECISIONS}} {{WRITING}}\n')
+    await writeFile(path.join(repo, 'pr-review.config.yml'), 'prompts:\n  generation-format.md: format.md\n')
+    const report = await runDoctorChecks(
+      deps({
+        git: createFakeGit({ topLevel: repo, commonDir: path.join(repo, '.git'), remotes: {} }),
+        dataDirOverride: await makeTempDir(),
+        version: '0.11.1',
+      })
+    )
+    // A copy without a base line counts as copied from 0.10.0, and generation-format.md changed since.
+    expect(report.checks.prompts).toMatchObject({
+      ok: false,
+      detail: "copied from another version of pr-review's templates: format.md",
+    })
+    expect(report.checks.prompts?.hint).toMatch(
+      /^format\.md: pr-review's generation-format\.md changed after 0\.10\.0, .*compare\/v0\.10\.0\.\.\.v0\.11\.1, then make `<!-- pr-review-canvas 0\.11\.1 generation-format\.md [0-9a-f]{12} -->` its first line$/
+    )
   })
 
   it('looks for the SKILL.md, so an empty directory does not count as installed', async () => {
