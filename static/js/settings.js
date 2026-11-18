@@ -197,6 +197,8 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<div class="field"><label for="set-fold-level">Hide code by default</label>' +
       `<select id="set-fold-level">${optionsHtml(FOLD_LEVELS, settings.foldLevel)}</select></div>` +
       '<p class="muted small">The level every review opens at. The Hide code control and the <span class="mono">f</span> key change it for one page.</p>' +
+      '<div class="field"><label for="set-background-open">Background</label>' +
+      `<select id="set-background-open">${optionsHtml(BACKGROUND_MODES, settings.backgroundOpen, BACKGROUND_LABELS)}</select></div>` +
       '<div class="field"><label for="set-diff-layout">Diff layout</label>' +
       `<select id="set-diff-layout">${optionsHtml(DIFF_LAYOUTS, settings.diffLayout, DIFF_LAYOUT_LABELS)}</select></div>` +
       `<p class="muted small">Split puts the old code beside the new, and draws unified while the diff column is under ${SPLIT_MIN_WIDTH}px wide. The layout button in the header and the <span class="mono">s</span> key change it here too.</p>` +
@@ -206,8 +208,6 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<div class="field field-check"><label for="set-read-by-points">Read by attention points</label>' +
       `<input id="set-read-by-points" type="checkbox"${settings.readByPoints ? ' checked' : ''}></div>` +
       '<p class="muted small">A review opens on its attention points, one at a time: each layer opens with its description and tests, then shows its points with their code. The switch at the head of the rail moves to the layers, shown as above. Off, a review shows its layers alone.</p>' +
-      '<div class="field"><label for="set-background-open">Background</label>' +
-      `<select id="set-background-open">${optionsHtml(BACKGROUND_MODES, settings.backgroundOpen, BACKGROUND_LABELS)}</select></div>` +
       '<div class="field field-check"><label for="set-start-collapsed">Start collapsed</label>' +
       `<input id="set-start-collapsed" type="checkbox"${settings.startCollapsed ? ' checked' : ''}></div>` +
       '<p class="muted small">A review opens with only its first layer open and every file closed under its name. The rail, the keys, and links open what they land on.</p>' +
