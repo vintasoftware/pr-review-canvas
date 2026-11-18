@@ -5,6 +5,7 @@ import { emptyState } from '../../src/contract/state.js'
 import { UNKNOWN_CAPABILITIES } from '../../src/host/capabilities.js'
 import { mapReviewComment } from '../../src/github/comments.js'
 import { GH_ISSUE_COMMENTS, GH_REVIEW_COMMENTS, syntheticArtifact } from '../../src/testing/synthetic.js'
+import { opensBackground } from './background-mode.js'
 import { renderChatShell } from './chat.js'
 import { fullDate } from './dom.js'
 import { setHost } from './host.js'
@@ -496,6 +497,19 @@ describe('overview', () => {
     expect(document.querySelector('.summary h4')?.textContent).toBe('Heading')
   })
 
+  it('opens Background according to the reader and PR author, even on an older canvas', () => {
+    const reviewer = bundle({ capabilities: { ...UNKNOWN_CAPABILITIES, login: 'reviewer' } })
+    const author = bundle({ status: 'stale', capabilities: { ...UNKNOWN_CAPABILITIES, login: 'OctoCat' } })
+    const local = { ...reviewer, local: /** @type {const} */ ('branch') }
+    expect(opensBackground('off', reviewer)).toBe(false)
+    expect(opensBackground('others', reviewer)).toBe(true)
+    expect(opensBackground('others', author)).toBe(false)
+    expect(opensBackground('others', bundle())).toBe(false)
+    expect(opensBackground('others', local)).toBe(false)
+    expect(opensBackground('all', author)).toBe(true)
+    expect(opensBackground('all', local)).toBe(true)
+  })
+
   it('renders the background closed, with escaped topics, kinds, and safe links', () => {
     expect(backgroundHtml([], paths)).toBe('')
     document.body.innerHTML = backgroundHtml(
@@ -531,7 +545,8 @@ describe('overview', () => {
     const withTopics = bundle()
     if (!withTopics.artifact) throw new Error('no artifact')
     withTopics.artifact.background = [{ topic: 'Retry', kind: 'concept', explanation: 'Try again.' }]
-    document.body.innerHTML = renderOverview(withTopics, { paths, now: NOW })
+    document.body.innerHTML = renderOverview(withTopics, { paths, now: NOW, backgroundOpen: true })
+    expect(document.querySelector('details.background')?.hasAttribute('open')).toBe(true)
     const order = [...document.querySelectorAll('#overview > *')].map(el => el.className)
     expect(order.indexOf('background')).toBe(order.indexOf('pr-desc') - 1)
   })

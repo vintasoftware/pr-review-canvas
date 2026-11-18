@@ -13,12 +13,12 @@ import { buildThreads } from './threads.js'
 
 /**
  * "Background": the topics the change builds on, for a reader new to the project or its stack.
- * Closed by default, so a reader who knows them reads past one line.
  * @param {ReadonlyArray<BackgroundTopic>} background
  * @param {ReadonlySet<string>} paths
+ * @param {boolean} [open]
  * @returns {string}
  */
-export function backgroundHtml(background, paths) {
+export function backgroundHtml(background, paths, open = false) {
   if (background.length === 0) {
     return ''
   }
@@ -31,7 +31,7 @@ export function backgroundHtml(background, paths) {
     )
     .join('')
   return (
-    `<details class="background">${detailsSummaryHtml(`<span>Background · ${count}</span>`, 'Toggle background')}` +
+    `<details class="background"${open ? ' open' : ''}>${detailsSummaryHtml(`<span>Background · ${count}</span>`, 'Toggle background')}` +
     `<div class="body"><ul class="background-topics">${items}</ul></div></details>`
   )
 }
@@ -105,7 +105,7 @@ export function conversationHtml(comments, now) {
 
 /**
  * @param {PrBundle} bundle
- * @param {{ paths: ReadonlySet<string>, now: Date }} ctx
+ * @param {{ paths: ReadonlySet<string>, now: Date, backgroundOpen?: boolean }} ctx
  * @returns {string}
  */
 export function renderOverview(bundle, ctx) {
@@ -115,7 +115,7 @@ export function renderOverview(bundle, ctx) {
   )
   const active = artifact ? openPoints(artifact.points, bundle.state) : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
-  const background = artifact ? backgroundHtml(artifact.background, ctx.paths) : ''
+  const background = artifact ? backgroundHtml(artifact.background, ctx.paths, ctx.backgroundOpen) : ''
   const description = bundle.pr.body.trim()
     ? `<details class="pr-desc">${detailsSummaryHtml(`<span>PR description (from ${esc(hostLabel())})</span>`, 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
     : '<div class="pr-desc body muted">No PR description.</div>'

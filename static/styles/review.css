@@ -482,6 +482,9 @@ body:not(:has(.point-statuses [data-act='toggle-resolved'][aria-pressed='true'])
 .pr-desc {
   border-top: 1px solid var(--ink);
 }
+details.pr-desc > .body {
+  padding-top: 6px;
+}
 .background,
 .pr-conversation,
 .review-history {
@@ -497,6 +500,7 @@ body:not(:has(.point-statuses [data-act='toggle-resolved'][aria-pressed='true'])
   border-top: 1px solid var(--line);
 }
 .background-topics > li:first-child {
+  padding-top: 0;
   border-top: 0;
 }
 .background-h {

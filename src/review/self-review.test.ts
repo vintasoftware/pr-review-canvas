@@ -1,12 +1,5 @@
 import { syntheticArtifact } from '../testing/synthetic.js'
-import {
-  isAuthor,
-  keptReopens,
-  keptSettlements,
-  tallyCanvas,
-  tallyMarkdown,
-  withSettlement,
-} from './self-review.js'
+import { keptReopens, keptSettlements, tallyCanvas, tallyMarkdown, withSettlement } from './self-review.js'
 
 const settlement = { reason: 'Known.', at: '2026-09-10T12:00:00.000Z' }
 
@@ -39,14 +32,6 @@ describe('withSettlement', () => {
     const replaced = withSettlement(settled, 'fp-1', { ...settlement, reason: 'Other.' }, 'r2')
     expect(replaced.settled).toEqual({ 'fp-1': { ...settlement, reason: 'Other.' } })
     expect(withSettlement(replaced, 'fp-1', undefined, 'r3')).toMatchObject({ settled: {}, revisedAt: 'r3' })
-  })
-})
-
-describe('isAuthor', () => {
-  it('matches the login without case and never matches no login', () => {
-    expect(isAuthor('OctoCat', { author: 'octocat' })).toBe(true)
-    expect(isAuthor('hubot', { author: 'octocat' })).toBe(false)
-    expect(isAuthor(null, { author: 'octocat' })).toBe(false)
   })
 })
 

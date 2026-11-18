@@ -580,6 +580,7 @@ The data directory's `settings.yml` accepts these keys and values:
 | `layerView`            | `all`     | `all`, `one`                                                                     |
 | `readByPoints`         | `false`   | `true`, `false`                                                                  |
 | `pointColors`          | `classic` | `classic`, `action`                                                              |
+| `backgroundOpen`       | `off`     | `off`, `others`, `all`                                                           |
 | `startCollapsed`       | `false`   | `true` opens only the first layer and no file; `false` opens them all            |
 | `compactPoints`        | `false`   | `true` lists each point as one line until opened; `false` draws them whole       |
 | `fullWidthText`        | `false`   | `true` lets the summary, rationale and PR description fill their panel           |
@@ -676,8 +677,10 @@ The overview's **Background** block, under the summary, lists the topics the cha
 a reader new to the project or its stack: project concepts, languages, frameworks, libraries, and
 tools. Each topic has a short explanation of what it is and how the change uses it, with links to
 the code and, when the generator is sure of one, to official documentation. The block starts
-closed. A canvas generated before this feature, or for a change that builds on nothing unusual,
-has no Background block. External links open in a new tab.
+closed. Under **Settings → Reading → Background**, choose **Open except on my PRs** to open it
+when the signed-in account differs from the author, or **Open for all PRs** to open it on every
+review, including local work. You can always toggle the block by hand. A canvas with no topics
+omits Background. External links open in a new tab.
 
 ### Collapsed diffs
 

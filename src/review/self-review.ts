@@ -1,6 +1,7 @@
 // Self-review: the author settles attention points before asking for review, and the canvas carries
 // each answer to every reviewer. Any point can be settled, a reviewer point too when it does not
 // apply. A settled point leaves the reviewer's list; its reason stays.
+import { isAuthor } from '../../static/js/host.js'
 import type { Point, Pr, ReopenedDecision, ReviewArtifact, Settlement } from '../contract/review-artifact.js'
 import { POINT_LEVELS } from '../contract/review-artifact.js'
 import { isLocalKey, type ReviewKey } from '../contract/review-key.js'
@@ -98,14 +99,6 @@ export function settlementCommentBody(
 ): string {
   const credit = mentionCanvas ? '\n\n_from the pr-review canvas self-review_' : ''
   return `**Resolved by the author:** ${point.title}\n\n${reason.trim()}${credit}`
-}
-
-/**
- * Whether the signed-in login wrote the pull request. The forge compares logins without case, so
- * this does too.
- */
-export function isAuthor(login: string | null, pr: Pick<Pr, 'author'>): boolean {
-  return login !== null && login.toLowerCase() === pr.author.toLowerCase()
 }
 
 /**

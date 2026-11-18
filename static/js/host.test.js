@@ -1,5 +1,13 @@
 // @ts-check
-import { authorProfileUrl, currentHost, hostLabel, noPostingTitle, postToLabel, setHost } from './host.js'
+import {
+  authorProfileUrl,
+  currentHost,
+  hostLabel,
+  isAuthor,
+  noPostingTitle,
+  postToLabel,
+  setHost,
+} from './host.js'
 
 describe('host words and links', () => {
   afterEach(() => {
@@ -20,5 +28,13 @@ describe('host words and links', () => {
     expect(postToLabel()).toBe('post to gitlab')
     expect(noPostingTitle()).toBe('this GitLab login cannot post on this repository')
     expect(authorProfileUrl('alice')).toBe('https://gitlab.example.com/alice')
+  })
+})
+
+describe('isAuthor', () => {
+  it('matches the login without case and never matches no login', () => {
+    expect(isAuthor('OctoCat', { author: 'octocat' })).toBe(true)
+    expect(isAuthor('hubot', { author: 'octocat' })).toBe(false)
+    expect(isAuthor(null, { author: 'octocat' })).toBe(false)
   })
 })

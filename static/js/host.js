@@ -34,6 +34,15 @@ export function noPostingTitle() {
   return `this ${current.label} login cannot post on this repository`
 }
 
+/**
+ * Forge logins are case-insensitive.
+ * @param {string | null} login
+ * @param {{author: string}} pr
+ */
+export function isAuthor(login, pr) {
+  return login !== null && login.toLowerCase() === pr.author.toLowerCase()
+}
+
 /** @param {string} author */
 export function authorProfileUrl(author) {
   return `${current.webBase}/${author}`

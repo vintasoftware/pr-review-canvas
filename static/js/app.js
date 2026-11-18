@@ -13,6 +13,7 @@ import {
   pollSettled,
   setApiBase,
 } from './api.js'
+import { opensBackground } from './background-mode.js'
 import { setChatEnabled } from './ask.js'
 import { applyPointsDensity, setMentionCanvas } from './points.js'
 import { pendingForPoint } from './pending.js'
@@ -353,6 +354,7 @@ export class PrAppElement extends HTMLElement {
       const { artifact, files, on } = drawn
       // The server says whether this reader resolves points here: the author, on the current head's canvas.
       setSelfReview(bundle.selfReview, artifact.settled, bundle.canvasComment)
+      const backgroundOpen = opensBackground(boot.backgroundOpen, bundle)
       const paths = pathSet(files)
       // The context is set before any <pr-file> connects, so each card renders once, when visible.
       setRenderContext({
@@ -379,7 +381,7 @@ export class PrAppElement extends HTMLElement {
       this.innerHTML =
         header +
         bannerHtml(bundle.warnings) +
-        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state, { switchable: this.readByPoints, points: this.layerView?.view === 'points' })}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
+        `<div class="layout${chatEnabled && !chatMinimized ? '' : ' no-chat'}">${renderRail(artifact, bundle.state, { switchable: this.readByPoints, points: this.layerView?.view === 'points' })}<main id="main">${staleBar}${marksBar}${renderOverview(bundle, { paths, now, backgroundOpen })}${renderLayers(artifact, files, bundle.state, bundle.comments.reviewComments, on)}</main>${chatEnabled ? renderChatShell({ enabled: true, width: readChatWidth(storage), minimized: chatMinimized }) : reviewPaneHtml()}</div>` +
         footerHtml(boot.version, bundle)
       // A bar the reader dismissed goes before the review wiring measures the outdated bar.
       wireBarDismissal(this, storage)
@@ -414,7 +416,8 @@ export class PrAppElement extends HTMLElement {
         chat: () => this.chat,
         openReview: () => (this.chat ?? this.reviewPane)?.openReview(),
         uncover: () => (this.chat ?? this.reviewPane)?.uncover(),
-        openSettings: el => void openSettingsDialog(this, el, { onSaved: data => this.settingsSaved(data) }),
+        openSettings: el =>
+          void openSettingsDialog(this, el, { onSaved: data => this.settingsSaved(data, bundle) }),
         setLayerView: (view, place) => this.switchLayerView(view, place),
         stepStop: (direction, fits, here) => this.layerView?.step(direction, fits, here),
       })
@@ -517,7 +520,7 @@ export class PrAppElement extends HTMLElement {
     if (settings instanceof HTMLElement && this.interactions === null) {
       settings.addEventListener(
         'click',
-        () => void openSettingsDialog(this, settings, { onSaved: data => this.settingsSaved(data) })
+        () => void openSettingsDialog(this, settings, { onSaved: data => this.settingsSaved(data, bundle) })
       )
     }
     this.wireAppearance()
@@ -629,8 +632,16 @@ export class PrAppElement extends HTMLElement {
    * `readByPoints` on opens the attention points, turning it off the layers, and a new `layerView`
    * shows in place of the layers on screen, and is where the rail's switch leads from the points.
    * @param {import('./contract-types.js').SettingsResponse} data
+   * @param {PrBundle} bundle
    */
-  settingsSaved(data) {
+  settingsSaved(data, bundle) {
+    const boot = this.bootstrap
+    if (boot && boot.backgroundOpen !== data.settings.backgroundOpen) {
+      boot.backgroundOpen = data.settings.backgroundOpen
+      const background = qs('#overview details.background', this)
+      if (background instanceof HTMLDetailsElement)
+        background.open = opensBackground(boot.backgroundOpen, bundle)
+    }
     const { readByPoints, layerView } = data.settings
     const turned = readByPoints !== this.readByPoints
     const points = turned ? readByPoints : this.layerView?.view === 'points'

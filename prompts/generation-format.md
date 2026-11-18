@@ -331,8 +331,7 @@ When in doubt, choose `reviewer`: a point the author resolves leaves every revie
 
 `background` lists at most {{MAX_BACKGROUND_TOPICS}} topics this change builds on that a reader
 new to the project, or new to its stack, may not know. It is a starting point for study, not a
-review finding. The page shows it collapsed under the summary, so a reader who knows the topics
-skips it.
+review finding. The page shows these topics under the summary.
 
 - Pick topics the diff assumes the reader knows: project concepts (a domain term, an internal
   module, a convention of this codebase), and the languages, frameworks, libraries, and tools the
