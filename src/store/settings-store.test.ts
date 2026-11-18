@@ -50,6 +50,7 @@ describe('createSettingsStore', () => {
       readByPoints: false,
       pointColors: 'classic',
       startCollapsed: false,
+      backgroundOpen: 'off',
       compactPoints: false,
       fullWidthText: false,
       hideInline: false,
@@ -87,6 +88,7 @@ describe('createSettingsStore', () => {
       readByPoints: false,
       pointColors: 'classic',
       startCollapsed: false,
+      backgroundOpen: 'off',
       compactPoints: false,
       fullWidthText: false,
       hideInline: false,
@@ -148,6 +150,7 @@ describe('parseSettings', () => {
     expect(parseSettings('chatAgent: gemini\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('chatTimeoutSec: 5\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('foldLevel: everything\n')).toEqual(DEFAULT_SETTINGS)
+    expect(parseSettings('backgroundOpen: sometimes\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('- a\n- b\n')).toEqual(DEFAULT_SETTINGS)
     expect(parseSettings('just a string')).toEqual(DEFAULT_SETTINGS)
   })
@@ -306,6 +309,7 @@ describe('two saves that arrive together', () => {
       readByPoints: false,
       pointColors: 'classic',
       startCollapsed: false,
+      backgroundOpen: 'off',
       compactPoints: false,
       fullWidthText: false,
       hideInline: false,

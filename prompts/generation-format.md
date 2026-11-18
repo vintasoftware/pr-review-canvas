@@ -327,6 +327,27 @@ When in doubt, choose `reviewer`: a point the author resolves leaves every revie
 
 {{SETTLED_DECISIONS}}
 
+## Background
+
+`background` lists at most {{MAX_BACKGROUND_TOPICS}} topics this change builds on that a reader
+new to the project, or new to its stack, may not know. It is a starting point for study, not a
+review finding. The page shows these topics under the summary.
+
+- Pick topics the diff assumes the reader knows: project concepts (a domain term, an internal
+  module, a convention of this codebase), and the languages, frameworks, libraries, and tools the
+  changed code relies on. Set `kind` to `project`, `language`, `framework`, `library`, `tool`, or
+  `concept` (a general idea such as optimistic locking or memoization).
+- Put the topic a newcomer needs first at the top. Skip what the summary already explains, and
+  what any working developer knows, such as a loop or an HTTP status code.
+- `topic` is the name the reader would search for, such as "Zod schemas" or "React hooks".
+- `explanation` says what the topic is in plain words, then how this change uses it, with a
+  canvas link to the code. Keep it to at most three short sentences.
+- Link external documentation only when you are sure the page exists: prefer the official home
+  or documentation root over a deep page. No link is better than a guessed one. Every external
+  link must be `https`. For a project topic, name the repository file that explains it, such as
+  `CONTEXT.md` or `docs/architecture.md`, in backticks when it is not in the diff.
+- A small change that builds on nothing unusual needs no topics: write `"background": []`.
+
 ## Risk
 
 The project marks these paths as high blast radius; the publish step tags a layer that touches
@@ -391,7 +412,8 @@ Where the node id sits, one type at a time:
 ## Links
 
 Four forms, in any markdown field. Link a layer, a file, a hunk, or lines whenever you name one.
-The validator rejects a link that does not resolve.
+The validator rejects a link that does not resolve. A background topic's explanation may also link
+official documentation, as its section says.
 
 - `#layer:<layerKey>` — `[auth](#layer:auth-session)`
 - `#file:<path>` — `[the store](#file:packages/x/store.ts)`

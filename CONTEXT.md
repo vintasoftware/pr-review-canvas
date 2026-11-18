@@ -19,6 +19,13 @@ A contiguous section of a file’s diff, including its changed lines and surroun
 A collapsed range of a diff that a reviewer can expand to inspect. Folding a change does not mean it has been reviewed.
 _Avoid_: Excluded code, deleted context
 
+**Background**:
+The topics a change builds on that a reader new to the project or its stack may not know: project
+concepts, languages, frameworks, libraries, and tools. Each has a short explanation, how the change
+uses it, and at times a link to official documentation. It helps a reader start studying a topic;
+it asks nothing of them.
+_Avoid_: Tutorial, attention point, finding
+
 **Attention point**:
 A concern anchored to changed code that asks the reviewer to decide, check, or take note.
 _Avoid_: Proven bug, automatic finding

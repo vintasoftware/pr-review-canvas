@@ -42,6 +42,7 @@ generation:
   # caps:                  # override the text caps (characters)
   #   summary: 1800
   #   rationale: 300
+  #   backgroundExplanation: 400 # a Background topic's explanation
   #   diagram: 1500       # mermaid source, counted raw
 
 # Which paths count as tests, for the layering rules, the `test` pill on a file card, and the

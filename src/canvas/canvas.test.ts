@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { strToU8, zipSync } from 'fflate'
 import type { CanvasManifest } from '../contract/canvas-manifest.js'
-import type { ReviewArtifact } from '../contract/review-artifact.js'
+import { LIMITS, type ReviewArtifact } from '../contract/review-artifact.js'
 import { AppError } from '../server/errors.js'
 import { createFakeGit, makeTempDir, makeTestContext, TEST_REPO, type TestContext } from '../testing/fakes.js'
 import {
@@ -118,6 +118,20 @@ describe('canvas zip codec', () => {
     const bytes = buildCanvasZip(manifest(), artifact())
     expect(Array.from(bytes.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04])
     expect(readCanvasZip(bytes)).toEqual({ manifest: manifest(), artifact: artifact(), prNumber: 42 })
+  })
+
+  it('accepts ten background topics in a canvas zip and refuses an eleventh', () => {
+    const background = Array.from({ length: LIMITS.maxBackgroundTopics }, (_, i) => ({
+      topic: `Topic ${i + 1}`,
+      kind: 'concept' as const,
+      explanation: 'See [the run path](#layer:run-path).',
+    }))
+    const zip = () => buildCanvasZip(manifest(), artifact({ background }))
+    expect(readCanvasZip(zip()).artifact.background).toEqual(background)
+    background.push({ ...background[0]!, topic: 'One too many' })
+    expect(catchZip(() => readCanvasZip(zip())).issues).toEqual([
+      expect.stringContaining('review.json: background'),
+    ])
   })
 
   it('refuses a file that is not a zip', () => {

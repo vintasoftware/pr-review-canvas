@@ -115,6 +115,7 @@ export function pageRoutes(ctx: AppContext, project: ProjectLink): Hono<AppEnv> 
           readByPoints: settings.readByPoints,
           pointColors: settings.pointColors,
           startCollapsed: settings.startCollapsed,
+          backgroundOpen: settings.backgroundOpen,
           compactPoints: settings.compactPoints,
           fullWidthText: settings.fullWidthText,
           hideInline: settings.hideInline,

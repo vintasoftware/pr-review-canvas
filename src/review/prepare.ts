@@ -25,7 +25,7 @@ import type { Derived } from '../store/derived-store.js'
 import { fileDelta, findBasisCanvas, findResolutionSource, splitBasis } from './incremental.js'
 import { carriedPointLines } from './point-carry.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
-import { isAuthor } from './self-review.js'
+import { isAuthor } from '../../static/js/host.js'
 import { readSettledDecisions } from './settled-decisions.js'
 
 export interface PrepareOptions {

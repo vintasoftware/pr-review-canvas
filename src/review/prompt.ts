@@ -133,6 +133,8 @@ function capsMarkdown(ctx: GenerationContext): string {
     `- fold title: ${c.pointTitle}, plain text counted in full`,
     `- attention point body, and a missing test's note, which becomes one: ${c.pointBody}`,
     `- test behavior: ${c.testBehavior}`,
+    `- background topic name: ${c.backgroundTopic}, plain text counted in full`,
+    `- background topic explanation: ${c.backgroundExplanation}`,
     `- diagram source: ${c.diagram} characters of mermaid, counted raw`,
   ].join('\n')
 }
@@ -321,7 +323,7 @@ function reJudgedMarkdown(basis: BasisSplit | undefined, resolutions: Resolution
   return [
     `**Layers** — the head touched at least one of their files, so decide the grouping, the prose, and the anchors again:\n\n${layers.length === 0 ? '_none_' : layers.join('\n')}`,
     `**Attention points** — the code under them or a file they link to changed, or could not be compared; keep one only if you read the new code and it still holds:\n\n${points.length === 0 ? '_none_' : points.join('\n')}`,
-    '**The summary and the pull-request-wide risk** are always written again: they describe the whole change set, which the new commits changed.',
+    '**The summary, the background, and the pull-request-wide risk** are always written again: they describe the whole change set, which the new commits changed.',
   ].join('\n\n')
 }
 
@@ -406,6 +408,7 @@ export function renderPrompt(
     MAX_POINTS: String(ctx.limits.maxPoints),
     MAX_DIAGRAMS: String(ctx.limits.maxDiagramsPerLayer),
     MAX_DIAGRAM_LINKS: String(ctx.limits.maxDiagramLinks),
+    MAX_BACKGROUND_TOPICS: String(ctx.limits.maxBackgroundTopics),
     HIGH_RISK: highRiskMarkdown(ctx),
     RULEBOOK: rulebookMarkdown(ctx),
     QUALITY_STANDARDS: sources.qualityStandards.trim(),

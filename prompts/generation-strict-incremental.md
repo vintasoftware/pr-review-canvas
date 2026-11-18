@@ -46,7 +46,7 @@ explicit points. When the carried-point list prints moved lines, update the test
   to a layer is a change to that layer: its rationale must still describe what it now holds.
 - A re-judged concern may come back with the same kind, path, and title, but only if you read the
   new code and it still holds. A concern the change fixed is gone, not softened.
-- Write the summary and model risk tags again, from the whole change set as it is now.
+- Write the summary, the background, and model risk tags again, from the whole change set as it is now.
   A carried layer may gain or lose a model risk tag; its copied prose stays the same. Config risk
   tags are added by publish.
 - Everything below applies as it would to a canvas written from nothing: the layering rules, the

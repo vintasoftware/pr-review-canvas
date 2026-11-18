@@ -6,6 +6,7 @@
 /** @typedef {import('./contract-types.js').AgentsResponse} AgentsResponse */
 /** @typedef {import('./contract-types.js').SettingsResponse} SettingsResponse */
 import { fetchAgents, fetchCheckouts, fetchSettings, probeAgent, saveSettings } from './api.js'
+import { BACKGROUND_LABELS, BACKGROUND_MODES, isBackgroundMode } from './background-mode.js'
 import { runCommand } from './commands.js'
 import { esc, optionsHtml, qs } from './dom.js'
 import { FOLD_LEVELS, isFoldLevel } from './fold-levels.js'
@@ -196,6 +197,9 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<div class="field"><label for="set-fold-level">Hide code by default</label>' +
       `<select id="set-fold-level">${optionsHtml(FOLD_LEVELS, settings.foldLevel)}</select></div>` +
       '<p class="muted small">The level every review opens at. The Hide code control and the <span class="mono">f</span> key change it for one page.</p>' +
+      '<div class="field"><label for="set-background-open">Background</label>' +
+      `<select id="set-background-open">${optionsHtml(BACKGROUND_MODES, settings.backgroundOpen, BACKGROUND_LABELS)}</select></div>` +
+      '<p class="muted small">Whether the overview’s Background topics start open. Their heading still opens or closes them on any review.</p>' +
       '<div class="field"><label for="set-diff-layout">Diff layout</label>' +
       `<select id="set-diff-layout">${optionsHtml(DIFF_LAYOUTS, settings.diffLayout, DIFF_LAYOUT_LABELS)}</select></div>` +
       `<p class="muted small">Split puts the old code beside the new, and draws unified while the diff column is under ${SPLIT_MIN_WIDTH}px wide. The layout button in the header and the <span class="mono">s</span> key change it here too.</p>` +
@@ -367,6 +371,7 @@ export function keepOneKind(dialog, box) {
 export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   const foldLevel = qs('#set-fold-level', dialog)
   const diffLayout = qs('#set-diff-layout', dialog)
+  const background = qs('#set-background-open', dialog)
   const layerView = qs('#set-layer-view', dialog)
   const pointColors = qs('#set-point-colors', dialog)
   const hiddenItemClick = qs('#set-hidden-item-click', dialog)
@@ -394,6 +399,9 @@ export function readSettingsForm(/** @type {ParentNode} */ dialog) {
   }
   if (layerView instanceof HTMLSelectElement && isLayerView(layerView.value)) {
     input.layerView = layerView.value
+  }
+  if (background instanceof HTMLSelectElement && isBackgroundMode(background.value)) {
+    input.backgroundOpen = background.value
   }
   if (readByPoints instanceof HTMLInputElement) {
     input.readByPoints = readByPoints.checked

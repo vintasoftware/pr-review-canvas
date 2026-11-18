@@ -283,6 +283,7 @@ export function normalize(output: ModelOutput, input: NormalizeInput): ReviewArt
     risk: unionRisk(layers),
     layers,
     points: sortPoints(points),
+    background: output.background,
     generatedAt: input.generatedAt,
     generator: input.generator,
     source: 'local',
@@ -332,5 +333,6 @@ export function artifactToModelOutput(artifact: ReviewArtifact): ModelOutput {
     points: artifact.points
       .filter(isGeneratorPoint)
       .map(({ id: _id, fingerprint: _fp, origin: _origin, layerId: _layerId, ...p }) => p),
+    background: artifact.background,
   }
 }

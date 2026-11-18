@@ -43,6 +43,9 @@ pointColors: ${DEFAULT_SETTINGS.pointColors}
 # false opens every layer and file, except those marked reviewed or hidden by foldLevel.
 startCollapsed: false
 
+# Open Background by default on no reviews (off), other authors’ PRs (others), or every review (all).
+backgroundOpen: ${DEFAULT_SETTINGS.backgroundOpen}
+
 # Whether a layer's list draws each attention point as one line until you open it, with a switch
 # to show every point whole. false draws every point whole.
 compactPoints: false
@@ -290,6 +293,9 @@ function stripUndefined(input: SettingsInput): Partial<Settings> {
   }
   if (input.startCollapsed !== undefined) {
     out.startCollapsed = input.startCollapsed
+  }
+  if (input.backgroundOpen !== undefined) {
+    out.backgroundOpen = input.backgroundOpen
   }
   if (input.compactPoints !== undefined) {
     out.compactPoints = input.compactPoints

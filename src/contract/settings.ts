@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { GenerationModels, Sharing } from '../project-config.js'
 import type { ReviewKey } from './review-key.js'
+import { BACKGROUND_MODES } from '../../static/js/background-mode.js'
 import { DEFAULT_DIFF_LAYOUT, DIFF_LAYOUTS } from '../../static/js/diff-layouts.js'
 import { DEFAULT_FOLD_LEVEL, FOLD_LEVELS } from '../../static/js/fold-levels.js'
 import { DEFAULT_LAYER_VIEW, LAYER_VIEWS } from '../../static/js/layer-views.js'
@@ -87,6 +88,7 @@ export const SettingsSchema = z.object({
   pointColors: z.enum(POINT_COLORS),
   /** Whether a review opens with only its first layer open and every file closed. */
   startCollapsed: z.boolean(),
+  backgroundOpen: z.enum(BACKGROUND_MODES),
   /** Whether a layer's list draws each attention point as one line until the reader opens it. */
   compactPoints: z.boolean(),
   /** Whether the overview summary, a layer's rationale and the PR description fill their panel. */
@@ -133,6 +135,7 @@ export const DEFAULT_SETTINGS: Settings = {
   readByPoints: false,
   pointColors: DEFAULT_POINT_COLORS,
   startCollapsed: false,
+  backgroundOpen: 'off',
   compactPoints: false,
   fullWidthText: false,
   hideInline: false,
@@ -172,6 +175,7 @@ export const SettingsInputSchema = z.strictObject({
   readByPoints: z.boolean().optional(),
   pointColors: z.enum(POINT_COLORS).optional(),
   startCollapsed: z.boolean().optional(),
+  backgroundOpen: SettingsSchema.shape.backgroundOpen.optional(),
   compactPoints: z.boolean().optional(),
   fullWidthText: z.boolean().optional(),
   hideInline: z.boolean().optional(),

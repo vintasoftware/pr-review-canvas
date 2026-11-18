@@ -2367,6 +2367,28 @@
       "id": "p-12"
     }
   ],
+  "background": [
+    {
+      "topic": "SMART Health Links (SHL)",
+      "kind": "project",
+      "explanation": "A SMART Health Link is a URL that lets a patient share health data: the server keeps an encrypted file, and the link carries the key. This change adds updates and cleanup for those files; see [the update endpoint](#layer:update-endpoint). The spec lives in the [HL7 implementation guide](https://build.fhir.org/ig/HL7/smart-health-cards-and-links/)."
+    },
+    {
+      "topic": "Prisma schema and migrations",
+      "kind": "library",
+      "explanation": "Prisma is a TypeScript ORM: `schema.prisma` declares the tables, and each folder under `prisma/migrations` holds the SQL that moves the database there. This change adds lifecycle columns in [the schema](#file:apps/shl-server/prisma/schema.prisma). Start with the [Prisma docs](https://www.prisma.io/docs)."
+    },
+    {
+      "topic": "Compare-and-swap",
+      "kind": "concept",
+      "explanation": "Compare-and-swap writes a new value only if the current value is still the one you read, so two concurrent writers cannot both win. The manifest swap in [the storage lifecycle](#layer:storage-lifecycle) uses it to publish a new file generation."
+    },
+    {
+      "topic": "Scheduled cleanup jobs",
+      "kind": "tool",
+      "explanation": "A cleanup job runs on a timer and deletes what nothing points to any more. [The cleanup job](#layer:cleanup-job) removes storage objects of expired or replaced links."
+    }
+  ],
   "generatedAt": "2026-09-14T20:00:22.847Z",
   "generator": {
     "agent": "claude",

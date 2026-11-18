@@ -1,6 +1,7 @@
 // @ts-check
 /** @typedef {import('./contract-types.js').PrBundle} PrBundle */
 /** @typedef {import('./contract-types.js').IssueComment} IssueComment */
+/** @typedef {import('./contract-types.js').BackgroundTopic} BackgroundTopic */
 
 import { viewCommentHtml } from './comment-link.js'
 import { detailsSummaryHtml, esc, avatarHtml, timeAgo } from './dom.js'
@@ -9,6 +10,31 @@ import { renderMarkdown } from './markdown.js'
 import { openPoints, pointStatusesHtml, sevsumHtml } from './points.js'
 import { selfReviewNoteHtml } from './self-review.js'
 import { buildThreads } from './threads.js'
+
+/**
+ * "Background": the topics the change builds on, for a reader new to the project or its stack.
+ * @param {ReadonlyArray<BackgroundTopic>} background
+ * @param {ReadonlySet<string>} paths
+ * @param {boolean} [open]
+ * @returns {string}
+ */
+export function backgroundHtml(background, paths, open = false) {
+  if (background.length === 0) {
+    return ''
+  }
+  const count = `${background.length} ${background.length === 1 ? 'topic' : 'topics'}`
+  const items = background
+    .map(
+      t =>
+        `<li><div class="background-h"><strong>${esc(t.topic)}</strong><span class="pill">${esc(t.kind)}</span></div>` +
+        `<div class="prose">${renderMarkdown(t.explanation, { paths })}</div></li>`
+    )
+    .join('')
+  return (
+    `<details class="background"${open ? ' open' : ''}>${detailsSummaryHtml(`<span>Background · ${count}</span>`, 'Toggle background')}` +
+    `<div class="body"><ul class="background-topics">${items}</ul></div></details>`
+  )
+}
 
 /**
  * @param {PrBundle['comments']['reviewComments']} comments
@@ -79,7 +105,7 @@ export function conversationHtml(comments, now) {
 
 /**
  * @param {PrBundle} bundle
- * @param {{ paths: ReadonlySet<string>, now: Date }} ctx
+ * @param {{ paths: ReadonlySet<string>, now: Date, backgroundOpen?: boolean }} ctx
  * @returns {string}
  */
 export function renderOverview(bundle, ctx) {
@@ -89,6 +115,7 @@ export function renderOverview(bundle, ctx) {
   )
   const active = artifact ? openPoints(artifact.points, bundle.state) : []
   const summary = artifact ? summaryHtml(artifact.summary, ctx.paths) : ''
+  const background = artifact ? backgroundHtml(artifact.background, ctx.paths, ctx.backgroundOpen) : ''
   const description = bundle.pr.body.trim()
     ? `<details class="pr-desc">${detailsSummaryHtml(`<span>PR description (from ${esc(hostLabel())})</span>`, 'Toggle PR description')}<div class="body prose">${renderMarkdown(bundle.pr.body, { paths: ctx.paths, github: true })}</div></details>`
     : '<div class="pr-desc body muted">No PR description.</div>'
@@ -96,6 +123,7 @@ export function renderOverview(bundle, ctx) {
     '<section class="panel" id="overview" aria-labelledby="ov-h">' +
     `<div class="panel-h"><h2 id="ov-h">Overview</h2>${artifact ? sevsumHtml(active, artifact.layers) : ''}</div>` +
     `<div class="body">${artifact ? selfReviewNoteHtml(artifact.points) + pointStatusesHtml(artifact.points, bundle.state) : ''}${summary}</div>` +
+    background +
     description +
     conversationHtml(bundle.comments.issueComments, ctx.now) +
     (reviews.length

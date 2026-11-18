@@ -180,6 +180,21 @@ function checkLengths(output: ModelOutput, caps: TextCaps, report: Report): void
     check(`points.${i}.title`, 'pointTitle', p.title)
     check(`points.${i}.body`, 'pointBody', p.body)
   })
+  // A topic name is plain text, so the schema caps it in full; only the explanation is Markdown.
+  output.background.forEach((t, i) => {
+    check(`background.${i}.explanation`, 'backgroundExplanation', t.explanation)
+  })
+}
+
+/** The background holds at most `maxBackgroundTopics` topics. */
+function checkBackground(output: ModelOutput, limits: Limits, report: Report): void {
+  if (output.background.length > limits.maxBackgroundTopics) {
+    report.add(
+      'TOO_MANY_TOPICS',
+      'background',
+      `${output.background.length} background topics, cap ${limits.maxBackgroundTopics}`
+    )
+  }
 }
 
 /**
@@ -534,6 +549,15 @@ function checkLinks(output: ModelOutput, files: readonly FileEntry[], report: Re
   output.points.forEach((p, i) => {
     check(`point:${i + 1}`, `point ${i + 1} "${p.title}"`, p.body)
   })
+  output.background.forEach((t, i) => {
+    const where = `background:${i + 1}`
+    const label = `background topic ${i + 1} "${t.topic}"`
+    const links = extractLinks(t.explanation)
+    if (links.length === 0) {
+      report.add('LINK_UNRESOLVED', where, `${label}: add a Markdown link to the code this topic explains`)
+    }
+    for (const href of links) checkLink(report, targets, where, label, href)
+  })
 }
 
 /**
@@ -614,6 +638,7 @@ export function validateModelOutput(raw: unknown, input: ValidationInput): Valid
     report.add(error.code, error.where ?? 'folds', error.message)
   }
   checkPoints(output, index, input.limits, report, input.storedArtifact === true)
+  checkBackground(output, input.limits, report)
   checkLinks(output, input.files, report)
   checkDiagramLinks(output, input.files, input.limits, report)
   return report.errors.length === 0

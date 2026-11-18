@@ -278,7 +278,13 @@ author: the reason is theirs to give.
   diff rows in assigned chunks, including context, using the longer side of each chunk.
 - `covered` test entries name a `testPath` that exists at the PR head (changed or not).
 - Annotations and attention points sit on lines inside a hunk, on the side you name.
-- Links use only the four forms `#layer:`, `#file:`, `#hunk:`, `#line:` and must resolve.
+- Links use only the four forms `#layer:`, `#file:`, `#hunk:`, `#line:` and must resolve. The one
+  exception is a background topic's explanation, which may also link official documentation with
+  `https`.
+- `background` lists the topics the change builds on (project concepts, languages, frameworks,
+  libraries, tools) for a reader new to the project or its stack, up to the limit the prompt
+  states: each a short explanation and how this change uses it. Write `[]` when nothing needs
+  explaining.
 - At most one diagram per layer (its `diagram` field plus a ```mermaid fence in its rationale)
   and one in the summary; a fence in any other field stays a code block. Draw only when relations
   beat prose and most canvases need zero to two diagrams in total, keep labels short, and write no

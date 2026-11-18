@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Reading
+
+- **Background** in the overview lists the topics a change builds on, for a reader new to the
+  project or its stack: project concepts, languages, frameworks, libraries, and tools, each with a
+  short explanation, a link to the code, and optional links to official documentation. It starts closed.
+  **Settings → Reading → Background** can open it on other authors’ PRs or on every review. The
+  generator writes it for every new canvas; `generation.caps` takes `backgroundTopic` and
+  `backgroundExplanation`.
+
 ### Sign-off
 
 - The canvas tells the author of a pull request or merge request that they cannot approve it or

@@ -24,6 +24,7 @@ export const ADDED_TOKENS: readonly AddedToken[] = [
   { since: '0.10.0', template: 'generation-format.md', token: 'RESOLVED' },
   { since: '0.10.0', template: 'generation-format.md', token: 'SETTLED_DECISIONS' },
   { since: '0.11.1', template: 'generation-format.md', token: 'WRITING' },
+  { since: '0.12.0', template: 'generation-format.md', token: 'MAX_BACKGROUND_TOPICS' },
 ]
 
 export const TokenGapSchema = z.object({

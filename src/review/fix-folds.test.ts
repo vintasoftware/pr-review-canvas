@@ -21,7 +21,7 @@ function model(folds: CodeFold[], hunks = ['src_app_ts#1', 'src_app_ts#2']): Mod
     tests: [],
     files: [{ path: 'src/app.ts', hunks, annotations: [], folds }],
   }
-  return { summary: 'Run path', layers: [layer], points: [] }
+  return { summary: 'Run path', layers: [layer], points: [], background: [] }
 }
 
 function point(line: number, endLine?: number, side: 'new' | 'old' = 'new'): ModelOutput['points'][number] {

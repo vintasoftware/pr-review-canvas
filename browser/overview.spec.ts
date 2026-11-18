@@ -1,3 +1,4 @@
+import { syntheticArtifact } from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
 test('toggles details when clicking directly on the chevron', async ({ page, reviewUrl }) => {
@@ -57,3 +58,85 @@ test.describe('with fullWidthText', () => {
     expect(Math.abs(summary.width - (body.width - padding))).toBeLessThan(2)
   })
 })
+
+test('keeps the space below the PR description heading compact in each skin', async ({ page, reviewUrl }) => {
+  for (const skin of ['github', 'olive', 'terminal']) {
+    await page.goto(`${reviewUrl}?skin=${skin}`)
+    const description = page.locator('#overview .pr-desc')
+    await description.locator('summary').click()
+    await expect(description.locator('.body')).toHaveCSS('padding-top', '6px')
+  }
+})
+
+test('saves the Background preference and preserves a manual toggle on an unrelated save', async ({
+  page,
+  chatServer,
+}) => {
+  const server = await chatServer()
+  server.ctx.fixtureArtifact = {
+    ...syntheticArtifact(),
+    background: [{ topic: 'Retry policies', kind: 'concept', explanation: 'Try again.' }],
+  }
+  await page.goto(server.url)
+  const background = page.locator('#overview details.background')
+  const preference = page.getByLabel('Background', { exact: true })
+  const save = page.locator('[data-act="settings-save"]')
+  await page.locator('#settings').click()
+  await expect(preference).toHaveValue('off')
+  await preference.selectOption({ label: 'Open for all PRs' })
+  await save.click()
+  await expect(background).toHaveAttribute('open')
+  await page.reload()
+  await expect(background).toHaveAttribute('open')
+  await background.locator('summary').click()
+  await page.locator('#settings').click()
+  await page.locator('#set-full-width-text').check()
+  await save.click()
+  await expect(page.locator('#settings-dialog')).toBeHidden()
+  await expect(background).not.toHaveAttribute('open')
+  await page.reload()
+  await expect(background).toHaveAttribute('open')
+  await page.locator('#settings').click()
+  await preference.selectOption({ label: 'Open except on my PRs' })
+  await save.click()
+  await expect(background).not.toHaveAttribute('open')
+})
+
+for (const [view, settings] of [
+  ['all layers', { layerView: 'all' }],
+  ['one layer', { layerView: 'one' }],
+  ['attention points', { readByPoints: true }],
+] as const) {
+  test(`opens Background on request and follows its code link when reading by ${view}`, async ({
+    page,
+    chatServer,
+  }) => {
+    const server = await chatServer({
+      setup: async ({ ctx }) => {
+        await ctx.settings.write(settings)
+        ctx.fixtureArtifact = {
+          ...syntheticArtifact(),
+          background: [
+            {
+              topic: 'Retry policies',
+              kind: 'concept',
+              explanation:
+                'Read [the later hunk](#hunk:src/app.ts#2). See [docs](https://example.com/retry).',
+            },
+          ],
+        }
+      },
+    })
+    await page.goto(server.url + '#overview')
+    const background = page.locator('#overview details.background')
+    await expect(background).toBeVisible()
+    await expect(background).not.toHaveAttribute('open')
+    const toggle = background.locator(':scope > summary')
+    await expect(toggle).toContainText('Background · 1 topic')
+    await toggle.click()
+    await expect(background.getByText('Retry policies')).toBeVisible()
+    await expect(background.getByRole('link', { name: 'docs' })).toHaveAttribute('rel', 'noopener noreferrer')
+    await background.getByRole('link', { name: 'the later hunk' }).click()
+    await expect(page.locator('#hunk-src_app_ts-2')).toBeInViewport()
+  })
+}

@@ -97,6 +97,24 @@ describe('ReviewArtifactSchema', () => {
   })
 })
 
+describe('background', () => {
+  it('reads a canvas or a model output without one as no topics, and refuses an unknown kind', () => {
+    const { background: _stored, ...older } = syntheticArtifact()
+    expect(ReviewArtifactSchema.parse(older).background).toEqual([])
+    const { background: _model, ...output } = ModelOutputSchema.parse({
+      summary: 's',
+      layers: [{ key: 'a', title: 'A', rationale: '', kind: 'layer', tests: [], files: [] }],
+      points: [],
+    })
+    expect(ModelOutputSchema.parse(output).background).toEqual([])
+    const topic = { topic: 'Zod', kind: 'library', explanation: 'Schemas.' }
+    expect(ReviewArtifactSchema.parse({ ...older, background: [topic] }).background).toEqual([topic])
+    expect(
+      ReviewArtifactSchema.safeParse({ ...older, background: [{ ...topic, kind: 'vibe' }] }).success
+    ).toBe(false)
+  })
+})
+
 describe('ModelOutputSchema', () => {
   const layer = {
     key: 'run-path',
@@ -109,7 +127,7 @@ describe('ModelOutputSchema', () => {
 
   it('accepts a minimal model output', () => {
     const parsed = ModelOutputSchema.parse({ summary: 'x', layers: [layer], points: [] })
-    expect(parsed).toEqual({ summary: 'x', layers: [layer], points: [] })
+    expect(parsed).toEqual({ summary: 'x', layers: [layer], points: [], background: [] })
   })
 
   it('makes the model name the level of every fold and every collapsed file', () => {
@@ -251,8 +269,15 @@ describe('constants', () => {
       pointTitle: 90,
       pointBody: 600,
       testBehavior: 120,
+      backgroundTopic: 60,
+      backgroundExplanation: 400,
       diagram: 1500,
     })
-    expect(LIMITS).toEqual({ maxPoints: 12, maxDiagramsPerLayer: 1, maxDiagramLinks: 12 })
+    expect(LIMITS).toEqual({
+      maxPoints: 12,
+      maxDiagramsPerLayer: 1,
+      maxDiagramLinks: 12,
+      maxBackgroundTopics: 10,
+    })
   })
 })

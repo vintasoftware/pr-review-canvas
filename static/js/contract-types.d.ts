@@ -49,6 +49,7 @@ export type {
 } from '../../src/contract/comments.js'
 export type {
   Annotation,
+  BackgroundTopic,
   CodeFold,
   Diagram,
   FileEntry,

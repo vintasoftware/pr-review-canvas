@@ -693,6 +693,89 @@ describe('validateModelOutput', () => {
     ])
   })
 
+  it('accepts background topics with canvas links and https links', () => {
+    const output = clean()
+    output.background = [
+      {
+        topic: 'Retry policies',
+        kind: 'concept',
+        explanation:
+          'A retry policy says when to try again. See [the run path](#layer:run-path) and [the docs](https://example.com/retry).',
+      },
+    ]
+    expect(errorsOf(output)).toEqual([])
+    output.background = []
+    expect(errorsOf(output)).toEqual([])
+  })
+
+  it.each(['x'.repeat(TEXT_CAPS.backgroundTopic + 1), `**${'x'.repeat(TEXT_CAPS.backgroundTopic - 3)}**`])(
+    'counts the whole plain-text background topic toward its cap: %s',
+    topic => {
+      const output = clean()
+      output.background = [{ topic, kind: 'library', explanation: 'Short.' }]
+      expect(errorsOf(output)).toEqual([
+        expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'background.0.topic' }),
+      ])
+    }
+  )
+
+  it('TEXT_TOO_LONG: caps a background explanation by its visible text', () => {
+    const output = clean()
+    output.background = [
+      {
+        topic: 'Zod',
+        kind: 'library',
+        explanation: '[run](#layer:run-path) ' + 'x'.repeat(TEXT_CAPS.backgroundExplanation),
+      },
+    ]
+    expect(errorsOf(output)).toEqual([
+      expect.objectContaining({ code: 'TEXT_TOO_LONG', where: 'background.0.explanation' }),
+    ])
+    output.background[0]!.explanation = `[run](#layer:run-path) and [docs](https://example.com/${'x'.repeat(TEXT_CAPS.backgroundExplanation)})`
+    expect(errorsOf(output)).toEqual([])
+  })
+
+  it('TOO_MANY_TOPICS: at most maxBackgroundTopics background topics', () => {
+    const output = clean()
+    output.background = Array.from({ length: LIMITS.maxBackgroundTopics + 1 }, (_, i) => ({
+      topic: `Topic ${i}`,
+      kind: 'tool' as const,
+      explanation: 'See [the run path](#layer:run-path).',
+    }))
+    expect(errorsOf(output)).toEqual([
+      {
+        code: 'TOO_MANY_TOPICS',
+        where: 'background',
+        message: `${LIMITS.maxBackgroundTopics + 1} background topics, cap ${LIMITS.maxBackgroundTopics}`,
+      },
+    ])
+  })
+
+  it('LINK_UNRESOLVED: a background canvas link must resolve', () => {
+    const output = clean()
+    output.background = [{ topic: 'Gone', kind: 'project', explanation: 'See [it](#layer:nope).' }]
+    expect(errorsOf(output)).toEqual([
+      expect.objectContaining({ code: 'LINK_UNRESOLVED', where: 'background:1' }),
+    ])
+  })
+
+  it.each(['No links.', 'Read [the docs](https://example.com).'])(
+    'requires a canvas link in a background explanation: %s',
+    explanation => {
+      const output = clean()
+      output.background = [{ topic: 'Retry', kind: 'concept', explanation }]
+      expect(errorsOf(output)).toEqual([
+        expect.objectContaining({ code: 'LINK_UNRESOLVED', where: 'background:1' }),
+      ])
+    }
+  )
+
+  it('rejects a background topic with an unknown kind', () => {
+    const output = clean()
+    output.background = [{ topic: 'T', kind: 'vibe' as 'tool', explanation: 'E.' }]
+    expect(errorsOf(output)).toEqual([expect.objectContaining({ code: 'SCHEMA' })])
+  })
+
   it('TEST_PATH_UNKNOWN: covered without a path, and with a path outside the PR head', () => {
     const output = clean()
     layer(output, 0).tests = [

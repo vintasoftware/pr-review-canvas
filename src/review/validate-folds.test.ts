@@ -23,7 +23,7 @@ function fixture() {
     tests: [],
     files: [file],
   }
-  const output: ModelOutput = { summary: 'Run path', layers: [layer], points: [] }
+  const output: ModelOutput = { summary: 'Run path', layers: [layer], points: [], background: [] }
 
   return { output, layer, file, fold }
 }

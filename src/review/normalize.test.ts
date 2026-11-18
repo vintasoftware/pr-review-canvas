@@ -141,6 +141,7 @@ describe('normalize', () => {
         },
       ],
       points: expectedPoints,
+      background: [],
       generatedAt: '2026-09-10T12:00:00.000Z',
       generator: { agent: 'claude', model: 'm', harness: 'claude-code', attempts: 2 },
       source: 'local',
@@ -421,6 +422,15 @@ describe('normalize', () => {
     model.layers[0]!.files = []
     const saved = normalize(model, input())
     expect(saved.points.some(point => point.origin === 'tests')).toBe(false)
+  })
+
+  it('keeps background topics through normalize and back', () => {
+    const model = artifactToModelOutput(syntheticArtifact())
+    expect(model.background).toEqual([])
+    const topics = [{ topic: 'Zod', kind: 'library' as const, explanation: 'Runtime schemas.' }]
+    const saved = normalize({ ...model, background: topics }, input())
+    expect(saved.background).toEqual(topics)
+    expect(artifactToModelOutput(saved).background).toEqual(topics)
   })
 
   it('round-trips through artifactToModelOutput and normalize', () => {
