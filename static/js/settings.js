@@ -199,6 +199,7 @@ export function settingsDialogHtml(data, agents, tab = 'reading') {
       '<p class="muted small">The level every review opens at. The Hide code control and the <span class="mono">f</span> key change it for one page.</p>' +
       '<div class="field"><label for="set-background-open">Background</label>' +
       `<select id="set-background-open">${optionsHtml(BACKGROUND_MODES, settings.backgroundOpen, BACKGROUND_LABELS)}</select></div>` +
+      '<p class="muted small">Whether the overview’s Background topics start open. Their heading still opens or closes them on any review.</p>' +
       '<div class="field"><label for="set-diff-layout">Diff layout</label>' +
       `<select id="set-diff-layout">${optionsHtml(DIFF_LAYOUTS, settings.diffLayout, DIFF_LAYOUT_LABELS)}</select></div>` +
       `<p class="muted small">Split puts the old code beside the new, and draws unified while the diff column is under ${SPLIT_MIN_WIDTH}px wide. The layout button in the header and the <span class="mono">s</span> key change it here too.</p>` +
