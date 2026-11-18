@@ -4,7 +4,8 @@ import { emptyState } from '../../src/contract/state.js'
 import { syntheticArtifact, withMarkdownTitles } from '../../src/testing/synthetic.js'
 import { externalLink } from './dom.js'
 import {
-  approveBlockedReason,
+  setAuthorSignOffReason,
+  signoffDisabledReason,
   FAILED_REASON,
   fillSignoffDialog,
   openSignoffDialog,
@@ -19,11 +20,11 @@ import {
 const artifact = syntheticArtifact()
 const BASE = emptyState('2026-09-10T12:00:00.000Z')
 
-describe('approveBlockedReason', () => {
+describe('signoffDisabledReason for approve', () => {
   it('names the one layer that is still open', () => {
-    expect(approveBlockedReason(artifact, BASE)).toBe('1 layer is not reviewed yet: Run path')
+    expect(signoffDisabledReason('APPROVE', artifact, BASE)).toBe('1 layer is not reviewed yet: Run path')
     // The reason is a tooltip, so it names the layer in its title's words.
-    expect(approveBlockedReason(withMarkdownTitles(artifact), BASE)).toBe(
+    expect(signoffDisabledReason('APPROVE', withMarkdownTitles(artifact), BASE)).toBe(
       '1 layer is not reviewed yet: Run path'
     )
   })
@@ -33,14 +34,31 @@ describe('approveBlockedReason', () => {
       ...artifact,
       layers: [...artifact.layers, { ...artifact.layers[0], id: 'layer-3', key: 'third', title: 'Third' }],
     }
-    expect(approveBlockedReason(/** @type {typeof artifact} */ (two), BASE)).toBe(
+    expect(signoffDisabledReason('APPROVE', /** @type {typeof artifact} */ (two), BASE)).toBe(
       '2 layers are not reviewed yet'
     )
   })
 
   it('clears once every layer that is not Other is reviewed', () => {
     const done = { ...BASE, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
-    expect(approveBlockedReason(artifact, done)).toBeNull()
+    expect(signoffDisabledReason('APPROVE', artifact, done)).toBeNull()
+  })
+})
+
+describe('signoffDisabledReason for the author', () => {
+  const reason = 'You opened this pull request. Sign-off comes from another reviewer.'
+  const done = { ...BASE, reviewed: { 'layer:run-path': /** @type {const} */ (true) } }
+  afterEach(() => setAuthorSignOffReason(null))
+
+  it('leaves request changes on for a reader who did not open the pull request', () => {
+    expect(signoffDisabledReason('REQUEST_CHANGES', artifact, BASE)).toBeNull()
+  })
+
+  it('comes before the unreviewed layers and stays once they are all reviewed', () => {
+    setAuthorSignOffReason(reason)
+    expect(signoffDisabledReason('APPROVE', artifact, BASE)).toBe(reason)
+    expect(signoffDisabledReason('APPROVE', artifact, done)).toBe(reason)
+    expect(signoffDisabledReason('REQUEST_CHANGES', artifact, done)).toBe(reason)
   })
 })
 

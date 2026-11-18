@@ -481,6 +481,22 @@ describe('a GitLab origin', () => {
     expect(result.comments).toMatchObject([{ id: 7001, body: 'route draft', line: 4 }])
     expect((await t.ctx.prs.readComments(42))?.reviewComments.some(c => c.id === 7001)).toBe(true)
   })
+  it.each(['APPROVE', 'REQUEST_CHANGES'] as const)(
+    'refuses %s from the merge request author, whatever the project allows',
+    async event => {
+      // MR 42 is by alice, and so is the login glabFor42 answers with.
+      const gh = glabFor42()
+      t = await makeTestContext({ git: gitForMr42(), gh, host: GL, fixtureArtifact: syntheticArtifact() })
+      const app = createApp(t.ctx)
+      const bundle = (await (await app.request('/api/prs/42', { headers: LOCAL })).json()) as PrBundle
+      const reason = 'You opened this merge request. Sign-off comes from another reviewer.'
+      expect(bundle.authorSignOffReason).toBe(reason)
+      const res = await app.request(...post('/api/prs/42/review', { event, body: 'mine', headSha: HEAD_SHA }))
+      expect(res.status).toBe(403)
+      expect(await res.json()).toMatchObject({ error: { code: 'SIGNOFF_BY_AUTHOR', message: reason } })
+      expect(gh.calls.filter(c => c.kind === 'post')).toEqual([])
+    }
+  )
   it.each(['changed head', 'concurrent draft', 'replaced draft', 'cleanup failure'])(
     'retains local drafts after %s prevents GitLab submission',
     async failure => {

@@ -86,6 +86,7 @@ function bundleFor(state, canvas = artifact) {
     chat: { enabled: false, acpx: true },
     largePr: false,
     selfReview: false,
+    authorSignOffReason: null,
     mentionCanvas: true,
     canvasComment: true,
     warnings: [],
