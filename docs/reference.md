@@ -515,9 +515,8 @@ and where it goes.
 
 Set any of these keys under `generation.caps`. Prose limits count visible characters, so Markdown
 link targets, backticks, and asterisks do not count. Fold titles and background topic names are plain text and count in full.
-`diagram` counts raw Mermaid source characters. For Background, stored canvases allow up to 240
-characters per topic name and 1,600 raw Markdown characters per explanation, including link targets.
-These ceilings also apply when a project raises its generation caps.
+`diagram` counts raw Mermaid source characters. A stored canvas holds at most four times each
+default as raw text, so a higher cap stops there.
 
 | Key                     | Default |
 | ----------------------- | ------- |
