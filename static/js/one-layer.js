@@ -1,7 +1,8 @@
 // @ts-check
 // One layer, or one attention point, at a time. With `layerView: one` the page shows the overview
-// or a single layer section and hides the rest, so the rail is how the reader moves between layers
-// and the page scrolls through one layer only. Whatever brings something on screen (a rail link,
+// or a single layer section and hides the rest. The reader moves between layers by the rail and by
+// the bar over and under each section, and the page scrolls through one layer only. Whatever brings
+// something on screen (a rail link, a bar link,
 // the j/k and n/p keys, a canvas link) shows the section that holds it first, so nothing the
 // reader is sent to stays hidden. A review mark is the exception: it moves on to the next card
 // only inside the layer on screen. With `points` the page shows one stop of the one-point view
@@ -13,7 +14,15 @@ import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
 import { getRenderContext, openCard } from './layers.js'
-import { clearStop, showStop, stopShowing, stopTarget } from './point-view.js'
+import {
+  clearStop,
+  layerNavHtml,
+  placeStepBars,
+  removeStepBars,
+  showStop,
+  stopShowing,
+  stopTarget,
+} from './point-view.js'
 import { expandOpenPoint } from './points.js'
 import { stopsOf } from './point-steps.js'
 import { markRailCurrent } from './scroll-spy.js'
@@ -26,9 +35,9 @@ import { markRailCurrent } from './scroll-spy.js'
 const SECTION_SELECTOR = '#overview, pr-layer > section'
 
 /**
- * The state of a history entry the one-point view shows. Its scroll is a stop's, the top of the
- * page, so back or forward to it while the layers show goes to what its fragment names; every
- * other entry keeps the scroll the browser brings back.
+ * The state of a history entry that a stop, or a section in the one-layer view, opened at the top
+ * of the page. That scroll means nothing while all the layers show, so back or forward to it there
+ * goes to what its fragment names. Every other entry keeps the scroll the browser brings back.
  */
 const STOP_ENTRY = { stop: true }
 
@@ -143,11 +152,31 @@ export function initOneLayer(root, opts) {
     return stop === undefined ? elementForHash(root, fragment) : stopTarget(root, stop)
   }
 
+  /**
+   * In the one-layer view, puts the layer bar around `section`. It reads each layer's reviewed mark
+   * from the page, so the mark is current without a render.
+   * @param {HTMLElement} section
+   */
+  const showLayerBars = section => {
+    const ctx = getRenderContext()
+    if (view !== 'one' || ctx === null) {
+      return
+    }
+    const { artifact } = ctx
+    /** @param {import('./point-steps.js').Layer} layer */
+    const reviewed = layer =>
+      root.querySelector(`#${cssEscape(layerAnchorId(layer.key))}`)?.classList.contains('is-reviewed') ===
+      true
+    const index = artifact.layers.findIndex(layer => layerAnchorId(layer.key) === section.id)
+    placeStepBars(section, layerNavHtml(artifact, index, reviewed), 'Layers')
+  }
+
   /** @param {HTMLElement} section */
   const showSection = section => {
     showOnly(root, section)
     openCard(section)
     shownHash = `#${section.id}`
+    showLayerBars(section)
   }
 
   /**
@@ -215,6 +244,34 @@ export function initOneLayer(root, opts) {
   }
 
   /**
+   * In the one-layer view, shows the section a step leads to under a page at its top, as a stop
+   * shows, so the bar over the section is on screen. False for a target that is not a section,
+   * and in the other views.
+   * @param {Element} el
+   */
+  const showAtTop = el => {
+    if (view !== 'one' || !isPageSection(el)) {
+      return false
+    }
+    el.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+    win.scrollTo({ top: 0 })
+    return true
+  }
+
+  /**
+   * A step to a section in the one-layer view, from a link or a key: shows it under a page at its
+   * top and writes its history entry. False, writing nothing, where `showAtTop` is false.
+   * @param {Element | null} el
+   */
+  const openAtTop = el => {
+    if (el === null || !showAtTop(el)) {
+      return false
+    }
+    win.history.pushState(STOP_ENTRY, '', `#${el.id}`)
+    return true
+  }
+
+  /**
    * In the one-point view, puts on screen what `fragment` names, under a page at its top. False
    * when it names nothing, or something that took the page to its layers.
    * @param {string} fragment
@@ -257,6 +314,8 @@ export function initOneLayer(root, opts) {
       return
     }
     clearStop(root)
+    // The other views show no bar. One layer at a time replaces the bars when it shows the section.
+    if (view !== 'one') removeStepBars(root)
     revealFragment(win.location.hash)
     if (view === 'all') {
       for (const section of pageSections(root)) {
@@ -321,7 +380,7 @@ export function initOneLayer(root, opts) {
 
   // A rail link or a "more chunks in layer 4" link is a plain fragment: what it names opens here,
   // before the browser's own scroll runs. In the one-point view a stop takes the place of the one
-  // before, under a page that stays at the top.
+  // before, under a page that stays at the top, and so does a section in the one-layer view.
   root.addEventListener(
     'click',
     event => {
@@ -332,7 +391,9 @@ export function initOneLayer(root, opts) {
         return
       }
       const href = link.getAttribute('href') ?? ''
-      if (view !== 'points') {
+      if (openAtTop(targetFor(href))) {
+        event.preventDefault()
+      } else if (view !== 'points') {
         revealFragment(href)
       } else if (followInPoints(href)) {
         event.preventDefault()
@@ -344,7 +405,8 @@ export function initOneLayer(root, opts) {
 
   // Back and forward between plain fragments: what the fragment names opens. The scroll is
   // repeated here when the browser could not scroll to it, its section hidden, or when it brought
-  // back a stop's scroll, which means nothing in the layers.
+  // back a stop's scroll, which means nothing in the layers. In the one-layer view a section opens
+  // at the top of the page, as from its link.
   win.addEventListener(
     'hashchange',
     () => {
@@ -354,7 +416,7 @@ export function initOneLayer(root, opts) {
         return
       }
       const el = targetFor(fragment)
-      if (el === null) return
+      if (el === null || (!wasPoints && showAtTop(el))) return
       if (wasPoints || sectionOf(root, el)?.hidden === true) {
         expandOpenPoint(el)
         scrollIntoViewSafe(el, 'start')
@@ -433,6 +495,7 @@ export function initOneLayer(root, opts) {
       showFromTop(target)
       return target
     },
+    openAtTop,
     redraw,
     /** The layer view the settings now choose, which the rail's switch goes to. */
     setLayersView(/** @type {LayerView} */ next) {

@@ -271,6 +271,7 @@ export function padUnderStickyBar(doc, bar) {
  *   openSettings?: (el: HTMLElement) => void,
  *   setLayerView?: (view: string, place?: string) => void,
  *   stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined,
+ *   openAtTop?: (el: Element | null) => boolean,
  *   openReview?: () => void,
  *   uncover?: () => void,
  * }} [opts]
@@ -1505,8 +1506,11 @@ export function wireReview(root, session, opts = {}) {
         }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
         if (item !== null) {
-          if (kind === 'layer') window.history.pushState(null, '', `#${item.id}`)
-          focusItem(byId(item.id))
+          const el = byId(item.id)
+          // openAtTop writes the history entry itself.
+          const opened = kind === 'layer' && opts.openAtTop?.(el) === true
+          if (kind === 'layer' && !opened) window.history.pushState(null, '', `#${item.id}`)
+          focusItem(el, opened ? null : 'start')
         }
         break
       }
@@ -1605,9 +1609,11 @@ export function wireReview(root, session, opts = {}) {
       case 'diff-layout':
         toggleDiffLayout()
         break
-      case 'overview':
-        focusItem(byId('overview'))
+      case 'overview': {
+        const el = byId('overview')
+        focusItem(el, opts.openAtTop?.(el) === true ? null : 'start')
         break
+      }
       case 'help':
         openHelpDialog(root)
         break
