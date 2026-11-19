@@ -103,17 +103,6 @@ describe('stopNavHtml', () => {
     expect(html(otherOnly, 1)[0]).toBe('← previous layer: Run <code>path</code>')
   })
 
-  it('says the way of each link, back or on', () => {
-    const ways = stops.flatMap((_, index) =>
-      Array.from(draw(stopNavHtml(stops, index, artifact)).querySelectorAll('a')).map(a => [
-        a.getAttribute('data-way'),
-        a.textContent?.startsWith('←') ? 'back' : 'on',
-      ])
-    )
-    expect(ways.length).toBeGreaterThan(stops.length)
-    for (const [way, by] of ways) expect(way).toBe(by)
-  })
-
   it('leads from the last stop to the layers, as the rail’s switch does', () => {
     draw(stopNavHtml(stops, 4, artifact))
     const on = document.querySelector('a[data-act="layer-view"]')

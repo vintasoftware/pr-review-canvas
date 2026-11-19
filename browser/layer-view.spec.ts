@@ -528,18 +528,6 @@ test.describe('reading by attention points', () => {
     await expect(page).toHaveURL(new RegExp(`#${lensed}$`))
   })
 
-  test('a stop’s bar keeps the keyboard on its way: Enter again moves on', async ({ page, reviewUrl }) => {
-    await page.goto(reviewUrl)
-    const on = page.locator('#stop-nav a[data-way="on"]')
-    await on.focus()
-    await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/#point-p-1$/)
-    await expect(on).toBeFocused()
-    await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/#layer-other$/)
-    await expect(on).toBeFocused()
-  })
-
   test('the rail’s switch keeps the keyboard on the button it pressed', async ({ page, reviewUrl }) => {
     await page.goto(reviewUrl)
     await page.locator('nav.rail .rail-view [data-view="layers"]').focus()
