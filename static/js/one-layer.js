@@ -215,6 +215,21 @@ export function initOneLayer(root, opts) {
   }
 
   /**
+   * In the one-layer view, shows the section a step leads to under a page at its top, as a stop
+   * shows, so the bar over the section is on screen. False for a target that is not a section,
+   * and in the other views.
+   * @param {Element | null} el
+   */
+  const openAtTop = el => {
+    if (view !== 'one' || el === null || !isPageSection(el)) {
+      return false
+    }
+    el.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+    win.scrollTo({ top: 0 })
+    return true
+  }
+
+  /**
    * In the one-point view, puts on screen what `fragment` names, under a page at its top. False
    * when it names nothing, or something that took the page to its layers.
    * @param {string} fragment
@@ -321,7 +336,7 @@ export function initOneLayer(root, opts) {
 
   // A rail link or a "more chunks in layer 4" link is a plain fragment: what it names opens here,
   // before the browser's own scroll runs. In the one-point view a stop takes the place of the one
-  // before, under a page that stays at the top.
+  // before, under a page that stays at the top, and so does a section in the one-layer view.
   root.addEventListener(
     'click',
     event => {
@@ -332,7 +347,10 @@ export function initOneLayer(root, opts) {
         return
       }
       const href = link.getAttribute('href') ?? ''
-      if (view !== 'points') {
+      if (openAtTop(targetFor(href))) {
+        event.preventDefault()
+        win.history.pushState(STOP_ENTRY, '', href)
+      } else if (view !== 'points') {
         revealFragment(href)
       } else if (followInPoints(href)) {
         event.preventDefault()
@@ -344,7 +362,8 @@ export function initOneLayer(root, opts) {
 
   // Back and forward between plain fragments: what the fragment names opens. The scroll is
   // repeated here when the browser could not scroll to it, its section hidden, or when it brought
-  // back a stop's scroll, which means nothing in the layers.
+  // back a stop's scroll, which means nothing in the layers. In the one-layer view a section opens
+  // at the top of the page, as from its link.
   win.addEventListener(
     'hashchange',
     () => {
@@ -354,7 +373,7 @@ export function initOneLayer(root, opts) {
         return
       }
       const el = targetFor(fragment)
-      if (el === null) return
+      if (el === null || (!wasPoints && openAtTop(el))) return
       if (wasPoints || sectionOf(root, el)?.hidden === true) {
         expandOpenPoint(el)
         scrollIntoViewSafe(el, 'start')
@@ -433,6 +452,13 @@ export function initOneLayer(root, opts) {
       showFromTop(target)
       return target
     },
+    /**
+     * For the `j` and `k` keys: in the one-layer view, shows the section they step to under a page
+     * at its top, as its link does, and returns true. False in the other views, where the keys
+     * scroll to it.
+     * @param {Element | null} el
+     */
+    openAtTop,
     redraw,
     /** The layer view the settings now choose, which the rail's switch goes to. */
     setLayersView(/** @type {LayerView} */ next) {

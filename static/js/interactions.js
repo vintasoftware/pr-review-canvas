@@ -271,6 +271,7 @@ export function padUnderStickyBar(doc, bar) {
  *   openSettings?: (el: HTMLElement) => void,
  *   setLayerView?: (view: string, place?: string) => void,
  *   stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined,
+ *   openAtTop?: (el: Element | null) => boolean,
  *   openReview?: () => void,
  *   uncover?: () => void,
  * }} [opts]
@@ -1505,8 +1506,10 @@ export function wireReview(root, session, opts = {}) {
         }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
         if (item !== null) {
+          const el = byId(item.id)
           if (kind === 'layer') window.history.pushState(null, '', `#${item.id}`)
-          focusItem(byId(item.id))
+          // One layer at a time opens the layer at the top of the page, with its bar on screen.
+          focusItem(el, kind === 'layer' && opts.openAtTop?.(el) === true ? null : 'start')
         }
         break
       }
