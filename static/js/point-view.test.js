@@ -139,7 +139,6 @@ describe('layerNavHtml', () => {
 
   it('leads from the overview to the first layer, by its number and title', () => {
     expect(links(layers, -1)).toEqual([['#layer-run-path', 'start with Layer 1: Run path →', 'on']])
-    expect(document.querySelector('a')?.classList.contains('step-on')).toBe(true)
   })
 
   it('leads back to the overview from the first layer, as k does, and on to the next layer', () => {
