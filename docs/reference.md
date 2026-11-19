@@ -799,6 +799,13 @@ returns to Overview. Landing on Other or a reviewed layer opens its body.
 Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
 
+A bar over and under the layer leads back and on, as in [One point at a time](#one-point-at-a-time):
+back to the previous layer by its title, or to the overview from the first layer, and on to the
+next layer by its title. On the overview it leads to the first layer. After the last layer, where
+`j` stops, it leads to the first other layer you have not marked reviewed, or says that every other
+layer is reviewed. A rail link, a bar link, `j` and `k`, and back and forward show the layer under a
+page at its top, so the bar over it is in sight.
+
 ### One point at a time
 
 With **Read by attention points** turned on in the settings dialog (`readByPoints`, off by default),
@@ -818,7 +825,8 @@ through a lens, always open, with no chevron to fold it:
 - A bar over and under each stop leads back and on: to the previous point, to the opening of the
   stop's own layer by its title, or to the previous layer, and on in the same words. After the last
   point, **the rest of the diff, by layer** switches to **Layers**, on the first layer. On the
-  overview it leads to the first stop.
+  overview it leads to the first stop. After a step from the bar, the keyboard focus is on the same
+  way in the new bar over the stop, so `Enter` again moves on.
 - The step keys walk the stops: `j` and `k` the layers' opening stops, `n` and `p` every stop, and
   `]` and `[` the stops of the open points. On a point you reached by the rail or a link, the first
   `]` puts the focus on it, so `c`, `d` and `o` act on it.
