@@ -174,11 +174,14 @@ describe('initOneLayer', () => {
     const scrolled = vi.fn()
     section('layer-other').scrollIntoView = scrolled
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const pushState = vi.spyOn(window.history, 'pushState')
     window.location.hash = '#layer-other'
     window.dispatchEvent(new Event('hashchange'))
     expect(shownIds()).toEqual(['layer-other'])
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
     expect(scrolled).not.toHaveBeenCalled()
+    // Back and forward move along the history; they write no entry.
+    expect(pushState).not.toHaveBeenCalled()
     window.location.hash = ''
     window.dispatchEvent(new Event('hashchange'))
     expect(shownIds()).toEqual(['overview'])

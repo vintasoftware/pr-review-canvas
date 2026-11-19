@@ -1788,10 +1788,13 @@ describe('keyboard', () => {
     if (!(layer instanceof HTMLElement)) throw new Error('no layer')
     const moved = vi.fn()
     layer.scrollIntoView = moved
+    const pushed = vi.spyOn(window.history, 'pushState')
     key('j')
     expect(opened).toHaveBeenCalledWith(layer)
     expect(document.activeElement).toBe(layer)
     expect(moved).not.toHaveBeenCalled()
+    // The view wrote the history entry with the layer, so the key writes none of its own.
+    expect(pushed).not.toHaveBeenCalled()
     // A file is not a layer: n scrolls to it as before.
     key('n')
     expect(opened).toHaveBeenCalledTimes(1)
@@ -1804,6 +1807,7 @@ describe('keyboard', () => {
     expect(opened).toHaveBeenLastCalledWith(overview)
     expect(document.activeElement).toBe(overview)
     expect(moved).not.toHaveBeenCalled()
+    pushed.mockRestore()
   })
 
   it('moves the keyboard focus with the ring', () => {

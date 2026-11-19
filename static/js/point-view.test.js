@@ -532,10 +532,14 @@ describe('the one-layer view on a rendered page', () => {
 
   it('opens a section at the top for the keys only in this view, and takes the bar off in the others', () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const pushState = vi.spyOn(window.history, 'pushState')
     const other = document.querySelector('#layer-other')
     expect(view?.openAtTop(other)).toBe(true)
     expect(other?.hasAttribute('hidden')).toBe(false)
+    // A key writes the history entry a link to the section writes.
+    expect(pushState).toHaveBeenCalledWith({ stop: true }, '', '#layer-other')
     expect(view?.openAtTop(document.querySelector('#layer-other article.file'))).toBe(false)
+    expect(pushState).toHaveBeenCalledTimes(1)
     expect(view?.openAtTop(null)).toBe(false)
     view?.switchView('all')
     expect(bars()).toHaveLength(0)
