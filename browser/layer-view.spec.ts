@@ -139,6 +139,21 @@ test.describe('the bar of one layer at a time', () => {
     await expect(nav.locator('a[data-way="on"]')).toHaveCount(0)
   })
 
+  test('g o opens the overview at the top of the page, with its bar in sight', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl + '#layer-other')
+    await expect(page.locator('#layer-other')).toBeVisible()
+    await page.mouse.wheel(0, 400)
+    await page.keyboard.press('g')
+    await page.keyboard.press('o')
+    await expect(page.locator('#overview')).toBeVisible()
+    await expect(page).toHaveURL(/#overview$/)
+    await expect(page.locator('#stop-nav')).toBeInViewport()
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+  })
+
   test('keeps the keyboard on the bar: Enter again moves on', async ({ page, reviewUrl }) => {
     await page.goto(reviewUrl + '#overview')
     const on = page.locator('#stop-nav a[data-way="on"]')
