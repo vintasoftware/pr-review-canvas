@@ -1795,6 +1795,15 @@ describe('keyboard', () => {
     // A file is not a layer: n scrolls to it as before.
     key('n')
     expect(opened).toHaveBeenCalledTimes(1)
+    // g o steps to the overview the same way.
+    const overview = root.querySelector('#overview')
+    if (!(overview instanceof HTMLElement)) throw new Error('no overview')
+    overview.scrollIntoView = moved
+    key('g')
+    key('o')
+    expect(opened).toHaveBeenLastCalledWith(overview)
+    expect(document.activeElement).toBe(overview)
+    expect(moved).not.toHaveBeenCalled()
   })
 
   it('moves the keyboard focus with the ring', () => {
