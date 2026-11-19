@@ -91,24 +91,15 @@ export function stopTarget(root, stop) {
 export function showStop(root, section, stops, stop, files, artifact) {
   clearStop(root)
   const doc = root.ownerDocument
-  const html = stopNavHtml(
-    stops,
-    stops.findIndex(s => s.id === stop?.id),
-    artifact
+  placeStepBars(
+    section,
+    stopNavHtml(
+      stops,
+      stops.findIndex(s => s.id === stop?.id),
+      artifact
+    ),
+    'Attention points'
   )
-  // The same bar over the stop and under it, so a reader at either end moves on without a scroll.
-  const bar = (/** @type {string} */ label) => {
-    const nav = doc.createElement('nav')
-    nav.className = 'step-nav'
-    nav.setAttribute('aria-label', label)
-    nav.innerHTML = html
-    return nav
-  }
-  const top = bar('Attention points')
-  top.id = NAV_ID
-  const box = section.closest('pr-layer') ?? section
-  box.before(top)
-  box.after(bar('Attention points, at the end'))
   if (stop === undefined) {
     return
   }
@@ -141,6 +132,29 @@ export function showStop(root, section, stops, stop, files, artifact) {
   // An open point shows whole in its stop, in a compact list too; one acted on stays folded.
   const card = section.querySelector(`li.finding[data-fingerprint="${fp}"]`)
   if (card !== null) expandOpenPoint(card)
+}
+
+/**
+ * Puts the same bar over the box of `section` and under it, so a reader at either end moves on
+ * without a scroll. The bar over it is `#stop-nav`. `clearStop` takes both off.
+ * @param {HTMLElement} section
+ * @param {string} html what the bar says, from `stopNavHtml` or `layerNavHtml`
+ * @param {string} label what the bar is called, for a screen reader
+ */
+export function placeStepBars(section, html, label) {
+  const doc = section.ownerDocument
+  const bar = (/** @type {string} */ name) => {
+    const nav = doc.createElement('nav')
+    nav.className = 'step-nav'
+    nav.setAttribute('aria-label', name)
+    nav.innerHTML = html
+    return nav
+  }
+  const top = bar(label)
+  top.id = NAV_ID
+  const box = section.closest('pr-layer') ?? section
+  box.before(top)
+  box.after(bar(`${label}, at the end`))
 }
 
 /** Takes the lens and the bar off the page. @param {ParentNode} root */
