@@ -10,6 +10,15 @@
   **Settings → Reading → Background** can open it on other authors’ PRs or on every review. The
   generator writes it for every new canvas; `generation.caps` takes `backgroundTopic` and
   `backgroundExplanation`.
+- **One layer at a time** has the bar of **One point at a time** over and under the layer: back to
+  the previous layer or the overview, and on to the next layer, by title. After the last layer it
+  leads to the first other layer you have not marked reviewed. A rail link, a bar link, `j` and `k`,
+  and back and forward open the layer at the top of the page, so the bar over it is in sight.
+
+### Fixes
+
+- After `Enter` on a link in the bar of **One point at a time**, the keyboard focus is on the same
+  link in the new bar, so `Enter` again moves on. Before, the focus went to the top of the page.
 
 ### Sign-off
 
