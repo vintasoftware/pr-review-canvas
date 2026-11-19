@@ -14,6 +14,8 @@
   the previous layer or the overview, and on to the next layer, by title. After the last layer it
   leads to the first other layer you have not marked reviewed. A rail link, a bar link, `j` and `k`,
   and back and forward open the layer at the top of the page, so the bar over it is in sight.
+- In both bars the way on is a command: a small button in the GitHub and olive skins, and a
+  bracketed command in the terminal skin. The way back stays a link.
 
 ### Fixes
 
