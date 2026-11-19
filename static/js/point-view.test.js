@@ -158,7 +158,7 @@ describe('layerNavHtml', () => {
     expect(links(artifact, 1, () => true)).toEqual([
       ['#layer-run-path', '← previous layer: Run path', 'back'],
     ])
-    expect(document.querySelector('.step-n')?.textContent).toBe('every other layer is reviewed')
+    expect(document.querySelector('.step-done')?.textContent).toBe('every other layer is reviewed')
   })
 
   it('names Other by its title alone, and renders the Markdown of the titles it names', () => {
@@ -527,7 +527,7 @@ describe('the one-layer view on a rendered page', () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
     press('nav.rail a[href="#layer-other"]')
     expect(document.querySelector('#stop-nav [data-way="on"]')).toBeNull()
-    expect(document.querySelector('#stop-nav .step-n')?.textContent).toBe('every other layer is reviewed')
+    expect(document.querySelector('#stop-nav .step-done')?.textContent).toBe('every other layer is reviewed')
   })
 
   it('opens a section at the top for the keys only in this view, and takes the bar off in the others', () => {

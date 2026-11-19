@@ -135,7 +135,7 @@ test.describe('the bar of one layer at a time', () => {
     await page.keyboard.press('j')
     await expect(other).toBeVisible()
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
-    await expect(nav.locator('.step-n')).toHaveText('every other layer is reviewed')
+    await expect(nav.locator('.step-done')).toHaveText('every other layer is reviewed')
     await expect(nav.locator('a[data-way="on"]')).toHaveCount(0)
   })
 

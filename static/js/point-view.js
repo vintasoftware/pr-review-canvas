@@ -323,7 +323,7 @@ export function layerNavHtml(artifact, index, reviewed) {
   const open = layers.find(l => l !== layer && !reviewed(l))
   const end =
     open === undefined
-      ? '<span class="step-n">every other layer is reviewed</span>'
+      ? '<span class="step-done">every other layer is reviewed</span>'
       : onLink(`#${layerAnchorId(open.key)}`, `next open layer: ${titleHtml(open.title)}`)
   return stopNavHtml(stops, index, artifact, end)
 }

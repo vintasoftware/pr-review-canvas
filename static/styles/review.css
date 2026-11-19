@@ -762,6 +762,10 @@ section.layer[data-lens='point']
   font-weight: 600;
   white-space: nowrap;
 }
+/* In place of a way on, so it stays after the way back, also on a phone. */
+.step-done {
+  color: var(--fg-muted);
+}
 /* The ways back and on are commands; a long layer title in one wraps, as a link's does. */
 .step-nav > .cmd {
   white-space: normal;
