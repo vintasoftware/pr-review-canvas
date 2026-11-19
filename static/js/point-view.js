@@ -15,6 +15,7 @@ import { esc } from './dom.js'
 import { titleHtml } from './markdown.js'
 import { layerAnchorId } from './keys.js'
 import { hunkIdForPoint } from './layers.js'
+import { layerStop } from './point-steps.js'
 import { expandOpenPoint } from './points.js'
 
 const LENS_ID = 'stop-lens'
@@ -229,14 +230,30 @@ function backHtml(stop, previous) {
 }
 
 /**
+ * The way to the layers, for the rest of the diff, which follows the last stop: it switches to them,
+ * as the rail's switch does, on the first layer.
+ * @param {ReviewArtifact} artifact
+ */
+function restOfDiffHtml(artifact) {
+  const first = artifact.layers[0]
+  return first === undefined
+    ? ''
+    : onLink(
+        `#${layerAnchorId(first.key)}`,
+        'the rest of the diff, by layer',
+        ' data-act="layer-view" data-view="layers"'
+      )
+}
+
+/**
  * The bar's ways back and on from stop `index`, -1 for the overview, each saying where it goes.
- * After the last stop come the layers, for the rest of the diff: that way switches to them, as the
- * rail's switch does, on the first layer.
+ * After the last stop comes `end`: by default the way to the layers, for the rest of the diff.
  * @param {ReadonlyArray<Stop>} stops
  * @param {number} index
  * @param {ReviewArtifact} artifact
+ * @param {string} [end] what the bar of the last stop says in place of a way on, as HTML
  */
-export function stopNavHtml(stops, index, artifact) {
+export function stopNavHtml(stops, index, artifact, end = restOfDiffHtml(artifact)) {
   const stop = stops[index]
   const previous = stops[index - 1]
   const next = stops[index + 1]
@@ -250,18 +267,10 @@ export function stopNavHtml(stops, index, artifact) {
     stop?.kind === 'point'
       ? `<span class="step-n">Point ${stop.number} of ${stops.filter(s => s.kind === 'point').length}</span>`
       : ''
-  const firstLayer = artifact.layers[0]
   /** @type {string} */
   let on = ''
   if (next === undefined) {
-    on =
-      stop === undefined || firstLayer === undefined
-        ? ''
-        : onLink(
-            `#${layerAnchorId(firstLayer.key)}`,
-            'the rest of the diff, by layer',
-            ' data-act="layer-view" data-view="layers"'
-          )
+    on = stop === undefined ? '' : end
   } else if (stop === undefined) {
     // The first stop is a layer's opening: every point's layer has one.
     on = onLink(`#${next.id}`, `start with ${layerNameHtml(artifact.layers, next.layer)}`)
@@ -291,35 +300,27 @@ function layerNameHtml(layers, layer) {
 }
 
 /**
- * The one-layer view's bar, in the words of the stops' bar: from layer `index`, -1 for the
- * overview, back to the layer before it or the overview, as `k` goes, and on to the next layer.
- * After the last layer, where `j` stops, it leads to the first other layer with a reviewed mark
- * that is still open, and says so when there is none.
- * @param {ReadonlyArray<Layer>} layers every layer, in page order
+ * The one-layer view's bar: the stops' bar over every layer's opening, so it reads the same, from
+ * layer `index`, -1 for the overview. After the last layer, where `j` stops, it leads to the first
+ * layer still open, or says there is none. Validation keeps Other last, so Other is the layer on
+ * screen there and never the one it leads to.
+ * @param {ReviewArtifact} artifact
  * @param {number} index
  * @param {(layer: Layer) => boolean} reviewed whether the reader marked a layer reviewed
  */
-export function layerNavHtml(layers, index, reviewed) {
+export function layerNavHtml(artifact, index, reviewed) {
+  const { layers, points } = artifact
+  const stops = layers.map(layer =>
+    layerStop(
+      layer,
+      points.filter(p => p.layerId === layer.id)
+    )
+  )
   const layer = layers[index]
-  const previous = layers[index - 1]
-  const next = layers[index + 1]
-  const href = (/** @type {Layer} */ l) => `#${layerAnchorId(l.key)}`
-  const back =
-    layer === undefined
-      ? ''
-      : previous === undefined
-        ? backLink('#overview', 'overview')
-        : backLink(href(previous), `previous layer: ${titleHtml(previous.title)}`)
-  if (next === undefined && layer === undefined) {
-    return ''
-  }
-  if (next !== undefined) {
-    return layer === undefined
-      ? onLink(href(next), `start with ${layerNameHtml(layers, next)}`)
-      : `${back}${onLink(href(next), `next layer: ${titleHtml(next.title)}`)}`
-  }
-  const open = layers.find(l => l !== layer && l.kind !== 'other' && !reviewed(l))
-  return open === undefined
-    ? `${back}<span class="step-n">every other layer is reviewed</span>`
-    : `${back}${onLink(href(open), `next open layer: ${titleHtml(open.title)}`)}`
+  const open = layers.find(l => l !== layer && !reviewed(l))
+  const end =
+    open === undefined
+      ? '<span class="step-n">every other layer is reviewed</span>'
+      : onLink(`#${layerAnchorId(open.key)}`, `next open layer: ${titleHtml(open.title)}`)
+  return stopNavHtml(stops, index, artifact, end)
 }

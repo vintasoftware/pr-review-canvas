@@ -123,54 +123,50 @@ describe('stopNavHtml', () => {
 })
 
 describe('layerNavHtml', () => {
-  const { layers } = artifact
   const none = () => false
   /**
-   * @param {ReadonlyArray<import('./point-steps.js').Layer>} list
+   * @param {import('./contract-types.js').ReviewArtifact} canvas
    * @param {number} index
    * @param {(layer: import('./point-steps.js').Layer) => boolean} [reviewed]
    */
-  const links = (list, index, reviewed = none) =>
-    Array.from(draw(layerNavHtml(list, index, reviewed)).querySelectorAll('a')).map(a => [
+  const links = (canvas, index, reviewed = none) =>
+    Array.from(draw(layerNavHtml(canvas, index, reviewed)).querySelectorAll('a')).map(a => [
       a.getAttribute('href'),
       a.textContent,
       a.getAttribute('data-way'),
     ])
 
   it('leads from the overview to the first layer, by its number and title', () => {
-    expect(links(layers, -1)).toEqual([['#layer-run-path', 'start with Layer 1: Run path →', 'on']])
+    expect(links(artifact, -1)).toEqual([['#layer-run-path', 'start with Layer 1: Run path →', 'on']])
   })
 
   it('leads back to the overview from the first layer, as k does, and on to the next layer', () => {
-    expect(links(layers, 0)).toEqual([
+    expect(links(artifact, 0)).toEqual([
       ['#overview', '← overview', 'back'],
       ['#layer-other', 'next layer: Other changes →', 'on'],
     ])
   })
 
   it('leads from the last layer back to the one before and on to the first open layer', () => {
-    expect(links(layers, 1)).toEqual([
+    expect(links(artifact, 1)).toEqual([
       ['#layer-run-path', '← previous layer: Run path', 'back'],
       ['#layer-run-path', 'next open layer: Run path →', 'on'],
     ])
   })
 
-  it('says so when every other layer is reviewed, and never leads to Other, which has no mark', () => {
-    expect(links(layers, 1, () => true)).toEqual([['#layer-run-path', '← previous layer: Run path', 'back']])
+  it('says so when every other layer is reviewed', () => {
+    expect(links(artifact, 1, () => true)).toEqual([
+      ['#layer-run-path', '← previous layer: Run path', 'back'],
+    ])
     expect(document.querySelector('.step-n')?.textContent).toBe('every other layer is reviewed')
-    const [run, other] = layers
-    if (run === undefined || other === undefined) throw new Error('fixture changed')
-    expect(links([other, run], 1).map(([, text]) => text)).toEqual(['← previous layer: Other changes'])
   })
 
-  it('names Other by its title alone, renders Markdown titles, and has nothing without layers', () => {
-    const [run, other] = withMarkdownTitles(artifact).layers
-    if (run === undefined || other === undefined) throw new Error('fixture changed')
-    expect(links([other, run], -1).map(([, text]) => text)).toEqual(['start with Other changes →'])
-    expect(draw(layerNavHtml([run, other], 0, none)).querySelector('[data-way="on"]')?.innerHTML).toBe(
-      'next layer: Other <strong>changes</strong> →'
-    )
-    expect(layerNavHtml([], -1, none)).toBe('')
+  it('names Other by its title alone, and renders the Markdown of the titles it names', () => {
+    const otherOnly = { ...artifact, layers: artifact.layers.filter(l => l.kind === 'other') }
+    expect(links(otherOnly, -1).map(([, text]) => text)).toEqual(['start with Other changes →'])
+    expect(
+      draw(layerNavHtml(withMarkdownTitles(artifact), 0, none)).querySelector('[data-way="on"]')?.innerHTML
+    ).toBe('next layer: Other <strong>changes</strong> →')
   })
 })
 

@@ -15,6 +15,16 @@ import { layerAnchorId, pointAnchorId } from './keys.js'
  */
 
 /**
+ * A layer's opening stop, which one layer at a time also shows each layer as.
+ * @param {Layer} layer
+ * @param {ReadonlyArray<Point>} points the layer's points
+ * @returns {Extract<Stop, { kind: 'layer' }>}
+ */
+export function layerStop(layer, points) {
+  return { kind: 'layer', id: layerAnchorId(layer.key), layer, points: points.length }
+}
+
+/**
  * Every point sits in a listed layer: validation keeps a point inside a chunk, and every chunk is in
  * a layer, the Other layer for the rest.
  * @param {ReviewArtifact} artifact
@@ -33,7 +43,7 @@ export function stopsOf(artifact) {
     if (points.length === 0 && layer.tests.length === 0) {
       continue
     }
-    stops.push({ kind: 'layer', id: layerAnchorId(layer.key), layer, points: points.length })
+    stops.push(layerStop(layer, points))
     for (const point of points) {
       number += 1
       stops.push({ kind: 'point', id: pointAnchorId(point.id), layer, point, number })

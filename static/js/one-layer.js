@@ -155,13 +155,13 @@ export function initOneLayer(root, opts) {
       return
     }
     const way = clearStop(root)
-    const { layers } = ctx.artifact
+    const { artifact } = ctx
     /** @param {import('./point-steps.js').Layer} layer */
     const reviewed = layer =>
       root.querySelector(`#${cssEscape(layerAnchorId(layer.key))}`)?.classList.contains('is-reviewed') ===
       true
-    const index = layers.findIndex(layer => layerAnchorId(layer.key) === section.id)
-    placeStepBars(section, layerNavHtml(layers, index, reviewed), 'Layers', way)
+    const index = artifact.layers.findIndex(layer => layerAnchorId(layer.key) === section.id)
+    placeStepBars(section, layerNavHtml(artifact, index, reviewed), 'Layers', way)
   }
 
   /** @param {HTMLElement} section */
