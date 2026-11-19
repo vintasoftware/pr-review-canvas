@@ -205,13 +205,15 @@ function backLink(href, html) {
 }
 
 /**
- * A bar's way on, to `href`, that says where it goes as HTML.
+ * A bar's way on, to `href`, that says where it goes as HTML. It looks like a command, so the
+ * reader sees it as the step to take, apart from the plain way back.
  * @param {string} href
  * @param {string} html
  * @param {string} [attrs] more attributes, each with a space before it
+ * @param {boolean} [first] the way into a layer's stops or the first stop
  */
-function onLink(href, html, attrs = '') {
-  return `<a href="${esc(href)}" data-way="on"${attrs}>${html} &rarr;</a>`
+function onLink(href, html, attrs = '', first = false) {
+  return `<a class="cmd${first ? ' step-on' : ''}" href="${esc(href)}" data-way="on"${attrs}>${html} &rarr;</a>`
 }
 
 /**
@@ -265,12 +267,13 @@ export function stopNavHtml(stops, index, artifact) {
           )
   } else if (stop === undefined) {
     // The first stop is a layer's opening: every point's layer has one.
-    on = onLink(`#${next.id}`, `start with ${layerNameHtml(artifact.layers, next.layer)}`, ' class="step-on"')
+    on = onLink(`#${next.id}`, `start with ${layerNameHtml(artifact.layers, next.layer)}`, '', true)
   } else if (stop.kind === 'layer' && next.kind === 'point') {
     on = onLink(
       `#${next.id}`,
       `go to its ${stop.points} attention point${stop.points === 1 ? '' : 's'}`,
-      ' class="step-on"'
+      '',
+      true
     )
   } else {
     on = onLink(
@@ -320,7 +323,7 @@ export function layerNavHtml(layers, index, reviewed) {
   }
   if (next !== undefined) {
     return layer === undefined
-      ? onLink(href(next), `start with ${layerNameHtml(layers, next)}`, ' class="step-on"')
+      ? onLink(href(next), `start with ${layerNameHtml(layers, next)}`, '', true)
       : `${back}${onLink(href(next), `next layer: ${titleHtml(next.title)}`)}`
   }
   const open = layers.find(l => l !== layer && l.kind !== 'other' && !reviewed(l))

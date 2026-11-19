@@ -762,6 +762,11 @@ section.layer[data-lens='point']
   font-weight: 600;
   white-space: nowrap;
 }
+/* The way on is a command; a long layer title in it wraps, as a link's does. */
+.step-nav > .cmd {
+  white-space: normal;
+  text-align: right;
+}
 /* On a phone the place goes over the two ways, so neither long label squeezes it. */
 @media (width <= 600px) {
   .step-nav {
