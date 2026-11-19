@@ -1507,9 +1507,11 @@ export function wireReview(root, session, opts = {}) {
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
         if (item !== null) {
           const el = byId(item.id)
-          if (kind === 'layer') window.history.pushState(null, '', `#${item.id}`)
-          // One layer at a time opens the layer at the top of the page, with its bar on screen.
-          focusItem(el, kind === 'layer' && opts.openAtTop?.(el) === true ? null : 'start')
+          // One layer at a time opens the layer at the top of the page, with its bar on screen, and
+          // writes the history entry itself.
+          const opened = kind === 'layer' && opts.openAtTop?.(el) === true
+          if (kind === 'layer' && !opened) window.history.pushState(null, '', `#${item.id}`)
+          focusItem(el, opened ? null : 'start')
         }
         break
       }

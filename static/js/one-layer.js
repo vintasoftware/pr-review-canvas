@@ -26,9 +26,9 @@ import { markRailCurrent } from './scroll-spy.js'
 const SECTION_SELECTOR = '#overview, pr-layer > section'
 
 /**
- * The state of a history entry the one-point view shows. Its scroll is a stop's, the top of the
- * page, so back or forward to it while the layers show goes to what its fragment names; every
- * other entry keeps the scroll the browser brings back.
+ * The state of a history entry the one-point view shows, and of one the one-layer view shows a
+ * section in. Its scroll is the top of the page, so back or forward to it while all the layers
+ * show goes to what its fragment names; every other entry keeps the scroll the browser brings back.
  */
 const STOP_ENTRY = { stop: true }
 
@@ -240,14 +240,27 @@ export function initOneLayer(root, opts) {
    * In the one-layer view, shows the section a step leads to under a page at its top, as a stop
    * shows, so the bar over the section is on screen. False for a target that is not a section,
    * and in the other views.
-   * @param {Element | null} el
+   * @param {Element} el
    */
-  const openAtTop = el => {
-    if (view !== 'one' || el === null || !isPageSection(el)) {
+  const showAtTop = el => {
+    if (view !== 'one' || !isPageSection(el)) {
       return false
     }
     el.dispatchEvent(new Event('reveal-code', { bubbles: true }))
     win.scrollTo({ top: 0 })
+    return true
+  }
+
+  /**
+   * A step to a section in the one-layer view, from a link or a key: shows it under a page at its
+   * top and writes its history entry. False, writing nothing, where `showAtTop` is false.
+   * @param {Element | null} el
+   */
+  const openAtTop = el => {
+    if (el === null || !showAtTop(el)) {
+      return false
+    }
+    win.history.pushState(STOP_ENTRY, '', `#${el.id}`)
     return true
   }
 
@@ -371,7 +384,6 @@ export function initOneLayer(root, opts) {
       const href = link.getAttribute('href') ?? ''
       if (openAtTop(targetFor(href))) {
         event.preventDefault()
-        win.history.pushState(STOP_ENTRY, '', href)
       } else if (view !== 'points') {
         revealFragment(href)
       } else if (followInPoints(href)) {
@@ -395,7 +407,7 @@ export function initOneLayer(root, opts) {
         return
       }
       const el = targetFor(fragment)
-      if (el === null || (!wasPoints && openAtTop(el))) return
+      if (el === null || (!wasPoints && showAtTop(el))) return
       if (wasPoints || sectionOf(root, el)?.hidden === true) {
         expandOpenPoint(el)
         scrollIntoViewSafe(el, 'start')
@@ -475,9 +487,9 @@ export function initOneLayer(root, opts) {
       return target
     },
     /**
-     * For the `j` and `k` keys: in the one-layer view, shows the section they step to under a page
-     * at its top, as its link does, and returns true. False in the other views, where the keys
-     * scroll to it.
+     * For the keys that step to a section (`j`, `k`, `g o`): in the one-layer view, shows it under
+     * a page at its top and writes its history entry, as its link does, and returns true. False in
+     * the other views, where the keys scroll to it.
      * @param {Element | null} el
      */
     openAtTop,
