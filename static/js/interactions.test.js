@@ -1793,9 +1793,9 @@ describe('keyboard', () => {
     expect(opened).toHaveBeenCalledWith(layer)
     expect(document.activeElement).toBe(layer)
     expect(moved).not.toHaveBeenCalled()
-    // The view wrote the history entry with the layer, so the key writes none of its own.
+    // openAtTop writes the history entry, so the key writes none.
     expect(pushed).not.toHaveBeenCalled()
-    // A file is not a layer: n scrolls to it as before.
+    // n steps to a file, not a layer, so it scrolls to the file itself.
     key('n')
     expect(opened).toHaveBeenCalledTimes(1)
     // g o steps to the overview the same way.

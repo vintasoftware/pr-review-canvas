@@ -1,7 +1,8 @@
 // @ts-check
 // One layer, or one attention point, at a time. With `layerView: one` the page shows the overview
-// or a single layer section and hides the rest, so the rail is how the reader moves between layers
-// and the page scrolls through one layer only. Whatever brings something on screen (a rail link,
+// or a single layer section and hides the rest. The reader moves between layers by the rail and by
+// the bar over and under each section, and the page scrolls through one layer only. Whatever brings
+// something on screen (a rail link, a bar link,
 // the j/k and n/p keys, a canvas link) shows the section that holds it first, so nothing the
 // reader is sent to stays hidden. A review mark is the exception: it moves on to the next card
 // only inside the layer on screen. With `points` the page shows one stop of the one-point view
@@ -26,9 +27,9 @@ import { markRailCurrent } from './scroll-spy.js'
 const SECTION_SELECTOR = '#overview, pr-layer > section'
 
 /**
- * The state of a history entry the one-point view shows, and of one the one-layer view shows a
- * section in. Its scroll is the top of the page, so back or forward to it while all the layers
- * show goes to what its fragment names; every other entry keeps the scroll the browser brings back.
+ * The state of a history entry that a stop, or a section in the one-layer view, opened at the top
+ * of the page. That scroll means nothing while all the layers show, so back or forward to it there
+ * goes to what its fragment names. Every other entry keeps the scroll the browser brings back.
  */
 const STOP_ENTRY = { stop: true }
 
@@ -144,9 +145,8 @@ export function initOneLayer(root, opts) {
   }
 
   /**
-   * In the one-layer view, puts the bar of the stops around `section`: back to the layer before
-   * it and on to the next, by title. A layer's reviewed mark is read off the page, which keeps it
-   * current without a render.
+   * In the one-layer view, puts the layer bar around `section`. It reads each layer's reviewed mark
+   * from the page, so the mark is current without a render.
    * @param {HTMLElement} section
    */
   const showLayerBars = section => {
@@ -487,9 +487,8 @@ export function initOneLayer(root, opts) {
       return target
     },
     /**
-     * For the keys that step to a section (`j`, `k`, `g o`): in the one-layer view, shows it under
-     * a page at its top and writes its history entry, as its link does, and returns true. False in
-     * the other views, where the keys scroll to it.
+     * `openAtTop`, for the keys that step to a section: `j`, `k` and `g o`. False in the other
+     * views, where the key scrolls to the section itself.
      * @param {Element | null} el
      */
     openAtTop,

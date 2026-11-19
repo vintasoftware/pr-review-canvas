@@ -146,7 +146,7 @@ test.describe('the bar of one layer at a time', () => {
     await page.goto(reviewUrl + '#layer-other')
     await expect(page.locator('#layer-other')).toBeVisible()
     await page.mouse.wheel(0, 400)
-    // The wheel returns before the page scrolls; g o must come after the scroll, not race it.
+    // mouse.wheel returns before the page scrolls. Wait for the scroll, so g o comes after it.
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
     await page.keyboard.press('g')
     await page.keyboard.press('o')

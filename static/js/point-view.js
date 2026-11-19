@@ -140,10 +140,11 @@ export function showStop(root, section, stops, stop, files, artifact) {
 
 /**
  * Puts the same bar over the box of `section` and under it, so a reader at either end moves on
- * without a scroll. The bar over it is `#stop-nav`. `clearStop` takes both off. A step from a bar
- * takes its link off the page, so `way`, the way that had the focus, gives the focus to the same
- * way in the bar over the box, which the step put on screen: Enter again moves on. When the new
- * bar has no such way, the focus goes to the way it has.
+ * without a scroll. The bar over it is `#stop-nav`. `clearStop` takes both off.
+ *
+ * A step from a bar removes the link that had the focus. With `way`, the same way in the new bar
+ * over the box takes the focus, so Enter again moves on. A bar without that way gives the focus to
+ * the way it has.
  * @param {HTMLElement} section
  * @param {string} html what the bar says, from `stopNavHtml` or `layerNavHtml`
  * @param {string} label what the bar is called, for a screen reader
@@ -170,8 +171,9 @@ export function placeStepBars(section, html, label, way = null) {
 }
 
 /**
- * Takes the lens and the bar off the page, and returns the way of the bar link that had the focus,
- * `back` or `on`, or null while the focus was not on a bar, for `placeStepBars` to give it back.
+ * Takes the lens and the bar off the page. Returns the way of the bar link that had the focus,
+ * `back` or `on`, or null when the focus was not on a bar. It reads the focus before it removes the
+ * bar, since the focus leaves a link once the link is gone.
  * @param {ParentNode} root
  */
 export function clearStop(root) {
@@ -195,8 +197,8 @@ export function clearStop(root) {
 }
 
 /**
- * A bar's way back, to `href`, that says where it goes as HTML. It looks like the way on, a
- * command, so the two read as a pair.
+ * A bar's way back, to `href`, that says where it goes as HTML. Both ways are commands, so they
+ * read as a pair.
  * @param {string} href
  * @param {string} html
  */
@@ -205,7 +207,7 @@ function backLink(href, html) {
 }
 
 /**
- * A bar's way on, to `href`, that says where it goes as HTML. It looks like the way back.
+ * A bar's way on, to `href`, that says where it goes as HTML.
  * @param {string} href
  * @param {string} html
  * @param {string} [attrs] more attributes, each with a space before it
@@ -230,8 +232,8 @@ function backHtml(stop, previous) {
 }
 
 /**
- * The way to the layers, for the rest of the diff, which follows the last stop: it switches to them,
- * as the rail's switch does, on the first layer.
+ * The way on from the last stop: "the rest of the diff, by layer". It switches to the layers on the
+ * first layer, as the rail's switch does.
  * @param {ReviewArtifact} artifact
  */
 function restOfDiffHtml(artifact) {
@@ -300,10 +302,12 @@ function layerNameHtml(layers, layer) {
 }
 
 /**
- * The one-layer view's bar: the stops' bar over every layer's opening, so it reads the same, from
- * layer `index`, -1 for the overview. After the last layer, where `j` stops, it leads to the first
- * layer still open, or says there is none. Validation keeps Other last, so Other is the layer on
- * screen there and never the one it leads to.
+ * The one-layer view's bar for layer `index`, -1 for the overview. It is the stops' bar, built from
+ * every layer's opening stop, so both bars use the same words.
+ *
+ * After the last layer, where `j` stops, it leads to the first layer not marked reviewed, or says
+ * there is none. Other has no reviewed mark, but it never becomes that target: validation keeps
+ * Other last, so it is the layer on screen.
  * @param {ReviewArtifact} artifact
  * @param {number} index
  * @param {(layer: Layer) => boolean} reviewed whether the reader marked a layer reviewed
