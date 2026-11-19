@@ -1,0 +1,43 @@
+@import '../static/styles.css';
+
+.viewer-landing {
+  max-width: 44rem;
+  margin: 10vh auto 0;
+  padding: 0 1rem;
+  line-height: 1.5;
+}
+
+.viewer-landing h1 {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 1.5rem;
+}
+
+.viewer-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 1.5rem 0;
+}
+
+.viewer-form label {
+  width: 100%;
+  font-weight: 600;
+}
+
+.viewer-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentcolor;
+  border-radius: 4px;
+}
+
+.viewer-error {
+  color: #c62828;
+}

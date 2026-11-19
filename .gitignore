@@ -11,6 +11,7 @@ playwright-report/
 *.tgz
 *.tsbuildinfo
 dist-site/
+dist-viewer/
 
 # This repository's own skill, installed into it by `pr-review install-skill` so the slash
 # command works here. The tracked copy is skills/pr-review-canvas.
