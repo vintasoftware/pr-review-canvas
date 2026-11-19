@@ -244,7 +244,8 @@ describe('the one-point view on a rendered page', () => {
     )
     expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('note')
     expect(lensed()).toBeNull()
-    expect(document.querySelector('nav.step-nav')).toBeNull()
+    // The stops' bar goes; one layer at a time puts its own around the layer.
+    expect(document.querySelector('#stop-nav')?.getAttribute('aria-label')).toBe('Layers')
     expect(shown()).toEqual(['layer-run-path'])
   })
 

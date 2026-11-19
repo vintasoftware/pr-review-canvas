@@ -13,7 +13,15 @@ import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
 import { getRenderContext, openCard } from './layers.js'
-import { clearStop, showStop, stopShowing, stopTarget } from './point-view.js'
+import {
+  clearStop,
+  layerNavHtml,
+  placeStepBars,
+  showStop,
+  stopShowing,
+  stopTarget,
+  wayInFocus,
+} from './point-view.js'
 import { expandOpenPoint } from './points.js'
 import { stopsOf } from './point-steps.js'
 import { markRailCurrent } from './scroll-spy.js'
@@ -143,11 +151,34 @@ export function initOneLayer(root, opts) {
     return stop === undefined ? elementForHash(root, fragment) : stopTarget(root, stop)
   }
 
+  /**
+   * In the one-layer view, puts the bar of the stops around `section`: back to the layer before
+   * it and on to the next, by title. A layer's reviewed mark is read off the page, which keeps it
+   * current without a render.
+   * @param {HTMLElement} section
+   */
+  const showLayerBars = section => {
+    const ctx = getRenderContext()
+    if (view !== 'one' || ctx === null) {
+      return
+    }
+    const way = wayInFocus(root)
+    clearStop(root)
+    const { layers } = ctx.artifact
+    /** @param {import('./point-steps.js').Layer} layer */
+    const reviewed = layer =>
+      root.querySelector(`#${cssEscape(layerAnchorId(layer.key))}`)?.classList.contains('is-reviewed') ===
+      true
+    const index = layers.findIndex(layer => layerAnchorId(layer.key) === section.id)
+    placeStepBars(section, layerNavHtml(layers, index, reviewed), 'Layers', way)
+  }
+
   /** @param {HTMLElement} section */
   const showSection = section => {
     showOnly(root, section)
     openCard(section)
     shownHash = `#${section.id}`
+    showLayerBars(section)
   }
 
   /**

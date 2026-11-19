@@ -4,8 +4,10 @@
 // point's stop shows the layer's heading, the point's card, and only the chunk of its file that
 // holds the point. Every card stays where the layers drew it, so links, keys and commands work on
 // it as they do in the layers. A bar over the stop leads back and on; after the last stop, to the
-// layers. `one-layer.js` decides which stop is on screen.
+// layers. One layer at a time puts the same bar around its layer. `one-layer.js` decides which
+// stop or layer is on screen.
 /** @typedef {import('./contract-types.js').FileEntry} FileEntry */
+/** @typedef {import('./point-steps.js').Layer} Layer */
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {import('./point-steps.js').Stop} Stop */
 import { cssEscape, drawCardOf } from './anchors.js'
@@ -263,10 +265,7 @@ export function stopNavHtml(stops, index, artifact) {
           )
   } else if (stop === undefined) {
     // The first stop is a layer's opening: every point's layer has one.
-    const n = artifact.layers.filter(l => l.kind !== 'other').indexOf(next.layer) + 1
-    const title = titleHtml(next.layer.title)
-    const name = next.layer.kind === 'other' ? title : `Layer ${n}: ${title}`
-    on = onLink(`#${next.id}`, `start with ${name}`, ' class="step-on"')
+    on = onLink(`#${next.id}`, `start with ${layerNameHtml(artifact.layers, next.layer)}`, ' class="step-on"')
   } else if (stop.kind === 'layer' && next.kind === 'point') {
     on = onLink(
       `#${next.id}`,
@@ -280,4 +279,52 @@ export function stopNavHtml(stops, index, artifact) {
     )
   }
   return `${back}${here}${on}`
+}
+
+/**
+ * A layer's name as the way on from the overview says it, as HTML: `Layer 2: title`, or the
+ * title alone for Other, which has no number.
+ * @param {ReadonlyArray<Layer>} layers every layer, in page order
+ * @param {Layer} layer
+ */
+function layerNameHtml(layers, layer) {
+  const title = titleHtml(layer.title)
+  if (layer.kind === 'other') {
+    return title
+  }
+  return `Layer ${layers.filter(l => l.kind !== 'other').indexOf(layer) + 1}: ${title}`
+}
+
+/**
+ * The one-layer view's bar, in the words of the stops' bar: from layer `index`, -1 for the
+ * overview, back to the layer before it or the overview, as `k` goes, and on to the next layer.
+ * After the last layer, where `j` stops, it leads to the first other layer with a reviewed mark
+ * that is still open, and says so when there is none.
+ * @param {ReadonlyArray<Layer>} layers every layer, in page order
+ * @param {number} index
+ * @param {(layer: Layer) => boolean} reviewed whether the reader marked a layer reviewed
+ */
+export function layerNavHtml(layers, index, reviewed) {
+  const layer = layers[index]
+  const previous = layers[index - 1]
+  const next = layers[index + 1]
+  const href = (/** @type {Layer} */ l) => `#${layerAnchorId(l.key)}`
+  const back =
+    layer === undefined
+      ? ''
+      : previous === undefined
+        ? backLink('#overview', 'overview')
+        : backLink(href(previous), `previous layer: ${titleHtml(previous.title)}`)
+  if (next === undefined && layer === undefined) {
+    return ''
+  }
+  if (next !== undefined) {
+    return layer === undefined
+      ? onLink(href(next), `start with ${layerNameHtml(layers, next)}`, ' class="step-on"')
+      : `${back}${onLink(href(next), `next layer: ${titleHtml(next.title)}`)}`
+  }
+  const open = layers.find(l => l !== layer && l.kind !== 'other' && !reviewed(l))
+  return open === undefined
+    ? `${back}<span class="step-n">every other layer is reviewed</span>`
+    : `${back}${onLink(href(open), `next open layer: ${titleHtml(open.title)}`)}`
 }
