@@ -196,17 +196,17 @@ export function clearStop(root) {
 }
 
 /**
- * A bar's way back, to `href`, that says where it goes as HTML.
+ * A bar's way back, to `href`, that says where it goes as HTML. It looks like the way on, a
+ * command, so the two read as a pair.
  * @param {string} href
  * @param {string} html
  */
 function backLink(href, html) {
-  return `<a href="${esc(href)}" data-way="back">&larr; ${html}</a>`
+  return `<a class="cmd" href="${esc(href)}" data-way="back">&larr; ${html}</a>`
 }
 
 /**
- * A bar's way on, to `href`, that says where it goes as HTML. It looks like a command, so the
- * reader sees it as the step to take, apart from the plain way back.
+ * A bar's way on, to `href`, that says where it goes as HTML. It looks like the way back.
  * @param {string} href
  * @param {string} html
  * @param {string} [attrs] more attributes, each with a space before it
