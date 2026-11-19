@@ -91,8 +91,7 @@ export function stopTarget(root, stop) {
  * @param {ReviewArtifact} artifact
  */
 export function showStop(root, section, stops, stop, files, artifact) {
-  const way = wayInFocus(root)
-  clearStop(root)
+  const way = clearStop(root)
   const doc = root.ownerDocument
   placeStepBars(
     section,
@@ -147,7 +146,7 @@ export function showStop(root, section, stops, stop, files, artifact) {
  * @param {HTMLElement} section
  * @param {string} html what the bar says, from `stopNavHtml` or `layerNavHtml`
  * @param {string} label what the bar is called, for a screen reader
- * @param {string | null} [way] from `wayInFocus`, read before the old bar went
+ * @param {string | null} [way] what `clearStop` returned as it took the old bar off
  */
 export function placeStepBars(section, html, label, way = null) {
   const doc = section.ownerDocument
@@ -170,18 +169,16 @@ export function placeStepBars(section, html, label, way = null) {
 }
 
 /**
- * The way of the bar link in focus, `back` or `on`, or null while the focus is not on a bar.
+ * Takes the lens and the bar off the page, and returns the way of the bar link that had the focus,
+ * `back` or `on`, or null while the focus was not on a bar, for `placeStepBars` to give it back.
  * @param {ParentNode} root
  */
-export function wayInFocus(root) {
-  const el = root.ownerDocument?.activeElement ?? null
-  return el !== null && root.contains(el) && el.closest('nav.step-nav') !== null
-    ? el.getAttribute('data-way')
-    : null
-}
-
-/** Takes the lens and the bar off the page. @param {ParentNode} root */
 export function clearStop(root) {
+  const focused = root.ownerDocument?.activeElement ?? null
+  const way =
+    focused !== null && root.contains(focused) && focused.closest('nav.step-nav') !== null
+      ? focused.getAttribute('data-way')
+      : null
   root.querySelector(`#${LENS_ID}`)?.remove()
   for (const nav of root.querySelectorAll('nav.step-nav')) {
     nav.remove()
@@ -193,6 +190,7 @@ export function clearStop(root) {
     if (tests instanceof HTMLDetailsElement) tests.open = false
     tests.removeAttribute(OPENED_ATTR)
   }
+  return way
 }
 
 /**

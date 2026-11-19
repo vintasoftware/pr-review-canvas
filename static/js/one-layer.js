@@ -13,15 +13,7 @@ import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
 import { getRenderContext, openCard } from './layers.js'
-import {
-  clearStop,
-  layerNavHtml,
-  placeStepBars,
-  showStop,
-  stopShowing,
-  stopTarget,
-  wayInFocus,
-} from './point-view.js'
+import { clearStop, layerNavHtml, placeStepBars, showStop, stopShowing, stopTarget } from './point-view.js'
 import { expandOpenPoint } from './points.js'
 import { stopsOf } from './point-steps.js'
 import { markRailCurrent } from './scroll-spy.js'
@@ -162,8 +154,7 @@ export function initOneLayer(root, opts) {
     if (view !== 'one' || ctx === null) {
       return
     }
-    const way = wayInFocus(root)
-    clearStop(root)
+    const way = clearStop(root)
     const { layers } = ctx.artifact
     /** @param {import('./point-steps.js').Layer} layer */
     const reviewed = layer =>
