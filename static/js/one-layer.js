@@ -14,7 +14,15 @@ import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
 import { getRenderContext, openCard } from './layers.js'
-import { clearStop, layerNavHtml, placeStepBars, showStop, stopShowing, stopTarget } from './point-view.js'
+import {
+  clearStop,
+  layerNavHtml,
+  placeStepBars,
+  removeStepBars,
+  showStop,
+  stopShowing,
+  stopTarget,
+} from './point-view.js'
 import { expandOpenPoint } from './points.js'
 import { stopsOf } from './point-steps.js'
 import { markRailCurrent } from './scroll-spy.js'
@@ -154,14 +162,13 @@ export function initOneLayer(root, opts) {
     if (view !== 'one' || ctx === null) {
       return
     }
-    const way = clearStop(root)
     const { artifact } = ctx
     /** @param {import('./point-steps.js').Layer} layer */
     const reviewed = layer =>
       root.querySelector(`#${cssEscape(layerAnchorId(layer.key))}`)?.classList.contains('is-reviewed') ===
       true
     const index = artifact.layers.findIndex(layer => layerAnchorId(layer.key) === section.id)
-    placeStepBars(section, layerNavHtml(artifact, index, reviewed), 'Layers', way)
+    placeStepBars(section, layerNavHtml(artifact, index, reviewed), 'Layers')
   }
 
   /** @param {HTMLElement} section */
@@ -307,6 +314,8 @@ export function initOneLayer(root, opts) {
       return
     }
     clearStop(root)
+    // Only the one-layer view draws a bar from here, in place of the bars on the page.
+    if (view !== 'one') removeStepBars(root)
     revealFragment(win.location.hash)
     if (view === 'all') {
       for (const section of pageSections(root)) {

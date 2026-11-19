@@ -92,7 +92,7 @@ export function stopTarget(root, stop) {
  * @param {ReviewArtifact} artifact
  */
 export function showStop(root, section, stops, stop, files, artifact) {
-  const way = clearStop(root)
+  clearStop(root)
   const doc = root.ownerDocument
   placeStepBars(
     section,
@@ -101,8 +101,7 @@ export function showStop(root, section, stops, stop, files, artifact) {
       stops.findIndex(s => s.id === stop?.id),
       artifact
     ),
-    'Attention points',
-    way
+    'Attention points'
   )
   if (stop === undefined) {
     return
@@ -139,19 +138,21 @@ export function showStop(root, section, stops, stop, files, artifact) {
 }
 
 /**
- * Puts the same bar over the box of `section` and under it, so a reader at either end moves on
- * without a scroll. The bar over it is `#stop-nav`. `clearStop` takes both off.
+ * Puts the same bar over the box of `section` and under it, in place of the bars on the page, so a
+ * reader at either end moves on without a scroll. The bar over it is `#stop-nav`.
  *
- * A step from a bar removes the link that had the focus. With `way`, the same way in the new bar
- * over the box takes the focus, so Enter again moves on. A bar without that way gives the focus to
- * the way it has.
+ * When the focus was on a bar link, the same way in the new bar over the box takes it, so Enter
+ * again moves on. A bar without that way gives the focus to the way it has. Only this function
+ * removes a bar that a new one replaces, so no step can lose the focus before the new bar is there.
  * @param {HTMLElement} section
  * @param {string} html what the bar says, from `stopNavHtml` or `layerNavHtml`
  * @param {string} label what the bar is called, for a screen reader
- * @param {string | null} [way] what `clearStop` returned as it took the old bar off
  */
-export function placeStepBars(section, html, label, way = null) {
+export function placeStepBars(section, html, label) {
   const doc = section.ownerDocument
+  const focused = doc.activeElement
+  const way = focused?.closest('nav.step-nav') ? focused.getAttribute('data-way') : null
+  removeStepBars(doc)
   const bar = (/** @type {string} */ name) => {
     const nav = doc.createElement('nav')
     nav.className = 'step-nav'
@@ -171,21 +172,22 @@ export function placeStepBars(section, html, label, way = null) {
 }
 
 /**
- * Takes the lens and the bar off the page. Returns the way of the bar link that had the focus,
- * `back` or `on`, or null when the focus was not on a bar. It reads the focus before it removes the
- * bar, since the focus leaves a link once the link is gone.
+ * Takes the bars off the page, for a view that shows none.
  * @param {ParentNode} root
  */
-export function clearStop(root) {
-  const focused = root.ownerDocument?.activeElement ?? null
-  const way =
-    focused !== null && root.contains(focused) && focused.closest('nav.step-nav') !== null
-      ? focused.getAttribute('data-way')
-      : null
-  root.querySelector(`#${LENS_ID}`)?.remove()
+export function removeStepBars(root) {
   for (const nav of root.querySelectorAll('nav.step-nav')) {
     nav.remove()
   }
+}
+
+/**
+ * Takes a stop's lens off the page and closes the tests it opened. `placeStepBars` replaces the
+ * bars, and `removeStepBars` takes them off.
+ * @param {ParentNode} root
+ */
+export function clearStop(root) {
+  root.querySelector(`#${LENS_ID}`)?.remove()
   for (const el of root.querySelectorAll('[data-lens]')) {
     el.removeAttribute('data-lens')
   }
@@ -193,7 +195,6 @@ export function clearStop(root) {
     if (tests instanceof HTMLDetailsElement) tests.open = false
     tests.removeAttribute(OPENED_ATTR)
   }
-  return way
 }
 
 /**
