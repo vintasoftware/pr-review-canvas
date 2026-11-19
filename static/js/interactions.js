@@ -1608,9 +1608,12 @@ export function wireReview(root, session, opts = {}) {
       case 'diff-layout':
         toggleDiffLayout()
         break
-      case 'overview':
-        focusItem(byId('overview'))
+      case 'overview': {
+        // One layer at a time opens it at the top of the page, as `k` does from the first layer.
+        const el = byId('overview')
+        focusItem(el, opts.openAtTop?.(el) === true ? null : 'start')
         break
+      }
       case 'help':
         openHelpDialog(root)
         break
