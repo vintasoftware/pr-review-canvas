@@ -89,6 +89,7 @@ export function stopTarget(root, stop) {
  * @param {ReviewArtifact} artifact
  */
 export function showStop(root, section, stops, stop, files, artifact) {
+  const way = wayInFocus(root)
   clearStop(root)
   const doc = root.ownerDocument
   placeStepBars(
@@ -98,7 +99,8 @@ export function showStop(root, section, stops, stop, files, artifact) {
       stops.findIndex(s => s.id === stop?.id),
       artifact
     ),
-    'Attention points'
+    'Attention points',
+    way
   )
   if (stop === undefined) {
     return
@@ -136,12 +138,16 @@ export function showStop(root, section, stops, stop, files, artifact) {
 
 /**
  * Puts the same bar over the box of `section` and under it, so a reader at either end moves on
- * without a scroll. The bar over it is `#stop-nav`. `clearStop` takes both off.
+ * without a scroll. The bar over it is `#stop-nav`. `clearStop` takes both off. A step from a bar
+ * takes its link off the page, so `way`, the way that had the focus, gives the focus to the same
+ * way in the bar over the box, which the step put on screen: Enter again moves on. When the new
+ * bar has no such way, the focus goes to the way it has.
  * @param {HTMLElement} section
  * @param {string} html what the bar says, from `stopNavHtml` or `layerNavHtml`
  * @param {string} label what the bar is called, for a screen reader
+ * @param {string | null} [way] from `wayInFocus`, read before the old bar went
  */
-export function placeStepBars(section, html, label) {
+export function placeStepBars(section, html, label, way = null) {
   const doc = section.ownerDocument
   const bar = (/** @type {string} */ name) => {
     const nav = doc.createElement('nav')
@@ -155,6 +161,21 @@ export function placeStepBars(section, html, label) {
   const box = section.closest('pr-layer') ?? section
   box.before(top)
   box.after(bar(`${label}, at the end`))
+  if (way !== null) {
+    const link = top.querySelector(`a[data-way="${way}"]`) ?? top.querySelector('a')
+    if (link instanceof HTMLElement) link.focus({ preventScroll: true })
+  }
+}
+
+/**
+ * The way of the bar link in focus, `back` or `on`, or null while the focus is not on a bar.
+ * @param {ParentNode} root
+ */
+export function wayInFocus(root) {
+  const el = root.ownerDocument?.activeElement ?? null
+  return el !== null && root.contains(el) && el.closest('nav.step-nav') !== null
+    ? el.getAttribute('data-way')
+    : null
 }
 
 /** Takes the lens and the bar off the page. @param {ParentNode} root */
@@ -170,6 +191,25 @@ export function clearStop(root) {
     if (tests instanceof HTMLDetailsElement) tests.open = false
     tests.removeAttribute(OPENED_ATTR)
   }
+}
+
+/**
+ * A bar's way back, to `href`, that says where it goes as HTML.
+ * @param {string} href
+ * @param {string} html
+ */
+function backLink(href, html) {
+  return `<a href="${esc(href)}" data-way="back">&larr; ${html}</a>`
+}
+
+/**
+ * A bar's way on, to `href`, that says where it goes as HTML.
+ * @param {string} href
+ * @param {string} html
+ * @param {string} [attrs] more attributes, each with a space before it
+ */
+function onLink(href, html, attrs = '') {
+  return `<a href="${esc(href)}" data-way="on"${attrs}>${html} &rarr;</a>`
 }
 
 /**
@@ -199,14 +239,12 @@ export function stopNavHtml(stops, index, artifact) {
   const stop = stops[index]
   const previous = stops[index - 1]
   const next = stops[index + 1]
-  const link = (/** @type {string} */ href, /** @type {string} */ text, attrs = '') =>
-    `<a href="${esc(href)}"${attrs}>${text}</a>`
   const back =
     stop === undefined
       ? ''
       : previous === undefined
-        ? link('#overview', '&larr; overview')
-        : link(`#${previous.id}`, `&larr; ${backHtml(stop, previous)}`)
+        ? backLink('#overview', 'overview')
+        : backLink(`#${previous.id}`, backHtml(stop, previous))
   const here =
     stop?.kind === 'point'
       ? `<span class="step-n">Point ${stop.number} of ${stops.filter(s => s.kind === 'point').length}</span>`
@@ -218,9 +256,9 @@ export function stopNavHtml(stops, index, artifact) {
     on =
       stop === undefined || firstLayer === undefined
         ? ''
-        : link(
+        : onLink(
             `#${layerAnchorId(firstLayer.key)}`,
-            'the rest of the diff, by layer &rarr;',
+            'the rest of the diff, by layer',
             ' data-act="layer-view" data-view="layers"'
           )
   } else if (stop === undefined) {
@@ -228,17 +266,17 @@ export function stopNavHtml(stops, index, artifact) {
     const n = artifact.layers.filter(l => l.kind !== 'other').indexOf(next.layer) + 1
     const title = titleHtml(next.layer.title)
     const name = next.layer.kind === 'other' ? title : `Layer ${n}: ${title}`
-    on = link(`#${next.id}`, `start with ${name} &rarr;`, ' class="step-on"')
+    on = onLink(`#${next.id}`, `start with ${name}`, ' class="step-on"')
   } else if (stop.kind === 'layer' && next.kind === 'point') {
-    on = link(
+    on = onLink(
       `#${next.id}`,
-      `go to its ${stop.points} attention point${stop.points === 1 ? '' : 's'} &rarr;`,
+      `go to its ${stop.points} attention point${stop.points === 1 ? '' : 's'}`,
       ' class="step-on"'
     )
   } else {
-    on = link(
+    on = onLink(
       `#${next.id}`,
-      `${next.kind === 'layer' ? `next layer: ${titleHtml(next.layer.title)}` : 'next point'} &rarr;`
+      next.kind === 'layer' ? `next layer: ${titleHtml(next.layer.title)}` : 'next point'
     )
   }
   return `${back}${here}${on}`
