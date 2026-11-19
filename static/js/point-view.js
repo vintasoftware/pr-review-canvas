@@ -232,8 +232,7 @@ function backHtml(stop, previous) {
 }
 
 /**
- * The way on from the last stop: "the rest of the diff, by layer". It switches to the layers on the
- * first layer, as the rail's switch does.
+ * The way on from the last stop. It switches to the layers, as the rail's switch does.
  * @param {ReviewArtifact} artifact
  */
 function restOfDiffHtml(artifact) {

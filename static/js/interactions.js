@@ -1507,8 +1507,7 @@ export function wireReview(root, session, opts = {}) {
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
         if (item !== null) {
           const el = byId(item.id)
-          // One layer at a time opens the layer at the top of the page, with its bar on screen, and
-          // writes the history entry itself.
+          // openAtTop writes the history entry itself.
           const opened = kind === 'layer' && opts.openAtTop?.(el) === true
           if (kind === 'layer' && !opened) window.history.pushState(null, '', `#${item.id}`)
           focusItem(el, opened ? null : 'start')
@@ -1611,7 +1610,6 @@ export function wireReview(root, session, opts = {}) {
         toggleDiffLayout()
         break
       case 'overview': {
-        // One layer at a time opens it at the top of the page, as `k` does from the first layer.
         const el = byId('overview')
         focusItem(el, opts.openAtTop?.(el) === true ? null : 'start')
         break

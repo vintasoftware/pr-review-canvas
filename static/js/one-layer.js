@@ -486,11 +486,6 @@ export function initOneLayer(root, opts) {
       showFromTop(target)
       return target
     },
-    /**
-     * `openAtTop`, for the keys that step to a section: `j`, `k` and `g o`. False in the other
-     * views, where the key scrolls to the section itself.
-     * @param {Element | null} el
-     */
     openAtTop,
     redraw,
     /** The layer view the settings now choose, which the rail's switch goes to. */

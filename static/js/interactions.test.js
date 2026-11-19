@@ -1798,7 +1798,6 @@ describe('keyboard', () => {
     // n steps to a file, not a layer, so it scrolls to the file itself.
     key('n')
     expect(opened).toHaveBeenCalledTimes(1)
-    // g o steps to the overview the same way.
     const overview = root.querySelector('#overview')
     if (!(overview instanceof HTMLElement)) throw new Error('no overview')
     overview.scrollIntoView = moved

@@ -15,7 +15,6 @@ import { layerAnchorId, pointAnchorId } from './keys.js'
  */
 
 /**
- * A layer's opening stop, with the number of points that follow it.
  * @param {Layer} layer
  * @param {ReadonlyArray<Point>} points the layer's points
  * @returns {Extract<Stop, { kind: 'layer' }>}
