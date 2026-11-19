@@ -92,6 +92,67 @@ test('shows one layer at a time once the setting is saved, on this page and afte
   await expect(other).toBeVisible()
 })
 
+test.describe('the bar of one layer at a time', () => {
+  test.use({ settings: { layerView: 'one' } })
+
+  test('leads back and on from a layer, under a page at its top, with back and forward', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl + '#overview')
+    const nav = page.locator('#stop-nav')
+    const run = page.locator('#layer-run-path')
+    const other = page.locator('#layer-other')
+    await expect(nav.locator('a')).toHaveText(['start with Layer 1: Run path →'])
+
+    // The rail opens a layer at the top of the page, so its bar is on screen.
+    await page.locator('nav.rail a[href="#layer-run-path"]').click()
+    await expect(run).toBeVisible()
+    await expect(nav).toBeInViewport()
+    await expect(nav.locator('a')).toHaveText(['← overview', 'next layer: Other changes →'])
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+
+    // The bar under the layer leads on from its end, and the new layer opens at the top.
+    await page.locator('nav.step-nav[aria-label="Layers, at the end"] a', { hasText: 'next layer' }).click()
+    await expect(page).toHaveURL(/#layer-other$/)
+    await expect(other).toBeVisible()
+    await expect(run).toBeHidden()
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await expect(nav.locator('a')).toHaveText(['← previous layer: Run path', 'next open layer: Run path →'])
+
+    // Back and forward move between the layers the bar opened, from the top.
+    await page.goBack()
+    await expect(run).toBeVisible()
+    await expect(page).toHaveURL(/#layer-run-path$/)
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await page.goForward()
+    await expect(other).toBeVisible()
+
+    // Once the other layers are reviewed, the last one says so in place of a way on.
+    await nav.locator('a', { hasText: 'previous layer' }).click()
+    await run.locator('[data-act="mark-layer"]').click()
+    await expect(run).toHaveClass(/is-reviewed/)
+    await page.keyboard.press('j')
+    await expect(other).toBeVisible()
+    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await expect(nav.locator('.step-n')).toHaveText('every other layer is reviewed')
+    await expect(nav.locator('a[data-way="on"]')).toHaveCount(0)
+  })
+
+  test('keeps the keyboard on the bar: Enter again moves on', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl + '#overview')
+    const on = page.locator('#stop-nav a[data-way="on"]')
+    await on.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#layer-run-path')).toBeVisible()
+    await expect(on).toBeFocused()
+    await expect(on).toHaveText('next layer: Other changes →')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#layer-other')).toBeVisible()
+    await expect(on).toBeFocused()
+  })
+})
+
 test.describe('compact attention points saved in the settings', () => {
   test('draws the open page’s lists compact at once, and whole again', async ({ page, reviewUrl }) => {
     await page.goto(reviewUrl)
@@ -448,6 +509,18 @@ test.describe('reading by attention points', () => {
     // The URL names the stop that opened, so a reload or a copied link opens on it.
     const lensed = await page.locator('[data-lens]').getAttribute('id')
     await expect(page).toHaveURL(new RegExp(`#${lensed}$`))
+  })
+
+  test('a stop’s bar keeps the keyboard on its way: Enter again moves on', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl)
+    const on = page.locator('#stop-nav a[data-way="on"]')
+    await on.focus()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/#point-p-1$/)
+    await expect(on).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(page).toHaveURL(/#layer-other$/)
+    await expect(on).toBeFocused()
   })
 
   test('the rail’s switch keeps the keyboard on the button it pressed', async ({ page, reviewUrl }) => {
