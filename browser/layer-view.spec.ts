@@ -110,21 +110,21 @@ test.describe('the bar of one layer at a time', () => {
     await expect(run).toBeVisible()
     await expect(nav).toBeInViewport()
     await expect(nav.locator('a')).toHaveText(['← overview', 'next layer: Other changes →'])
-    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
 
     // The bar under the layer leads on from its end, and the new layer opens at the top.
     await page.locator('nav.step-nav[aria-label="Layers, at the end"] a', { hasText: 'next layer' }).click()
     await expect(page).toHaveURL(/#layer-other$/)
     await expect(other).toBeVisible()
     await expect(run).toBeHidden()
-    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
     await expect(nav.locator('a')).toHaveText(['← previous layer: Run path', 'next open layer: Run path →'])
 
     // Back and forward move between the layers the bar opened, from the top.
     await page.goBack()
     await expect(run).toBeVisible()
     await expect(page).toHaveURL(/#layer-run-path$/)
-    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
     await page.goForward()
     await expect(other).toBeVisible()
 
@@ -134,7 +134,7 @@ test.describe('the bar of one layer at a time', () => {
     await expect(run).toHaveClass(/is-reviewed/)
     await page.keyboard.press('j')
     await expect(other).toBeVisible()
-    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
     await expect(nav.locator('.step-n')).toHaveText('every other layer is reviewed')
     await expect(nav.locator('a[data-way="on"]')).toHaveCount(0)
   })
@@ -146,12 +146,14 @@ test.describe('the bar of one layer at a time', () => {
     await page.goto(reviewUrl + '#layer-other')
     await expect(page.locator('#layer-other')).toBeVisible()
     await page.mouse.wheel(0, 400)
+    // The wheel returns before the page scrolls; g o must come after the scroll, not race it.
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
     await page.keyboard.press('g')
     await page.keyboard.press('o')
     await expect(page.locator('#overview')).toBeVisible()
     await expect(page).toHaveURL(/#overview$/)
     await expect(page.locator('#stop-nav')).toBeInViewport()
-    expect(await page.evaluate(() => window.scrollY)).toBe(0)
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
   })
 
   test('keeps the keyboard on the bar: Enter again moves on', async ({ page, reviewUrl }) => {
