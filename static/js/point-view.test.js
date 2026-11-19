@@ -263,7 +263,7 @@ describe('the one-point view on a rendered page', () => {
     const rest = document.querySelector('#stop-nav a[data-act="layer-view"]')
     if (!(rest instanceof HTMLElement)) throw new Error('no way to the layers')
     rest.focus()
-    // As the layer-view command does with the link's place.
+    // The layer-view command passes the link's href as the place to open.
     view?.switchView('one', rest.getAttribute('href') ?? undefined)
     expect(document.querySelector('#stop-nav')?.getAttribute('aria-label')).toBe('Layers')
     expect(document.activeElement).toBe(document.querySelector('#stop-nav a[data-way="on"]'))

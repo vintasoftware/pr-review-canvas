@@ -182,8 +182,7 @@ export function removeStepBars(root) {
 }
 
 /**
- * Takes a stop's lens off the page and closes the tests it opened. `placeStepBars` replaces the
- * bars, and `removeStepBars` takes them off.
+ * Takes a stop's lens off the page and closes the tests it opened.
  * @param {ParentNode} root
  */
 export function clearStop(root) {

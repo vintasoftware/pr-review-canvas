@@ -314,7 +314,7 @@ export function initOneLayer(root, opts) {
       return
     }
     clearStop(root)
-    // Only the one-layer view draws a bar from here, in place of the bars on the page.
+    // The other views show no bar. One layer at a time replaces the bars when it shows the section.
     if (view !== 'one') removeStepBars(root)
     revealFragment(win.location.hash)
     if (view === 'all') {
