@@ -10,7 +10,13 @@ import {
   syntheticArtifact,
   withMarkdownTitles,
 } from '../../src/testing/synthetic.js'
-import { defineLayerElements, hunkIdForPoint, renderLayers, setRenderContext } from './layers.js'
+import {
+  defineLayerElements,
+  getRenderContext,
+  hunkIdForPoint,
+  renderLayers,
+  setRenderContext,
+} from './layers.js'
 import { initOneLayer } from './one-layer.js'
 import { stopsOf } from './point-steps.js'
 import { layerNavHtml, stopNavHtml } from './point-view.js'
@@ -249,6 +255,18 @@ describe('the one-point view on a rendered page', () => {
     press('#stop-nav a[data-way="back"]')
     expect(window.location.hash).toBe('#overview')
     expect(document.activeElement?.textContent).toBe('start with Layer 1: Run path →')
+  })
+
+  it('keeps the focus on the bar from the last stop into the layers, one at a time', () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    view?.step(1, stop => stop.id === 'point-p-3')
+    const rest = document.querySelector('#stop-nav a[data-act="layer-view"]')
+    if (!(rest instanceof HTMLElement)) throw new Error('no way to the layers')
+    rest.focus()
+    // As the layer-view command does with the link's place.
+    view?.switchView('one', rest.getAttribute('href') ?? undefined)
+    expect(document.querySelector('#stop-nav')?.getAttribute('aria-label')).toBe('Layers')
+    expect(document.activeElement).toBe(document.querySelector('#stop-nav a[data-way="on"]'))
   })
 
   it('leaves the focus where it is after a step that no bar made', () => {
@@ -533,5 +551,14 @@ describe('the one-layer view on a rendered page', () => {
     view?.switchView('all')
     expect(bars()).toHaveLength(0)
     expect(view?.openAtTop(other)).toBe(false)
+  })
+
+  it('takes the bar off for the attention points of a canvas with none, which show no bar', () => {
+    const ctx = getRenderContext()
+    if (ctx === null) throw new Error('no render context')
+    setRenderContext({ ...ctx, artifact: { ...artifact, points: [] } })
+    expect(bars()).toHaveLength(2)
+    view?.switchView('points')
+    expect(bars()).toHaveLength(0)
   })
 })
