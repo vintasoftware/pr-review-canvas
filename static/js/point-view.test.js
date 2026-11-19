@@ -103,6 +103,17 @@ describe('stopNavHtml', () => {
     expect(html(otherOnly, 1)[0]).toBe('← previous layer: Run <code>path</code>')
   })
 
+  it('says the way of each link, back or on', () => {
+    const ways = stops.flatMap((_, index) =>
+      Array.from(draw(stopNavHtml(stops, index, artifact)).querySelectorAll('a')).map(a => [
+        a.getAttribute('data-way'),
+        a.textContent?.startsWith('←') ? 'back' : 'on',
+      ])
+    )
+    expect(ways.length).toBeGreaterThan(stops.length)
+    for (const [way, by] of ways) expect(way).toBe(by)
+  })
+
   it('leads from the last stop to the layers, as the rail’s switch does', () => {
     draw(stopNavHtml(stops, 4, artifact))
     const on = document.querySelector('a[data-act="layer-view"]')
@@ -179,6 +190,36 @@ describe('the one-point view on a rendered page', () => {
     expect(lens).toContain(`data-hunk="${cssEscape(hunkIdForPoint(point, entry))}"`)
     expect(document.querySelectorAll('#point-p-1')).toHaveLength(1)
     expect(document.querySelector('nav.rail a[aria-current]')?.getAttribute('href')).toBe('#point-p-1')
+  })
+
+  it('keeps the focus on the bar after a step from it: the same way, else the way the new bar has', () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    /** @param {string} selector */
+    const press = selector => {
+      const link = document.querySelector(selector)
+      if (!(link instanceof HTMLElement)) throw new Error(`no ${selector}`)
+      link.focus()
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    }
+    // The bar under the stop gives the focus to the bar over the next one, which is on screen.
+    press('nav.step-nav:not(#stop-nav) a[data-way="on"]')
+    expect(window.location.hash).toBe('#point-p-1')
+    expect(document.activeElement?.closest('nav')?.id).toBe('stop-nav')
+    expect(document.activeElement?.getAttribute('href')).toBe('#layer-other')
+    press('#stop-nav a[data-way="back"]')
+    expect(document.activeElement?.getAttribute('href')).toBe('#overview')
+    // The overview's bar has no way back, so the focus goes to its way on.
+    press('#stop-nav a[data-way="back"]')
+    expect(window.location.hash).toBe('#overview')
+    expect(document.activeElement?.textContent).toBe('start with Layer 1: Run path →')
+  })
+
+  it('leaves the focus where it is after a step that no bar made', () => {
+    const rail = document.querySelector('nav.rail a[href="#point-p-1"]')
+    if (!(rail instanceof HTMLElement)) throw new Error('no rail link')
+    rail.focus()
+    view?.step(1, () => true)
+    expect(document.activeElement).toBe(rail)
   })
 
   it('shows the stop of a point of the Other layer, which has its row in the diff only', () => {
