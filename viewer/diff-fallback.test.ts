@@ -142,3 +142,11 @@ it('leaves out a file whose name or patch could pose as another file, and says s
   )
   expect(sameLoadedDiff(diff, diff)).toBe(false)
 })
+
+it('leaves out a file whose name would read back as another', () => {
+  const padded = { ...LISTED[0]!, filename: ' src/app.ts ' }
+  const ambiguous = { filename: 'x b/src/app.ts', status: 'changed', additions: 0, deletions: 0 }
+  const diff = diffFromFiles(ghFiles([LISTED[1]!, padded, ambiguous]), 3)
+  expect(diff.files.map(f => f.path)).toEqual(['src/new.ts'])
+  expect(diff.refused).toEqual([' src/app.ts ', 'x b/src/app.ts'])
+})
