@@ -43,6 +43,7 @@ import {
   getFoldLevel,
   getRenderContext,
   getStartCollapsed,
+  hiddenByLevel,
   pathSet,
   refreshCardDecorations,
   refreshFolds,
@@ -441,8 +442,9 @@ export function wireReview(root, session, opts = {}) {
    * @param {Element | null} el
    * @param {ScrollLogicalPosition | null} [block] `start` for a card, `center` for a point, and
    *   null for what a stop of the one-point view shows, which the stop already put on screen
+   * @param {{ openTarget?: boolean }} [reveal] `openTarget: false` keeps a closed card closed
    */
-  const focusItem = (el, block = 'start') => {
+  const focusItem = (el, block = 'start', reveal = {}) => {
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
       marked.classList.remove('is-focused')
     }
@@ -453,9 +455,9 @@ export function wireReview(root, session, opts = {}) {
       // The page's scroll padding already clears the outdated bar; this is the gap under it.
       el.style.scrollMarginTop = `${FOCUS_GAP}px`
       if (block !== null) {
-        // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around
-        // the element: a hidden element cannot take the focus.
-        scrollToDrawn(root, el, block)
+        // Scrolls first, which opens what hides the element: a hidden element cannot take the
+        // focus. `reveal` can keep the card itself closed.
+        scrollToDrawn(root, el, block, reveal)
       }
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.
@@ -747,7 +749,8 @@ export function wireReview(root, session, opts = {}) {
         if (reviewed) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
           if (next instanceof HTMLElement) {
-            focusItem(next)
+            // The next card opens, but not a file that the reading level hides whole.
+            focusItem(next, 'start', { openTarget: !hiddenByLevel(next) })
           }
         }
       }

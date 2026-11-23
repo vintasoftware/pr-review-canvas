@@ -33,6 +33,11 @@
   - On GitLab, the rule is new. It also applies on a project that lets authors approve their own
     merge requests.
 
+### Fixes
+
+- When you mark a file reviewed, the focus moves to the next file that is not reviewed. That file
+  now stays closed when the **Hide code** level hides it whole.
+
 ## 0.11.1
 
 Changes since 0.11.0.

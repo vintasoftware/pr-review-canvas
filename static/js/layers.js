@@ -431,7 +431,10 @@ export function wireCardReveal(root) {
     // into it, shows that one point.
     if (target instanceof Element) {
       target.closest('[data-point].is-resolved')?.setAttribute('data-revealed', '')
-      openCard(target)
+      // The sender can leave the card itself as it is.
+      if (!(event instanceof CustomEvent) || event.detail?.openTarget !== false) {
+        openCard(target)
+      }
     }
     for (
       let node = target instanceof Element ? target.parentElement : null;
@@ -916,9 +919,10 @@ const MAX_DRAW_ROUNDS = 10
  * @param {ParentNode} root
  * @param {Element} el
  * @param {ScrollLogicalPosition} block
+ * @param {{ openTarget?: boolean }} [reveal] what the first scroll opens, as `scrollIntoViewSafe` takes it
  */
-export function scrollToDrawn(root, el, block) {
-  scrollIntoViewSafe(el, block)
+export function scrollToDrawn(root, el, block, reveal = {}) {
+  scrollIntoViewSafe(el, block, reveal)
   for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
     el.scrollIntoView({ block })
   }
@@ -937,6 +941,31 @@ export function hydrateAll(root, ctx) {
     }
   }
   return rendered
+}
+
+/**
+ * True when the reading level hides a file whole. A file with points or comments stays open.
+ * @param {LayerFile} lf
+ * @param {string} layerId
+ * @param {ReviewArtifact} artifact
+ * @param {ReadonlySet<string>} commentPaths
+ */
+function levelHides(lf, layerId, artifact, commentPaths) {
+  return collapsesAt(lf, foldLevel) && !cardKeepsOpen(lf, layerId, artifact, commentPaths)
+}
+
+/**
+ * True for a file card that the page's reading level hides whole.
+ * @param {Element} card
+ */
+export function hiddenByLevel(card) {
+  const ctx = renderContext
+  if (ctx === null) {
+    return false
+  }
+  const layerId = card.getAttribute('data-layer') ?? ''
+  const lf = layerFileOf(ctx, layerId, card.getAttribute('data-path') ?? '')
+  return lf !== undefined && levelHides(lf, layerId, ctx.artifact, commentPathsOf(ctx))
 }
 
 /**
@@ -961,9 +990,7 @@ export function setFoldLevel(root, level) {
         ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
         : undefined
     if (card instanceof HTMLElement && lf !== undefined) {
-      const hidden =
-        collapsesAt(lf, level) &&
-        !cardKeepsOpen(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths)
+      const hidden = levelHides(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths)
       if (hidden || !startCollapsed) {
         setCardCollapsed(card, hidden || card.classList.contains('is-reviewed'))
       }
