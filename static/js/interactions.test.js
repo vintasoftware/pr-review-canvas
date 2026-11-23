@@ -600,7 +600,7 @@ describe('reviewed state', () => {
     expect(nextUnreviewedTarget(root, session, 'layer-run-path', 'layer')).toBeNull()
   })
 
-  it('keeps the next file closed when it takes the focus after a file is marked reviewed', async () => {
+  it('opens the next file that Start collapsed closed when a file is marked reviewed', async () => {
     setStartCollapsed(true)
     const { root } = setup()
     const body = root.querySelector('#file-src_new_name_ts > .file-body')
@@ -613,7 +613,7 @@ describe('reviewed state', () => {
     box.dispatchEvent(new Event('change', { bubbles: true }))
     await flush()
     expect(root.querySelector('.is-focused')?.id).toBe('file-src_new_name_ts')
-    expect(body?.hasAttribute('hidden')).toBe(true)
+    expect(body?.hasAttribute('hidden')).toBe(false)
   })
 
   it('opens the next layer when it takes the focus after a layer is marked reviewed', async () => {
