@@ -11,7 +11,7 @@ import type { Pr, Repo } from '../contract/review-artifact.js'
 import { BodyTooLargeError, readCappedBody } from '../server/capped-body.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import type { CanvasAuthor } from './canvas-author.js'
+import { type CanvasAuthor, isReviewAuthor } from './canvas-author.js'
 import type { HostAttachments } from './host.js'
 
 export const MAX_REDIRECTS = 3
@@ -96,9 +96,10 @@ function commentAuthor(c: { author: string; authorAssociation?: string | undefin
 }
 
 /**
- * The candidates whose author may supply the canvas, and a warning for each one skipped. The host
- * is asked once per author; a failed check skips that author's canvases, since a canvas is only
- * taken from someone known to have a role on the repository.
+ * The candidates whose author may supply the canvas, and a warning for each one skipped: the
+ * review's author, or someone with a role on the repository. The host is asked once per commenter;
+ * a failed check skips that commenter's canvases, since a canvas is only taken from someone known
+ * to have a role.
  */
 export async function keepTrustedCandidates(
   ctx: AppContext,
@@ -106,29 +107,34 @@ export async function keepTrustedCandidates(
   candidates: AttachmentCandidate[]
 ): Promise<{ trusted: AttachmentCandidate[]; warnings: string[] }> {
   const { host, repo } = ctx.config
-  const checks = new Map<string, Promise<boolean | Error>>()
+  const roles = new Map<string, boolean | Error>()
   const trusted: AttachmentCandidate[] = []
   const warnings: string[] = []
   for (const candidate of candidates) {
     const { author } = candidate
-    const key = `${author.login.toLowerCase()}\u0000${author.association ?? ''}`
-    let check = checks.get(key)
-    if (check === undefined) {
-      check = host
-        .trustsCanvasAuthor(ctx.gh, repo, author, pr.author)
-        .catch((err: unknown) => (err instanceof Error ? err : new Error(String(err))))
-      checks.set(key, check)
-    }
-    const answer = await check
-    if (answer === true) {
+    if (isReviewAuthor(author.login, pr.author)) {
       trusted.push(candidate)
-    } else if (answer === false) {
+      continue
+    }
+    const key = `${author.login.toLowerCase()}\u0000${author.association ?? ''}`
+    let role = roles.get(key)
+    if (role === undefined) {
+      try {
+        role = await host.hasRepositoryRole(ctx.gh, repo, author)
+      } catch (err) {
+        role = err instanceof Error ? err : new Error(String(err))
+      }
+      roles.set(key, role)
+    }
+    if (role === true) {
+      trusted.push(candidate)
+    } else if (role === false) {
       warnings.push(
         `skipped ${candidate.name}, posted by @${author.login}, who is neither the ${host.noun}'s author nor has a role on ${repo.owner}/${repo.name}`
       )
     } else {
       warnings.push(
-        `skipped ${candidate.name}: could not check @${author.login}'s role on ${repo.owner}/${repo.name}: ${answer.message}`
+        `skipped ${candidate.name}: could not check @${author.login}'s role on ${repo.owner}/${repo.name}: ${role.message}`
       )
     }
   }

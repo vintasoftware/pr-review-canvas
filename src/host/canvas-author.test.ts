@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { createFakeGh, TEST_REPO } from '../testing/fakes.js'
-import { githubTrustsCanvasAuthor, gitlabTrustsCanvasAuthor, isReviewAuthor } from './canvas-author.js'
+import { hasGithubRole, hasGitlabRole, isReviewAuthor } from './canvas-author.js'
 
 it('takes the review author in any letter case', () => {
   expect(isReviewAuthor('Octocat', 'octocat')).toBe(true)
@@ -11,12 +11,12 @@ it('takes the review author in any letter case', () => {
 // too, any other deleted account would otherwise pass as the author.
 it('never takes a deleted account for the review author, even when the author was deleted too', async () => {
   expect(isReviewAuthor('ghost', 'ghost')).toBe(false)
-  expect(await githubTrustsCanvasAuthor({ login: 'ghost' }, 'ghost')).toBe(false)
+  expect(hasGithubRole({ login: 'ghost' })).toBe(false)
   const gh = createFakeGh()
-  expect(await gitlabTrustsCanvasAuthor(gh, TEST_REPO, { login: 'ghost' }, 'ghost')).toBe(false)
+  expect(await hasGitlabRole(gh, TEST_REPO, { login: 'ghost' })).toBe(false)
   expect(gh.calls).toEqual([])
 })
 
-it('still takes a deleted account GitHub reports with a role on the repository', async () => {
-  expect(await githubTrustsCanvasAuthor({ login: 'ghost', association: 'MEMBER' }, 'octocat')).toBe(true)
+it('still takes a deleted account GitHub reports with a role on the repository', () => {
+  expect(hasGithubRole({ login: 'ghost', association: 'MEMBER' })).toBe(true)
 })

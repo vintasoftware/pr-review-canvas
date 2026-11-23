@@ -563,7 +563,8 @@ describe('who may supply the canvas', () => {
 
   async function discover(
     payload: CommentsPayload,
-    opts: Parameters<typeof makeTestContext>[0] = {}
+    opts: Parameters<typeof makeTestContext>[0] = {},
+    review: Pr = pr()
   ): Promise<{ outcome: Awaited<ReturnType<typeof discoverSharedCanvas>>; t: TestContext }> {
     const ctx = await makeTestContext({
       git: createFakeGit({
@@ -572,7 +573,7 @@ describe('who may supply the canvas', () => {
       }),
       ...opts,
     })
-    return { outcome: await discoverSharedCanvas(ctx.ctx, pr(), payload), t: ctx }
+    return { outcome: await discoverSharedCanvas(ctx.ctx, review, payload), t: ctx }
   }
 
   it('skips a canvas from someone with no role on a GitHub repository, and says whose it was', async () => {
@@ -592,6 +593,20 @@ describe('who may supply the canvas', () => {
     try {
       expect(outcome.imported?.status).toBe('ready')
       expect(outcome.warnings).toEqual([])
+    } finally {
+      await t.cleanup()
+    }
+  })
+
+  it('takes no canvas from a deleted account, on a pull request a deleted account opened either', async () => {
+    const { outcome, t } = await discover(
+      comments({ issueComments: [from('ghost', 'NONE')] }),
+      {},
+      pr({ author: 'ghost' })
+    )
+    try {
+      expect(outcome.imported).toBeNull()
+      expect(outcome.warnings).toEqual([skipped('ghost', 'pull request')])
     } finally {
       await t.cleanup()
     }
@@ -655,6 +670,28 @@ describe('who may supply the canvas', () => {
         'teammate',
         'mallory',
       ])
+    } finally {
+      await t.cleanup()
+    }
+  })
+
+  it('finds a GitLab member past the first page of names the search also matches', async () => {
+    const lookalikes = Array.from({ length: 100 }, (_, i) => ({ username: `al${i}` }))
+    const gh = createFakeGh({
+      routes: {
+        'projects/acme%2Fwidgets/members/all': {
+          kind: 'handler',
+          handler: params => (params['page'] === '1' ? lookalikes : [{ username: 'al' }]),
+        },
+      },
+    })
+    const { outcome, t } = await discover(comments({ issueComments: [from('al')] }), {
+      gh,
+      host: gitlabHost('gitlab.example.com'),
+    })
+    try {
+      expect(outcome.imported?.status).toBe('ready')
+      expect(outcome.warnings).toEqual([])
     } finally {
       await t.cleanup()
     }
