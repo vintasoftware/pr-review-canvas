@@ -10,7 +10,7 @@ export const CanvasManifestSchema = z.object({
   mergeBaseSha: z.string().regex(/^[0-9a-f]{40}$/),
   baseRef: z.string(),
   headRef: z.string(),
-  generatedAt: z.string(),
+  generatedAt: z.iso.datetime(),
   generator: GeneratorSchema,
 })
 export type CanvasManifest = z.infer<typeof CanvasManifestSchema>

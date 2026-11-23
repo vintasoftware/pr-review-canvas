@@ -429,6 +429,41 @@ describe('importCanvas', () => {
     expect((await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]?.prNumber).toBe(42)
   })
 
+  it('refuses a canvas dated in the future, or with a date that is not an ISO time', async () => {
+    t = await contextWithCommits()
+    // The test clock reads 2026-09-10T12:00Z. A day ahead is another machine's clock; more is not.
+    for (const over of [
+      { generatedAt: '2099-01-01T00:00:00.000Z' },
+      { revisedAt: '2026-09-12T00:00:00.000Z' },
+    ]) {
+      const err = await catchApp(() =>
+        importCanvas(t.ctx, { bytes: buildCanvasZip(manifest(), artifact(over)), currentHead: AT_HEAD })
+      )
+      expect([err.code, err.message]).toEqual(['CANVAS_INVALID', 'this canvas is dated in the future'])
+    }
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+    const ahead = artifact({ revisedAt: '2026-09-11T11:00:00.000Z' })
+    const taken = await importCanvas(t.ctx, {
+      bytes: buildCanvasZip(manifest(), ahead),
+      currentHead: AT_HEAD,
+    })
+    expect(taken.status).toBe('ready')
+    // A date that sorts after every real one as text, and one no date at all.
+    for (const generatedAt of ['~', 'tomorrow']) {
+      const err = await catchApp(() =>
+        importCanvas(t.ctx, {
+          bytes: buildCanvasZip(manifest({ generatedAt }), artifact({ generatedAt })),
+          currentHead: AT_HEAD,
+        })
+      )
+      expect(err.code).toBe('CANVAS_INVALID')
+      expect(err.issues).toEqual([
+        'manifest.json: generatedAt Invalid ISO datetime',
+        'review.json: generatedAt Invalid ISO datetime',
+      ])
+    }
+  })
+
   it('refuses a canvas from another repository unless force is passed', async () => {
     t = await contextWithCommits()
     const foreign = buildCanvasZip(manifest({ repo: { owner: 'other', name: 'repo' } }), artifact())

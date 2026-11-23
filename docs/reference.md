@@ -280,6 +280,9 @@ pr-review import <zip> [--pr <n>] [--force]
   `--pr` stores it under its own PR instead. Without `--pr`, import does not check against a live
   PR. A canvas generated before the PR existed names none and joins the pull request it is
   imported for.
+- Import refuses, with `CANVAS_INVALID`, a canvas dated more than a day ahead of this machine's
+  clock, and one whose dates are not ISO times in UTC. The newest copy of a commit's canvas wins by
+  the dates the canvas itself states, so one dated ahead would never be replaced.
 - Import returns `ready`, `stale`, or `exists`, plus commit information and warnings. `exists`
   keeps a stored canvas generated at the same time or later. `derivable: false` means the canvas
   was accepted but its source diffs could not be rebuilt from Git.

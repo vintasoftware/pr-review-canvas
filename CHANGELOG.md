@@ -44,6 +44,9 @@
 - The server refuses reads of its API from other sites, as it already refused writes. Loading a
   pull request fetches its commits and imports the canvas shared on it, and a page on another site
   could ask for that.
+- Import refuses a canvas dated more than a day in the future, and one whose dates are not ISO
+  times. The newest copy of a commit's canvas wins by the dates the canvas states, so a canvas
+  dated ahead was never replaced.
 
 ## 0.11.1
 
