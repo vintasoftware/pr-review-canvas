@@ -49,7 +49,8 @@ function bootstrapFor(target: ViewerTarget): ReviewBootstrap {
     repo: target.repo,
     project: `${target.owner}/${target.repo}`,
     base: API_BASE,
-    version,
+    // The footer names the exact build, so a reader or an auditor can match it to a commit.
+    version: `${version}+${import.meta.env.VITE_VIEWER_COMMIT ?? 'dev'}`,
     host: { kind: 'github', label: 'GitHub', webBase: 'https://github.com' },
     foldLevel: s.foldLevel,
     diffLayout: s.diffLayout,
