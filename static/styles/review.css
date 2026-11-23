@@ -770,6 +770,11 @@ section.layer[data-lens='point']
 .step-nav > .cmd {
   white-space: normal;
 }
+/* The terminal skin's brackets stay on the line of the word next to them. */
+.step-nav > .cmd::before,
+.step-nav > .cmd::after {
+  white-space: nowrap;
+}
 .step-nav > .cmd[data-way='on'] {
   text-align: right;
 }

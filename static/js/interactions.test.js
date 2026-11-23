@@ -1781,7 +1781,7 @@ describe('keyboard', () => {
     scrolled.mockRestore()
   })
 
-  it('leaves the scroll of a layer to one layer at a time, which opens it at the top of the page', () => {
+  it('leaves the scroll of a layer to one layer at a time, which opens it under its bar', () => {
     const opened = vi.fn(() => true)
     const { root } = setup({ openAtTop: opened })
     const layer = root.querySelector('#layer-run-path')

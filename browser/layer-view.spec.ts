@@ -95,36 +95,43 @@ test('shows one layer at a time once the setting is saved, on this page and afte
 test.describe('the bar of one layer at a time', () => {
   test.use({ settings: { layerView: 'one' } })
 
-  test('leads back and on from a layer, under a page at its top, with back and forward', async ({
+  test('leads back and on from a layer, with its bar at the top of the screen, and back and forward', async ({
     page,
     reviewUrl,
   }) => {
     await page.goto(reviewUrl + '#overview')
     const nav = page.locator('#stop-nav')
+    /** Whether the bar is at the top of the screen, within the half pixel a layout can leave. */
+    const barAtTop = () => nav.evaluate(el => Math.abs(el.getBoundingClientRect().top) < 1)
     const run = page.locator('#layer-run-path')
     const other = page.locator('#layer-other')
     await expect(nav.locator('a')).toHaveText(['start with Layer 1: Run path →'])
 
-    // The rail opens a layer at the top of the page, so its bar is on screen.
+    // The rail opens a layer with its bar at the top of the screen, so the layer starts under it.
     await page.locator('nav.rail a[href="#layer-run-path"]').click()
     await expect(run).toBeVisible()
-    await expect(nav).toBeInViewport()
     await expect(nav.locator('a')).toHaveText(['← overview', 'next layer: Other changes →'])
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    await expect.poll(barAtTop).toBe(true)
 
-    // The bar under the layer leads on from its end, and the new layer opens at the top.
-    await page.locator('nav.step-nav[aria-label="Layers, at the end"] a', { hasText: 'next layer' }).click()
+    // The bar under the layer leads on from its end, and the new layer opens under its bar. Other
+    // is short, so its bar is as near the top as the page scrolls.
+    await page
+      .locator('nav.step-nav[aria-label="Previous and next layer, at the end"] a', { hasText: 'next layer' })
+      .click()
     await expect(page).toHaveURL(/#layer-other$/)
     await expect(other).toBeVisible()
     await expect(run).toBeHidden()
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
-    await expect(nav.locator('a')).toHaveText(['← previous layer: Run path', 'next open layer: Run path →'])
+    await expect(nav).toBeInViewport()
+    await expect(nav.locator('a')).toHaveText([
+      '← previous layer: Run path',
+      'next open layer, Layer 1: Run path →',
+    ])
 
-    // Back and forward move between the layers the bar opened, from the top.
+    // Back and forward move between the layers the bar opened, each under its bar.
     await page.goBack()
     await expect(run).toBeVisible()
     await expect(page).toHaveURL(/#layer-run-path$/)
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    await expect.poll(barAtTop).toBe(true)
     await page.goForward()
     await expect(other).toBeVisible()
 
@@ -134,15 +141,12 @@ test.describe('the bar of one layer at a time', () => {
     await expect(run).toHaveClass(/is-reviewed/)
     await page.keyboard.press('j')
     await expect(other).toBeVisible()
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
-    await expect(nav.locator('.step-done')).toHaveText('every other layer is reviewed')
+    await expect(nav).toBeInViewport()
+    await expect(nav.locator('.step-done')).toHaveText('all other layers are reviewed')
     await expect(nav.locator('a[data-way="on"]')).toHaveCount(0)
   })
 
-  test('g o opens the overview at the top of the page, with its bar in sight', async ({
-    page,
-    reviewUrl,
-  }) => {
+  test('g o opens the overview with its bar in sight', async ({ page, reviewUrl }) => {
     await page.goto(reviewUrl + '#layer-other')
     await expect(page.locator('#layer-other')).toBeVisible()
     await page.mouse.wheel(0, 400)
@@ -153,7 +157,6 @@ test.describe('the bar of one layer at a time', () => {
     await expect(page.locator('#overview')).toBeVisible()
     await expect(page).toHaveURL(/#overview$/)
     await expect(page.locator('#stop-nav')).toBeInViewport()
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
   })
 
   test('keeps the keyboard on the bar: Enter again moves on', async ({ page, reviewUrl }) => {

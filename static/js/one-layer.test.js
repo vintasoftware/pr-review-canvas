@@ -169,17 +169,16 @@ describe('initOneLayer', () => {
     expect(shownIds()).toEqual(['overview'])
   })
 
-  it('follows a hash change to a hidden layer and shows it from the top of the page', () => {
+  it('follows a hash change to a hidden layer and scrolls to it, since the browser could not', () => {
     oneLayer = initOneLayer(root, { view: 'one' })
     const scrolled = vi.fn()
     section('layer-other').scrollIntoView = scrolled
-    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
     const pushState = vi.spyOn(window.history, 'pushState')
     window.location.hash = '#layer-other'
     window.dispatchEvent(new Event('hashchange'))
     expect(shownIds()).toEqual(['layer-other'])
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
-    expect(scrolled).not.toHaveBeenCalled()
+    // This page has no canvas, so no bar over the layer: the layer itself goes to the top.
+    expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
     // Back and forward move along the history; they write no entry.
     expect(pushState).not.toHaveBeenCalled()
     window.location.hash = ''

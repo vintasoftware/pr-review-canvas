@@ -168,7 +168,8 @@ export function initOneLayer(root, opts) {
       root.querySelector(`#${cssEscape(layerAnchorId(layer.key))}`)?.classList.contains('is-reviewed') ===
       true
     const index = artifact.layers.findIndex(layer => layerAnchorId(layer.key) === section.id)
-    placeStepBars(section, layerNavHtml(artifact, index, reviewed), 'Layers')
+    // The rail is "Review layers", so the bar's name says what it does.
+    placeStepBars(section, layerNavHtml(artifact, index, reviewed), 'Previous and next layer')
   }
 
   /** @param {HTMLElement} section */
@@ -244,9 +245,10 @@ export function initOneLayer(root, opts) {
   }
 
   /**
-   * In the one-layer view, shows the section a step leads to under a page at its top, as a stop
-   * shows, so the bar over the section is on screen. False for a target that is not a section,
-   * and in the other views.
+   * In the one-layer view, shows the section a step leads to with the bar over it at the top of
+   * the screen, so the section starts right under the bar. A page with no canvas has no bar, and
+   * the section itself goes there. False for a target that is not a section, and in the other
+   * views.
    * @param {Element} el
    */
   const showAtTop = el => {
@@ -254,20 +256,24 @@ export function initOneLayer(root, opts) {
       return false
     }
     el.dispatchEvent(new Event('reveal-code', { bubbles: true }))
-    win.scrollTo({ top: 0 })
+    ;(root.querySelector('#stop-nav') ?? el).scrollIntoView({ block: 'start' })
     return true
   }
 
   /**
-   * A step to a section in the one-layer view, from a link or a key: shows it under a page at its
-   * top and writes its history entry. False, writing nothing, where `showAtTop` is false.
+   * A step to a section in the one-layer view, from a link or a key: shows it at the top of the
+   * screen and writes its history entry. A step to the section the URL names writes none, as the
+   * browser writes none for the same fragment. False, writing nothing, where `showAtTop` is false.
    * @param {Element | null} el
    */
   const openAtTop = el => {
     if (el === null || !showAtTop(el)) {
       return false
     }
-    win.history.pushState(STOP_ENTRY, '', `#${el.id}`)
+    const fragment = `#${el.id}`
+    if (fragment !== win.location.hash) {
+      win.history.pushState(STOP_ENTRY, '', fragment)
+    }
     return true
   }
 
@@ -380,7 +386,8 @@ export function initOneLayer(root, opts) {
 
   // A rail link or a "more chunks in layer 4" link is a plain fragment: what it names opens here,
   // before the browser's own scroll runs. In the one-point view a stop takes the place of the one
-  // before, under a page that stays at the top, and so does a section in the one-layer view.
+  // before, under a page that stays at the top. In the one-layer view a section does, under its
+  // bar at the top of the screen.
   root.addEventListener(
     'click',
     event => {
@@ -406,7 +413,7 @@ export function initOneLayer(root, opts) {
   // Back and forward between plain fragments: what the fragment names opens. The scroll is
   // repeated here when the browser could not scroll to it, its section hidden, or when it brought
   // back a stop's scroll, which means nothing in the layers. In the one-layer view a section opens
-  // at the top of the page, as from its link.
+  // under its bar at the top of the screen, as from its link.
   win.addEventListener(
     'hashchange',
     () => {

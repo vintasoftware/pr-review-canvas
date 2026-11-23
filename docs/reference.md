@@ -802,9 +802,9 @@ holds for every review until changed.
 A bar over and under the layer leads back and on, as in [One point at a time](#one-point-at-a-time):
 back to the previous layer by its title, or to the overview from the first layer, and on to the
 next layer by its title. On the overview it leads to the first layer. After the last layer, where
-`j` stops, it leads to the first other layer you have not marked reviewed, or says that every other
-layer is reviewed. A rail link, a bar link, `j`, `k` and `g o`, and back and forward show the layer or
-the overview under a page at its top, so the bar over it is in sight.
+`j` stops, it leads to the first other layer you have not marked reviewed, by its number and title,
+or says that all other layers are reviewed. A rail link, a bar link, `j`, `k` and `g o`, and back and
+forward put the bar at the top of the screen, with the layer or the overview right under it.
 
 ### One point at a time
 

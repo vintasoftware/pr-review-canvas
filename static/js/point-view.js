@@ -198,12 +198,13 @@ export function clearStop(root) {
 
 /**
  * A bar's way back, to `href`, that says where it goes as HTML. Both ways are commands, so they
- * read as a pair.
+ * read as a pair. The space next to each arrow does not break, so a long title that wraps never
+ * leaves the arrow on a line of its own.
  * @param {string} href
  * @param {string} html
  */
 function backLink(href, html) {
-  return `<a class="cmd" href="${esc(href)}" data-way="back">&larr; ${html}</a>`
+  return `<a class="cmd" href="${esc(href)}" data-way="back">&larr;&nbsp;${html}</a>`
 }
 
 /**
@@ -213,7 +214,7 @@ function backLink(href, html) {
  * @param {string} [attrs] more attributes, each with a space before it
  */
 function onLink(href, html, attrs = '') {
-  return `<a class="cmd" href="${esc(href)}" data-way="on"${attrs}>${html} &rarr;</a>`
+  return `<a class="cmd" href="${esc(href)}" data-way="on"${attrs}>${html}&nbsp;&rarr;</a>`
 }
 
 /**
@@ -287,8 +288,8 @@ export function stopNavHtml(stops, index, artifact, end = restOfDiffHtml(artifac
 }
 
 /**
- * A layer's name as the way on from the overview says it, as HTML: `Layer 2: title`, or the
- * title alone for Other, which has no number.
+ * A layer's name as the ways on from the overview and from the last layer say it, as HTML:
+ * `Layer 2: title`, or the title alone for Other, which has no number.
  * @param {ReadonlyArray<Layer>} layers every layer, in page order
  * @param {Layer} layer
  */
@@ -304,9 +305,10 @@ function layerNameHtml(layers, layer) {
  * The one-layer view's bar for layer `index`, -1 for the overview. It is the stops' bar, built from
  * every layer's opening stop, so both bars use the same words.
  *
- * After the last layer, where `j` stops, it leads to the first layer not marked reviewed, or says
- * there is none. Other has no reviewed mark, but it never becomes that target: validation keeps
- * Other last, so it is the layer on screen.
+ * After the last layer, where `j` stops, it leads to the first layer not marked reviewed, by its
+ * number, since that step goes back up the page, or says there is none. Other has no reviewed
+ * mark, but it never becomes that target: validation keeps Other last, so it is the layer on
+ * screen.
  * @param {ReviewArtifact} artifact
  * @param {number} index
  * @param {(layer: Layer) => boolean} reviewed whether the reader marked a layer reviewed
@@ -323,7 +325,7 @@ export function layerNavHtml(artifact, index, reviewed) {
   const open = layers.find(l => l !== layer && !reviewed(l))
   const end =
     open === undefined
-      ? '<span class="step-done">every other layer is reviewed</span>'
-      : onLink(`#${layerAnchorId(open.key)}`, `next open layer: ${titleHtml(open.title)}`)
+      ? '<span class="step-done">all other layers are reviewed</span>'
+      : onLink(`#${layerAnchorId(open.key)}`, `next open layer, ${layerNameHtml(layers, open)}`)
   return stopNavHtml(stops, index, artifact, end)
 }
