@@ -40,13 +40,13 @@ import { pointAnchorId, reviewedId } from './keys.js'
 import {
   canvasHiddenLines,
   cardOf,
-  drawCardsOnScreen,
   getFoldLevel,
   getRenderContext,
   getStartCollapsed,
   pathSet,
   refreshCardDecorations,
   refreshFolds,
+  scrollToDrawn,
   setCardCollapsed,
   setCardRenderedHook,
   redrawDiffs,
@@ -101,8 +101,6 @@ const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
 
 /** Pixels left above a card the keys scroll to, so its focus ring shows. */
 const FOCUS_GAP = 8
-/** How many times a key's scroll repeats while it brings undrawn cards on screen. */
-const MAX_DRAW_ROUNDS = 10
 /** The card kind and direction each step key moves by. */
 /** @type {Record<'next-layer' | 'prev-layer' | 'next-file' | 'prev-file', ['layer' | 'file', 1 | -1]>} */
 const STEPS = {
@@ -457,12 +455,7 @@ export function wireReview(root, session, opts = {}) {
       if (block !== null) {
         // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around
         // the element: a hidden element cannot take the focus.
-        scrollIntoViewSafe(el, block)
-        // A card this scroll brought on screen draws its diff and grows, which would push the
-        // element away again: the cards draw now and the scroll repeats until none is left.
-        for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
-          el.scrollIntoView({ block })
-        }
+        scrollToDrawn(root, el, block)
       }
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.

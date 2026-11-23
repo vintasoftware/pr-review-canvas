@@ -13,7 +13,7 @@ import { toast } from './commands.js'
 import { decodeHash, plainClick } from './deep-link.js'
 import { scrollIntoViewSafe } from './dom.js'
 import { layerAnchorId } from './keys.js'
-import { getRenderContext, openCard } from './layers.js'
+import { getRenderContext, openCard, scrollToDrawn } from './layers.js'
 import {
   clearStop,
   layerNavHtml,
@@ -35,9 +35,10 @@ import { markRailCurrent } from './scroll-spy.js'
 const SECTION_SELECTOR = '#overview, pr-layer > section'
 
 /**
- * The state of a history entry that a stop, or a section in the one-layer view, opened at the top
- * of the page. That scroll means nothing while all the layers show, so back or forward to it there
- * goes to what its fragment names. Every other entry keeps the scroll the browser brings back.
+ * The state of a history entry that a stop opened at the top of the page, or a section in the
+ * one-layer view under its bar. That scroll means nothing while all the layers show, so back or
+ * forward to it there goes to what its fragment names. Every other entry keeps the scroll the
+ * browser brings back.
  */
 const STOP_ENTRY = { stop: true }
 
@@ -256,7 +257,7 @@ export function initOneLayer(root, opts) {
       return false
     }
     el.dispatchEvent(new Event('reveal-code', { bubbles: true }))
-    ;(root.querySelector('#stop-nav') ?? el).scrollIntoView({ block: 'start' })
+    scrollToDrawn(root, root.querySelector('#stop-nav') ?? el, 'start')
     return true
   }
 

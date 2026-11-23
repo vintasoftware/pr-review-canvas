@@ -17,7 +17,7 @@ import { runCommand } from './commands.js'
 import { diagramPlaceholderHtml } from './diagram.js'
 import { applyDecorations, holdDecorations, refreshPendingRows, insertThreadRow } from './diff-decorations.js'
 import { renderDiff } from './diff-renderer.js'
-import { chevronHtml, detailsSummaryHtml, esc } from './dom.js'
+import { chevronHtml, detailsSummaryHtml, esc, scrollIntoViewSafe } from './dom.js'
 import { collapsesAt, DEFAULT_FOLD_LEVEL, hiddenLines } from './fold-levels.js'
 import { hunkForLine } from './hunks.js'
 import { fileAnchorId, layerAnchorId, pointAnchorId, reviewedId, sanitizeKey } from './keys.js'
@@ -904,6 +904,24 @@ export function drawCardsOnScreen(root) {
     }
   }
   return drawn
+}
+
+/** How many times a scroll repeats while it brings undrawn cards on screen. */
+const MAX_DRAW_ROUNDS = 10
+
+/**
+ * Scrolls `el` into view, as `scrollIntoViewSafe` does, and draws the cards that brings on screen.
+ * A card that draws its diff grows, which would push the element away again, or lets a short page
+ * scroll further, so the scroll repeats until no card on screen is left to draw.
+ * @param {ParentNode} root
+ * @param {Element} el
+ * @param {ScrollLogicalPosition} block
+ */
+export function scrollToDrawn(root, el, block) {
+  scrollIntoViewSafe(el, block)
+  for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
+    el.scrollIntoView({ block })
+  }
 }
 
 /**
