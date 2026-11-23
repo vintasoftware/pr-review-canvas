@@ -14,7 +14,7 @@ import { extractLinks, parseLink } from '../contract/links.js'
 import { isGeneratorPoint, type Point, type ReviewArtifact } from '../contract/review-artifact.js'
 import type { ReviewKey } from '../contract/review-key.js'
 import type { Git } from '../git/git.js'
-import { type CanvasEntry, type CanvasStore, importedForAnother } from '../store/canvas-store.js'
+import { type CanvasEntry, type CanvasStore, readsCanvas } from '../store/canvas-store.js'
 import type { Derived } from '../store/derived-store.js'
 
 /**
@@ -165,7 +165,7 @@ export async function findResolutionSource(
   }
   for (const [sha, entry] of entries) {
     const owned = key === undefined ? entry.prNumber === undefined : canvases.belongsTo(entry, key)
-    if (sha === headSha ? !importedForAnother(entry, owned) : owned && (await git.isAncestor(sha, headSha))) {
+    if (sha === headSha ? readsCanvas(entry, owned, true) : owned && (await git.isAncestor(sha, headSha))) {
       return sha
     }
   }

@@ -71,13 +71,24 @@ export function validateCanvasFilename(filename, prNumber) {
 }
 
 /**
- * The refusals no retry can clear: the zip is a canvas, of the wrong thing. Anything else the
- * discovery reports is a download that failed, which the link and the drop zone can still rescue.
- * @type {Record<string, string>}
+ * The refusals no retry can clear, each with what to do next: the zip is a canvas of the wrong
+ * thing, or its commit already has another pull request's canvas. Anything else the discovery
+ * reports is a download that failed, which the link and the drop zone can still rescue.
+ * @type {Record<string, [problem: string, next: string]>}
  */
 const SHARED_CANVAS_REFUSALS = {
-  'pr-mismatch': 'it was exported for another pull request',
-  'name-mismatch': 'it was exported from another repository',
+  'pr-mismatch': [
+    'it was exported for another pull request',
+    'Ask its author for a canvas of this pull request, or generate one. ',
+  ],
+  'name-mismatch': [
+    'it was exported from another repository',
+    'Ask its author for a canvas of this pull request, or generate one. ',
+  ],
+  'commit-taken': [
+    'the canvas stored for its commit is another pull request&rsquo;s',
+    'Generate one for this pull request, or drop its ZIP here, to replace the stored one. ',
+  ],
 }
 
 /**
@@ -93,12 +104,10 @@ export function sharedCanvasCalloutHtml(bundle) {
   if (shared.downloadable) {
     return `<div class="callout" role="status">A canvas is attached to this PR (${name}) &mdash; importing&hellip;</div>`
   }
-  const refused = SHARED_CANVAS_REFUSALS[shared.reason ?? '']
-  const problem = refused ?? `could not be downloaded (${esc(shared.reason ?? 'unknown')})`
-  const next =
-    refused === undefined
-      ? `<a href="${esc(shared.url)}" target="_blank" rel="noopener noreferrer">Download it</a> and drop it here. `
-      : 'Ask its author for a canvas of this pull request, or generate one. '
+  const [problem, next] = SHARED_CANVAS_REFUSALS[shared.reason ?? ''] ?? [
+    `could not be downloaded (${esc(shared.reason ?? 'unknown')})`,
+    `<a href="${esc(shared.url)}" target="_blank" rel="noopener noreferrer">Download it</a> and drop it here. `,
+  ]
   return (
     `<div class="callout warn" role="status">A canvas is attached to this PR (${name}) but ${problem}. ` +
     next +

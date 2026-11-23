@@ -332,6 +332,19 @@ describe('a canvas whose head moved on with the identical diff', () => {
     expect((await t.ctx.state.read(42)).reviewed).toEqual({})
   })
 
+  it('marks the head against its own diff when the canvas stored there was imported for another pull request', async () => {
+    await withOldCanvas()
+    // Whoever shared that canvas chose its merge base, which says nothing about this pull request.
+    const foreign = { ...manifest(HEAD_SHA), prNumber: 43, mergeBaseSha: '9'.repeat(40) }
+    await t.ctx.canvases.write(HEAD_SHA, { ...artifactFor(HEAD_SHA), source: 'import' }, foreign, 43)
+    const res = await markLayer1({ reviewed: true, headSha: HEAD_SHA, canvasMergeBaseSha: BASE_SHA })
+    expect(res.status).toBe(200)
+    expect(await t.ctx.state.read(42)).toMatchObject({
+      reviewedCanvasSha: HEAD_SHA,
+      reviewedMergeBaseSha: BASE_SHA,
+    })
+  })
+
   it('reads the canvas as outdated when the base advanced under the same head', async () => {
     await withOldCanvas()
     expect((await bundle()).carriedOver).toBeDefined()

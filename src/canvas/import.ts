@@ -5,7 +5,7 @@ import { canvasRevision } from '../contract/canvas-manifest.js'
 import { type DiffedCommit, staleRelation, standsForHead } from '../review/carry-over.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
-import { importedForAnother } from '../store/canvas-store.js'
+import { readsCanvas } from '../store/canvas-store.js'
 import { type CanvasZipContents, CanvasZipError, readCanvasZip } from './zip.js'
 
 export interface ImportOptions {
@@ -19,6 +19,11 @@ export interface ImportOptions {
   currentHead?: DiffedCommit | undefined
   /** Accepts a canvas exported from another repository. */
   force?: boolean | undefined
+  /**
+   * The canvas was found on the pull request rather than handed over by the reader, so whoever
+   * shared it there decides nothing about a canvas stored for anything else.
+   */
+  discovered?: boolean | undefined
 }
 
 function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
@@ -69,8 +74,8 @@ function errorText(err: unknown): string {
 
 /**
  * Validates the zip, stores it under its head sha, and says how it relates to the PR head. A
- * canvas already on disk is kept unless the incoming one was generated or revised later, or the
- * one on disk was imported for another pull request.
+ * canvas already on disk is kept unless the incoming one was generated or revised later. One found
+ * on a pull request never replaces a canvas that is not that pull request's own.
  */
 export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promise<ImportResult> {
   let contents: CanvasZipContents
@@ -111,18 +116,33 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   const currentHeadSha = opts.currentHead?.headSha ?? headSha
   const index = await ctx.canvases.readIndex()
   const stored = index.canvases[headSha]
+  // One canvas is stored per commit, and two pull requests can have the same head commit. Whoever
+  // shares a canvas on one is not trusted to explain the other, so a canvas found on a pull request
+  // only fills an empty place or replaces that pull request's own. Anything else stored there stays
+  // as it is: kept when this pull request reads it anyway, and otherwise the import is refused. A
+  // canvas the reader hands over replaces one its pull request cannot read.
+  const readable =
+    stored === undefined ||
+    opts.prNumber === undefined ||
+    readsCanvas(stored, ctx.canvases.belongsTo(stored, opts.prNumber), headSha === currentHeadSha)
+  const others = opts.discovered === true && stored !== undefined && stored.prNumber !== opts.prNumber
+  if (others && !readable) {
+    const owner = stored.prNumber === undefined ? 'a local review' : `#${stored.prNumber}`
+    throw new AppError(
+      'CANVAS_COMMIT_TAKEN',
+      `the canvas stored for ${headSha.slice(0, 7)} is the one of ${owner}, so the one shared on #${opts.prNumber} was not imported`,
+      409,
+      'generate a canvas for this pull request, or import its zip yourself, to replace the stored one'
+    )
+  }
   // The author revises a shared canvas by settling points, which keeps its generation time, so a
-  // copy is newer when it was generated or revised later. A copy imported for another pull request
-  // is replaced however new it claims to be: kept, it would be handed to this one under its number.
+  // copy is newer when it was generated or revised later.
   const keepStored =
-    stored !== undefined &&
-    canvasRevision(stored) >= canvasRevision(artifact) &&
-    (opts.prNumber === undefined ||
-      !importedForAnother(stored, ctx.canvases.belongsTo(stored, opts.prNumber)))
+    stored !== undefined && (others || (readable && canvasRevision(stored) >= canvasRevision(artifact)))
   if (!keepStored) {
     const importedAt = ctx.now().toISOString()
     await ctx.canvases.write(headSha, { ...artifact, source: 'import', importedAt }, manifest, opts.prNumber)
-  } else if (opts.prNumber !== undefined) {
+  } else if (opts.prNumber !== undefined && !others) {
     await ctx.canvases.attachPrNumber(headSha, opts.prNumber)
   }
 

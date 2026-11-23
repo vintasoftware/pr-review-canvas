@@ -268,6 +268,9 @@ export function importFailureReason(err: unknown): DownloadFailure {
   if (err.code === 'CANVAS_PR_MISMATCH') {
     return 'pr-mismatch'
   }
+  if (err.code === 'CANVAS_COMMIT_TAKEN') {
+    return 'commit-taken'
+  }
   return err.code === 'CANVAS_REPO_MISMATCH' ? 'name-mismatch' : 'not-zip'
 }
 
@@ -352,7 +355,12 @@ async function tryCandidate(
     }
   }
   try {
-    const imported = await importCanvas(ctx, { bytes: download.bytes, prNumber, currentHead: pr })
+    const imported = await importCanvas(ctx, {
+      bytes: download.bytes,
+      prNumber,
+      currentHead: pr,
+      discovered: true,
+    })
     return { sharedCanvas: { ...shared, downloadable: true }, imported, warnings: imported.warnings }
   } catch (err) {
     return {

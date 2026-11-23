@@ -471,81 +471,144 @@ describe('transfer routes', () => {
       expect(after.artifact?.summary).toBe('Updated explanation')
     })
 
-    it('keeps a canvas shared on another pull request with the same head off this one', async () => {
-      // #99 is a stranger's pull request with #42's head commit, and their own canvas for it,
-      // dated so that no later canvas would count as newer.
-      const future = '2099-01-01T00:00:00.000Z'
-      const base = artifactFor(HEAD_SHA)
-      const theirs = {
-        ...base,
-        pr: { ...base.pr, number: 99 },
-        generatedAt: future,
+    describe('two pull requests with one head commit', () => {
+      // #99 is a stranger's pull request with #42's head commit, and their own canvas for it.
+      const own = artifactFor(HEAD_SHA)
+      const FUTURE = '2099-01-01T00:00:00.000Z'
+      const theirs = (generatedAt: string): ReviewArtifact => ({
+        ...own,
+        pr: { ...own.pr, number: 99 },
+        generatedAt,
         summary: 'Safe to merge',
-      }
-      const comment = buildCanvasComment(
-        {
-          name: `pr-99-20990101T000000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`,
-          headSha: HEAD_SHA,
-          prNumber: 99,
-          bytes: buildCanvasZip({ ...manifest(HEAD_SHA), prNumber: 99, generatedAt: future }, theirs),
-        },
-        NO_POINTS,
-        65_536
-      )
-      const options: FakeGhOptions = ghWithBody('')
-      options.routes = {
-        ...options.routes,
-        'repos/acme/widgets/pulls/99': ghJson({
-          ...GH_PULL,
-          number: 99,
-          body: '',
-          user: { login: 'mallory' },
-        }),
-        'repos/acme/widgets/pulls/99/comments': ghJson([]),
-        'repos/acme/widgets/pulls/99/reviews': ghJson([]),
-        'repos/acme/widgets/issues/99/comments': ghJson([
-          {
-            id: 9,
-            user: { login: 'mallory' },
-            body: comment,
-            created_at: '2026-09-11T12:00:00Z',
-            html_url: 'https://github.com/acme/widgets/pull/99#issuecomment-9',
-          },
-        ]),
-      }
-      options.graphql = Array.from({ length: 8 }, () => GH_THREADS_PAGE)
-      t = await makeTestContext({
-        git: gitWithHistory({
-          refs: { 'pull/42/head': HEAD_SHA, 'pull/99/head': HEAD_SHA, 'refs/heads/main': BASE_SHA },
-          mergeBases: {
-            [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA,
-            [`refs/pr/99/base..${HEAD_SHA}`]: BASE_SHA,
-          },
-        }),
-        gh: createFakeGh(options),
       })
-      const app = createApp(t.ctx)
-      const bundle = async (n: number) =>
-        json<PrBundle>(await app.request(`/api/prs/${n}`, { headers: LOCAL }))
-      expect((await bundle(99)).artifact?.summary).toBe('Safe to merge')
-      // The commit is #42's head too, and the canvas stored for it is not #42's to read.
-      const victim = await bundle(42)
-      expect([victim.status, victim.artifact]).toEqual(['missing', undefined])
-      const settled = await app.request(`/api/prs/42/settled?headSha=${HEAD_SHA}`, { headers: LOCAL })
-      expect(settled.status).toBe(404)
 
-      // #42's own canvas replaces it, older date or not, and is never handed back to #99.
-      const form = new FormData()
-      const own = buildCanvasZip(manifest(HEAD_SHA), artifactFor(HEAD_SHA))
-      form.append('file', new File([own.slice().buffer as ArrayBuffer], 'canvas.zip'))
-      const imported = await app.request('/api/prs/42/import', {
-        method: 'POST',
-        headers: SAME_ORIGIN,
-        body: form,
+      function canvasComment(prNumber: number, author: string, artifact: ReviewArtifact) {
+        const stamp = `${artifact.generatedAt.slice(0, 19).replace(/[-:]/g, '')}Z`
+        const zip = {
+          name: `pr-${prNumber}-${stamp}-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`,
+          headSha: HEAD_SHA,
+          prNumber,
+          bytes: buildCanvasZip(
+            { ...manifest(HEAD_SHA), prNumber, generatedAt: artifact.generatedAt },
+            artifact
+          ),
+        }
+        return {
+          id: prNumber,
+          user: { login: author },
+          body: buildCanvasComment(zip, NO_POINTS, 65_536),
+          created_at: '2026-09-11T12:00:00Z',
+          html_url: `https://github.com/acme/widgets/pull/${prNumber}#issuecomment-${prNumber}`,
+        }
+      }
+
+      /** Both pull requests on the forge; `ownShared` puts #42's canvas in a comment of its author. */
+      async function twoPrs(shared: ReviewArtifact, ownShared: boolean) {
+        const options: FakeGhOptions = ghWithBody('')
+        options.routes = {
+          ...options.routes,
+          ...(ownShared
+            ? { 'repos/acme/widgets/issues/42/comments': ghJson([canvasComment(42, 'octocat', own)]) }
+            : {}),
+          'repos/acme/widgets/pulls/99': ghJson({
+            ...GH_PULL,
+            number: 99,
+            body: '',
+            user: { login: 'mallory' },
+          }),
+          'repos/acme/widgets/pulls/99/comments': ghJson([]),
+          'repos/acme/widgets/pulls/99/reviews': ghJson([]),
+          'repos/acme/widgets/issues/99/comments': ghJson([canvasComment(99, 'mallory', shared)]),
+        }
+        options.graphql = Array.from({ length: 12 }, () => GH_THREADS_PAGE)
+        t = await makeTestContext({
+          git: gitWithHistory({
+            refs: { 'pull/42/head': HEAD_SHA, 'pull/99/head': HEAD_SHA, 'refs/heads/main': BASE_SHA },
+            mergeBases: {
+              [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA,
+              [`refs/pr/99/base..${HEAD_SHA}`]: BASE_SHA,
+            },
+          }),
+          gh: createFakeGh(options),
+        })
+        const app = createApp(t.ctx)
+        const bundle = async (n: number, refresh = false) =>
+          json<PrBundle>(await app.request(`/api/prs/${n}${refresh ? '?refresh=1' : ''}`, { headers: LOCAL }))
+        return { app, bundle }
+      }
+
+      const stored = async () => (await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]
+
+      it('leaves a pull request the canvas it imported when the other shares one for the commit', async () => {
+        const { bundle } = await twoPrs(theirs(FUTURE), true)
+        expect((await bundle(42)).artifact?.summary).toBe(own.summary)
+        const other = await bundle(99)
+        expect([other.status, other.artifact, other.sharedCanvas?.reason]).toEqual([
+          'missing',
+          undefined,
+          'commit-taken',
+        ])
+        expect(other.warnings).toContain(
+          `the canvas stored for ${HEAD_SHA.slice(0, 7)} is the one of #42, so the one shared on #99 was not imported`
+        )
+        expect((await bundle(42, true)).artifact?.summary).toBe(own.summary)
+        expect(await stored()).toMatchObject({ prNumber: 42, source: 'import' })
       })
-      expect((await json<ImportResult>(imported)).status).toBe('ready')
-      expect((await bundle(42)).artifact?.summary).toBe(base.summary)
-      expect((await bundle(99)).artifact).toBeUndefined()
+
+      it('shows a pull request no canvas imported for the other, until the reader hands it its own', async () => {
+        const { app, bundle } = await twoPrs(theirs(FUTURE), true)
+        expect((await bundle(99)).artifact?.summary).toBe('Safe to merge')
+        // The commit is #42's head too. The canvas stored for it is not #42's to read, and the
+        // one its author shared does not replace what was imported for #99.
+        const victim = await bundle(42)
+        expect([victim.status, victim.artifact, victim.sharedCanvas?.reason]).toEqual([
+          'missing',
+          undefined,
+          'commit-taken',
+        ])
+        const settled = await app.request(`/api/prs/42/settled?headSha=${HEAD_SHA}`, { headers: LOCAL })
+        expect(settled.status).toBe(404)
+        expect((await bundle(99)).artifact?.summary).toBe('Safe to merge')
+
+        // The reader drops #42's canvas in, which replaces the one #42 could not read, however
+        // new that one claims to be, and is never handed back to #99.
+        const form = new FormData()
+        const zip = buildCanvasZip(manifest(HEAD_SHA), own)
+        form.append('file', new File([zip.slice().buffer as ArrayBuffer], 'canvas.zip'))
+        const imported = await app.request('/api/prs/42/import', {
+          method: 'POST',
+          headers: SAME_ORIGIN,
+          body: form,
+        })
+        expect((await json<ImportResult>(imported)).status).toBe('ready')
+        expect((await bundle(42)).artifact?.summary).toBe(own.summary)
+        expect((await bundle(99)).artifact).toBeUndefined()
+      })
+
+      it.each([
+        ['numbered for the other pull request, against a later canvas', manifest(HEAD_SHA), FUTURE],
+        [
+          'numbered for the other pull request, against an earlier canvas',
+          manifest(HEAD_SHA),
+          '2020-01-01T00:00:00.000Z',
+        ],
+        ['with no number, against a later canvas', { ...manifest(HEAD_SHA), prNumber: undefined }, FUTURE],
+        [
+          'with no number, against an earlier canvas',
+          { ...manifest(HEAD_SHA), prNumber: undefined },
+          '2020-01-01T00:00:00.000Z',
+        ],
+      ])('leaves a canvas generated on this machine as it is: %s', async (_case, generated, sharedAt) => {
+        const { prNumber, ...unnumbered } = generated
+        const { bundle } = await twoPrs(theirs(sharedAt), false)
+        await t.ctx.canvases.write(HEAD_SHA, own, prNumber === undefined ? unnumbered : generated)
+        const before = await stored()
+        // #99 reads the canvas of its head commit that was generated here; the one shared on it
+        // neither replaces that canvas nor puts #99's number on it.
+        expect((await bundle(99, true)).artifact?.summary).toBe(own.summary)
+        expect(await stored()).toEqual(before)
+        expect((await bundle(42)).artifact?.summary).toBe(own.summary)
+      })
     })
 
     it('does not scan when a canvas for the head is already stored', async () => {

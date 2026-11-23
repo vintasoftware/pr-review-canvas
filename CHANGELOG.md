@@ -31,8 +31,17 @@
   stranger's comment on a public PR can no longer stand in for the author's canvas.
 - A canvas imported for one pull request is shown on that pull request only. Before, a pull
   request opened with another one's head commit could carry a canvas for that commit, and both
-  pages showed it. The other pull request now shows no canvas for the commit until its own is
-  imported or generated, and neither its resolutions nor its next generated canvas read the foreign one.
+  pages showed it. A canvas found on a pull request now fills an empty place or replaces that pull
+  request's own, and leaves any other stored canvas as it is. When the commit's canvas was imported
+  for another pull request, the page says so, and generating a canvas or dropping the ZIP in
+  replaces it.
+- Canvases an earlier version imported stay stored, whoever shared them. Where a stranger may have
+  posted one on a pull request, generate that canvas again with `--force`.
+
+### Comments and descriptions
+
+- A PR description or comment can no longer carry the attributes the page's own commands and
+  labels use (`data-*`, `aria-*`), so a click inside someone's comment cannot run a command.
 
 ## 0.11.1
 

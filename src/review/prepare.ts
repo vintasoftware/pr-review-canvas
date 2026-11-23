@@ -271,7 +271,14 @@ export async function prepare(
       uncommitted: pr.state === UNCOMMITTED_STATE,
     }
   }
-  if (!opts.force && (await ctx.canvases.exists(pr.headSha))) {
+  // A canvas imported for another pull request is not this review's, so it is not in the way:
+  // the run replaces it, as the page that shows none for this head offers.
+  const key = reviewKeyOf(target)
+  const stored =
+    key === undefined
+      ? await ctx.canvases.exists(pr.headSha)
+      : (await ctx.canvases.entryFor(key, pr.headSha, pr.headSha)) !== undefined
+  if (!opts.force && stored) {
     return { ...result, status: 'exists' }
   }
 

@@ -127,6 +127,29 @@ describe('prepare', () => {
     expect(await t.ctx.derived.read({ headSha: HEAD_SHA, mergeBaseSha: BASE_SHA })).not.toBeNull()
   })
 
+  it('prepares over a canvas imported for another pull request with the same head, without --force', async () => {
+    t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
+    const artifact = syntheticArtifact()
+    await t.ctx.canvases.write(
+      HEAD_SHA,
+      { ...artifact, source: 'import' },
+      {
+        formatVersion: 1,
+        tool: { name: 'pr-review', version: 'x' },
+        repo: artifact.pr.repo,
+        prNumber: 99,
+        headSha: HEAD_SHA,
+        mergeBaseSha: BASE_SHA,
+        baseRef: 'main',
+        headRef: 'feat/b',
+        generatedAt: artifact.generatedAt,
+        generator: artifact.generator,
+      }
+    )
+    // #42 cannot read that canvas, so its page offers to generate one, and nothing is in the way.
+    expect((await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())).status).toBe('prepared')
+  })
+
   it('reports exists when a canvas is already stored for the head, and rebuilds with --force', async () => {
     t = await makeTestContext({ git: gitFor42(), gh: ghFor42() })
     const first = await prepare(t.ctx, { kind: 'pr', number: 42 }, opts())

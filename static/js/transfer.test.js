@@ -353,6 +353,12 @@ describe('stale screen', () => {
       bundle({ sharedCanvas: { ...shared, reason: 'name-mismatch' } })
     )
     expect(document.querySelector('.callout.warn')?.textContent).toContain('exported from another repository')
+    document.body.innerHTML = sharedCanvasCalloutHtml(
+      bundle({ sharedCanvas: { ...shared, reason: 'commit-taken' } })
+    )
+    expect(document.querySelector('.callout.warn')?.textContent).toContain(
+      'the canvas stored for its commit is another pull request’s. Generate one for this pull request, or drop its ZIP here'
+    )
   })
 
   it('offers to fetch the shared canvas again when the download failed', () => {

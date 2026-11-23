@@ -279,7 +279,8 @@ pr-review import <zip> [--pr <n>] [--force]
   refusal: a canvas is stored under the pull request it names, so importing the same ZIP without
   `--pr` stores it under its own PR instead. Without `--pr`, import does not check against a live
   PR. A canvas generated before the PR existed names none and joins the pull request it is
-  imported for.
+  imported for. A stored canvas that was imported for another pull request with the same commit
+  is replaced, since this pull request's page cannot read it.
 - Import returns `ready`, `stale`, or `exists`, plus commit information and warnings. `exists`
   keeps a stored canvas generated at the same time or later. `derivable: false` means the canvas
   was accepted but its source diffs could not be rebuilt from Git.
@@ -868,11 +869,14 @@ commenter. Anyone can comment on a public PR, so a canvas from anyone else, whet
 comment or a ZIP link, is skipped, and the page warns with the commenter's name. When GitLab's
 membership check fails, that commenter's canvases are skipped with a warning too.
 
-A canvas imported for one pull request is shown on that pull request only. Two pull requests can
-have the same head commit, and the author of one is not trusted to explain the other, so the other
-shows no canvas for that commit until it gets its own, which replaces the stored one. The same holds
-for a branch review at that commit. A canvas generated on this machine still shows wherever its
-commit is the head.
+One canvas is stored per commit, and two pull requests can have the same head commit. The author
+of one is not trusted to explain the other, so a canvas imported for one pull request is shown on
+that pull request only; a branch review at that commit does not show it either. A canvas found on a
+pull request fills an empty place or replaces that pull request's own canvas, and changes nothing
+else. A canvas generated on this machine stays as it is, and still shows wherever its commit is
+the head. A canvas imported for another pull request stays too: the page then says the commit's
+canvas is another pull request's. Generate a canvas for this one, or drop its ZIP on the page, and
+it replaces the stored one.
 
 An attachment exported for a different pull request is reported rather than imported, and is not
 downloaded at all when its filename already names the other PR. The page says so and offers the
@@ -1519,6 +1523,7 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                                                                            |
 | `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own                                                                |
 | `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                                                                             |
+| `CANVAS_COMMIT_TAKEN`                   | The canvas stored for that commit was imported for another pull request; generate a canvas for this one, or import its ZIP yourself, to replace it                                                      |
 | `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                                                                                 |
 | `CANVAS_ELSEWHERE`                      | `publish` got a canvas dir outside its data dir; publish the `canvasDir` prepare printed, with the `--data-dir` prepare used or none                                                                    |
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                                                                 |
