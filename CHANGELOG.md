@@ -39,6 +39,12 @@
 - A symbolic link in a review checkout is written as a small file that holds the link's target, so
   reading it never opens a file outside the checkout.
 
+### Server and CLI
+
+- The server refuses reads of its API from other sites, as it already refused writes. Loading a
+  pull request fetches its commits and imports the canvas shared on it, and a page on another site
+  could ask for that.
+
 ## 0.11.1
 
 Changes since 0.11.0.

@@ -1485,7 +1485,8 @@ the model on every repair attempt, with the problems of the last attempt on stde
 
 ## Network access and permissions
 
-The server binds to `127.0.0.1` and rejects browser writes from other origins. It is intended for
+The server binds to `127.0.0.1`, rejects browser writes from other origins, and rejects reads of
+its API from other sites. It is intended for
 local use with your GitHub or GitLab login. One server serves every project you open with
 `pr-review open`, so any page it serves can read the review data of each of them. Projects are
 added only by a command that can read `~/.pr-review/server.json`, which is readable by its owner

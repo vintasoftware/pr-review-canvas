@@ -34,21 +34,25 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 /**
  * Two checks. The Host allowlist stops DNS rebinding: a page on an attacker's domain that
  * resolves to 127.0.0.1 sends its own hostname. The same-origin check on state-changing methods
- * stops cross-site requests, because this server can post to GitHub as the user.
+ * stops cross-site requests, because this server can post to GitHub as the user. A read of the
+ * API is refused from another site too: loading a pull request fetches its commits into the clone
+ * and imports the canvas shared on it, which no other page gets to ask for. Pages are opened from
+ * links on other sites, so they are not.
  */
 export const securityMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   const host = c.req.header('host')
   if (!isAllowedHost(host)) {
     throw new AppError('FORBIDDEN_HOST', 'this server only answers to localhost', 403)
   }
-  if (!SAFE_METHODS.has(c.req.method)) {
-    const site = c.req.header('sec-fetch-site')
-    if (site !== undefined && site !== 'same-origin' && site !== 'none') {
+  const site = c.req.header('sec-fetch-site')
+  const safe = SAFE_METHODS.has(c.req.method)
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') {
+    if (!safe || c.req.path.startsWith('/api/')) {
       throw new AppError('CROSS_ORIGIN', 'cross-site request rejected', 403)
     }
-    if (!isSameOrigin(c.req.header('origin'), host)) {
-      throw new AppError('CROSS_ORIGIN', 'cross-origin request rejected', 403)
-    }
+  }
+  if (!safe && !isSameOrigin(c.req.header('origin'), host)) {
+    throw new AppError('CROSS_ORIGIN', 'cross-origin request rejected', 403)
   }
   await next()
 }
