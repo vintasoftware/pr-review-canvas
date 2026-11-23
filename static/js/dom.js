@@ -110,9 +110,13 @@ export function flash(el, ms = 2000) {
  * would hide its heading above the fold.
  * @param {Element} el
  * @param {ScrollLogicalPosition} [block]
+ * @param {{ openTarget?: boolean }} [opts] `openTarget: false` opens what is around the element,
+ *   but not the element itself
  */
-export function scrollIntoViewSafe(el, block = 'center') {
-  el.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+export function scrollIntoViewSafe(el, block = 'center', opts = {}) {
+  el.dispatchEvent(
+    new CustomEvent('reveal-code', { bubbles: true, detail: { openTarget: opts.openTarget !== false } })
+  )
   if (typeof el.scrollIntoView === 'function') {
     el.scrollIntoView({ block })
   }

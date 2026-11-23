@@ -600,6 +600,32 @@ describe('reviewed state', () => {
     expect(nextUnreviewedTarget(root, session, 'layer-run-path', 'layer')).toBeNull()
   })
 
+  it('opens the next file that Start collapsed closed when a file is marked reviewed', async () => {
+    setStartCollapsed(true)
+    const { root } = setup()
+    const body = root.querySelector('#file-src_new_name_ts > .file-body')
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    const box = root.querySelector('#file-src_app_ts input[data-reviewed-id]')
+    if (!(box instanceof HTMLInputElement)) {
+      throw new Error('no checkbox')
+    }
+    box.checked = true
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    await flush()
+    expect(root.querySelector('.is-focused')?.id).toBe('file-src_new_name_ts')
+    expect(body?.hasAttribute('hidden')).toBe(false)
+  })
+
+  it('opens the next layer after a layer is marked reviewed', async () => {
+    setStartCollapsed(true)
+    const { root } = setup({ artifact: withSecondLayer() })
+    expect(root.querySelector('#layer-second > .layer-body')?.hasAttribute('hidden')).toBe(true)
+    click(root, '#layer-run-path .layer-end [data-act="mark-layer"]')
+    await flush()
+    expect(root.querySelector('.is-focused')?.id).toBe('layer-second')
+    expect(root.querySelector('#layer-second > .layer-body')?.hasAttribute('hidden')).toBe(false)
+  })
+
   describe('the last open file of a layer', () => {
     const lastOpen = {
       ...BASE,
