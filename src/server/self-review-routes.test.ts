@@ -187,7 +187,10 @@ describe('settling an attention point', () => {
     t = await withCanvas(forge)
     t.ctx.projectConfig = {
       ...t.ctx.projectConfig,
-      config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false } },
+      config: {
+        ...t.ctx.projectConfig.config,
+        sharing: { canvasComment: false, mentionCanvas: false, viewerLink: false },
+      },
     }
     const body = await answer(
       await settle(t, '42', 'fp-2', {
@@ -460,7 +463,10 @@ describe('the bundle', () => {
     expect(await canvasComment('42')).toBe(true)
     t.ctx.projectConfig = {
       ...t.ctx.projectConfig,
-      config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: true } },
+      config: {
+        ...t.ctx.projectConfig.config,
+        sharing: { canvasComment: false, mentionCanvas: true, viewerLink: false },
+      },
     }
     expect(await canvasComment('42')).toBe(false)
     await t.cleanup()

@@ -24,11 +24,43 @@ export type GenerationModels = z.infer<typeof GenerationModelsSchema>
 export const HighRiskRuleSchema = z.object({ pattern: z.string().min(1), label: z.string().min(1) })
 export type HighRiskRule = z.infer<typeof HighRiskRuleSchema>
 
+/**
+ * A static viewer's address (viewer/, ADR 0005): https, or http on this machine to try one out. It
+ * takes no query or fragment, since the link adds the pull request as `?pr=`.
+ */
+export function isViewerAddress(value: string): boolean {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return false
+  }
+  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
+  const scheme = url.protocol === 'https:' || (url.protocol === 'http:' && local)
+  return scheme && url.username === '' && url.password === '' && url.search === '' && url.hash === ''
+}
+
+export const ViewerLinkSchema = z.union([
+  z.literal(false),
+  z
+    .string()
+    .refine(
+      isViewerAddress,
+      'a static viewer address: https, or http on localhost or 127.0.0.1, with no query or fragment'
+    ),
+])
+
 export const SharingSchema = z.object({
   /** Publish posts the canvas as a PR/MR comment. False keeps the canvas on this machine. */
   canvasComment: z.boolean(),
   /** What the review page posts names the canvas. False drops every mention and credit. */
   mentionCanvas: z.boolean(),
+  /**
+   * The static viewer the canvas comment links to, or false for none. A project sets it once it
+   * has decided its client terms allow a third-party page to read its repository (ADR 0005), so it
+   * has no personal override. Only GitHub pull requests get the link: the viewer reads no GitLab.
+   */
+  viewerLink: ViewerLinkSchema,
 })
 export type Sharing = z.infer<typeof SharingSchema>
 
@@ -116,7 +148,11 @@ const PartialProjectConfigSchema = z.object({
     .object({ keepForIdenticalDiff: z.boolean().optional(), incremental: z.boolean().optional() })
     .optional(),
   sharing: z
-    .object({ canvasComment: z.boolean().optional(), mentionCanvas: z.boolean().optional() })
+    .object({
+      canvasComment: z.boolean().optional(),
+      mentionCanvas: z.boolean().optional(),
+      viewerLink: ViewerLinkSchema.optional(),
+    })
     .optional(),
 })
 
@@ -134,7 +170,7 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
   tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
   chat: { enabled: true },
   canvas: { keepForIdenticalDiff: true, incremental: true },
-  sharing: { canvasComment: true, mentionCanvas: true },
+  sharing: { canvasComment: true, mentionCanvas: true, viewerLink: false },
 }
 
 export interface LoadedProjectConfig {
@@ -185,6 +221,7 @@ export function mergeProjectConfig(raw: unknown): { config: ProjectConfig; warni
     sharing: {
       canvasComment: user.sharing?.canvasComment ?? DEFAULT_PROJECT_CONFIG.sharing.canvasComment,
       mentionCanvas: user.sharing?.mentionCanvas ?? DEFAULT_PROJECT_CONFIG.sharing.mentionCanvas,
+      viewerLink: user.sharing?.viewerLink ?? DEFAULT_PROJECT_CONFIG.sharing.viewerLink,
     },
   }
   if (user.rulebook !== undefined) {

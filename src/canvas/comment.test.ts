@@ -1,6 +1,6 @@
 import { tallyCanvas } from '../review/self-review.js'
 import { syntheticArtifact } from '../testing/synthetic.js'
-import { buildCanvasComment, CANVAS_COMMENT_MARKER, readCanvasComment } from './comment.js'
+import { buildCanvasComment, CANVAS_COMMENT_MARKER, readCanvasComment, viewerPrUrl } from './comment.js'
 
 const zip = {
   name: 'pr-42-canvas.zip',
@@ -39,4 +39,15 @@ it.each([
   `${CANVAS_COMMENT_MARKER}pr-42-canvas.zip\n${'A'.repeat(1_000_004)}\n-->`,
 ])('ignores unsupported or malformed envelopes %#', body => {
   expect(readCanvasComment(body)).toBeNull()
+})
+
+it("links the viewer's page for the pull request first, and keeps the local app as the other way", () => {
+  const url = viewerPrUrl('https://example.com/tools/viewer/', { owner: 'acme', name: 'widgets' }, 42)
+  expect(url).toBe('https://example.com/tools/viewer/?pr=acme/widgets/42')
+  const body = buildCanvasComment(zip, tally, 65_536, url)
+  expect(body).toContain(
+    '[Open the canvas in the viewer](https://example.com/tools/viewer/?pr=acme/widgets/42), nothing to install. Or run `pr-review serve` and open #42.'
+  )
+  expect(readCanvasComment(body)).toEqual({ name: zip.name, bytes: Buffer.from(zip.bytes) })
+  expect(buildCanvasComment(zip, tally, 65_536)).not.toContain('in the viewer')
 })

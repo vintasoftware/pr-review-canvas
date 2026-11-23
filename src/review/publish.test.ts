@@ -303,6 +303,43 @@ describe('publish', () => {
     expect(shareCanvas).toHaveBeenCalledTimes(1)
   })
 
+  it('links the static viewer from the canvas comment when the project names one, on GitHub only', async () => {
+    const canvasDir = await prepared()
+    await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
+    const bodies: string[] = []
+    t.ctx.config.host = {
+      ...t.ctx.config.host,
+      shareCanvas: async (_client, _repo, _number, body) => {
+        bodies.push(body)
+        return {
+          id: 1,
+          author: 'octocat',
+          body,
+          createdAt: '2026-09-10T12:00:00.000Z',
+          updatedAt: '2026-09-10T12:00:00.000Z',
+          url: 'https://github.com/acme/widgets/pull/42#issuecomment-1',
+        }
+      },
+    }
+    const project = t.ctx.projectConfig.config
+    await publish(t.ctx, canvasDir, OPTS)
+    expect(bodies[0]).not.toContain('in the viewer')
+
+    t.ctx.projectConfig = {
+      ...t.ctx.projectConfig,
+      config: { ...project, sharing: { ...project.sharing, viewerLink: 'https://viewer.example.com' } },
+    }
+    await publish(t.ctx, canvasDir, OPTS)
+    expect(bodies[1]).toContain(
+      '[Open the canvas in the viewer](https://viewer.example.com/?pr=acme/widgets/42), nothing to install. Or run `pr-review serve`'
+    )
+
+    t.ctx.config.host = { ...t.ctx.config.host, kind: 'gitlab' }
+    await publish(t.ctx, canvasDir, OPTS)
+    expect(bodies[2]).not.toContain('in the viewer')
+    expect(readCanvasZip(readCanvasComment(bodies[1]!)!.bytes).manifest.headSha).toBe(HEAD_SHA)
+  })
+
   it('keeps the canvas local when the run turns sharing off, whatever the settings say', async () => {
     const canvasDir = await prepared()
     await writeModel(canvasDir, artifactToModelOutput(syntheticArtifact()))
