@@ -34,6 +34,8 @@ export const IssueCommentSchema = z.object({
   /** When the comment was last edited, which is its creation time until someone edits it. */
   updatedAt: z.string(),
   url: z.string(),
+  /** GitHub's `author_association` (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE, ...), when given. */
+  authorAssociation: z.string().optional(),
 })
 export type IssueComment = z.infer<typeof IssueCommentSchema>
 

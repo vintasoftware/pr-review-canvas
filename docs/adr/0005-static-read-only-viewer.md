@@ -60,6 +60,12 @@ the existing envelope (`<!-- pr-review-canvas:v1`) and `readCanvasZip`. The chec
 the local import runs, so a canvas the CLI rejects is rejected here too. With no canvas comment, the
 page says so and links to the setup docs.
 
+Anyone can comment on a public pull request, and the viewer's link always opens the newest canvas,
+so a stranger could otherwise post a forged canvas that every reviewer then reads. The viewer takes
+a canvas comment only from the pull request's author or from someone GitHub reports as an owner,
+member, or collaborator of the repository (the comment's `author_association`). It skips any other
+canvas comment and names its author in a warning on the page.
+
 ### Diff
 
 The canvas stores hunk headers, not diff text. The viewer fetches the diff between the manifest's

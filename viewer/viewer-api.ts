@@ -25,7 +25,7 @@ import { authorSignOffReason } from '../src/review/self-review.js'
 import { buildSkillCommand } from '../src/review/skill-command.js'
 import { draftDiff, sameDiff } from '../static/js/diff-identity.js'
 import type { CanvasManifest } from '../src/contract/canvas-manifest.js'
-import type { CommentsPayload } from '../src/contract/comments.js'
+import type { CommentsPayload, IssueComment } from '../src/contract/comments.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../src/contract/review-artifact.js'
 import type { PrState } from '../src/contract/state.js'
 import { readCanvasZip } from '../src/canvas/zip.js'
@@ -77,6 +77,21 @@ const notInViewer = (what: string) =>
   new ViewerError(501, 'NOT_IMPLEMENTED', `${what} is not available in the viewer`, LOCAL_APP_HINT)
 
 /** The canvas comment's envelope, as src/canvas/comment.ts writes it. */
+/** GitHub's `author_association` values for people with a role on the repository. */
+const REPOSITORY_ROLES = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
+
+/**
+ * Whether a comment's author may supply the canvas: the pull request's author, or an owner,
+ * member, or collaborator. `ghost` stands for any deleted account, so it matches nobody.
+ */
+function trustedAuthor(
+  comment: Pick<IssueComment, 'author' | 'authorAssociation'>,
+  prAuthor: string
+): boolean {
+  if (REPOSITORY_ROLES.has(comment.authorAssociation ?? '')) return true
+  return comment.author !== 'ghost' && comment.author.toLowerCase() === prAuthor.toLowerCase()
+}
+
 const CANVAS_ENVELOPE = /<!-- pr-review-canvas:v1\n([A-Za-z0-9._-]+\.zip)\n([A-Za-z0-9+/]+={0,2})\n-->/
 
 function decodeBase64(encoded: string): Uint8Array {
@@ -238,12 +253,22 @@ export function createViewerApi(
     return found
   }
 
-  /** The newest canvas comment on the pull request, read like `pr-review import` reads a zip. */
-  function findCanvas(comments: CommentsPayload, warnings: string[]): SharedCanvas | null {
+  /**
+   * The newest canvas comment on the pull request, read like `pr-review import` reads a zip. Only
+   * the pull request's author or someone with a role on the repository can supply it: on a public
+   * repository anyone can comment, and the viewer's link always opens the newest canvas.
+   */
+  function findCanvas(comments: CommentsPayload, prAuthor: string, warnings: string[]): SharedCanvas | null {
     const newestFirst = [...comments.issueComments].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     for (const comment of newestFirst) {
       const match = CANVAS_ENVELOPE.exec(comment.body)
       if (match === null) continue
+      if (!trustedAuthor(comment, prAuthor)) {
+        warnings.push(
+          `the canvas comment at ${comment.url} is by @${comment.author}, who is neither the pull request's author nor an owner, member, or collaborator of ${target.owner}/${target.repo}; skipped`
+        )
+        continue
+      }
       try {
         const contents = readCanvasZip(decodeBase64(match[2]!))
         const { repo } = contents.manifest
@@ -306,7 +331,7 @@ export function createViewerApi(
     const fetched = await fetchComments(gh, pr.repo, target.number, pr.headSha, now)
     // GraphQL needs a token, so resolved threads read as open; that is expected here, not news.
     const warnings = fetched.warnings.filter(w => !w.startsWith('resolved state unavailable'))
-    const canvas = findCanvas(fetched.payload, warnings)
+    const canvas = findCanvas(fetched.payload, meta.author, warnings)
     return { pr, comments: fetched.payload, canvas, warnings }
   }
 

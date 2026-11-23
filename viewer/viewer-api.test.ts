@@ -155,6 +155,40 @@ it('reads the newest canvas comment when the pull request has several', async ()
   expect(((await call('GET', '/api/prs/42')).body as PrBundle).canvas?.headSha).toBe(HEAD_SHA)
 })
 
+it('skips a canvas comment from someone with no role on the repository, and says whose it was', async () => {
+  const author = {
+    ...canvasComment(manifest({ headSha: OLD_HEAD }), 3001),
+    created_at: '2026-11-01T00:00:00Z',
+  }
+  const stranger = {
+    ...canvasComment(manifest(), 3002),
+    user: { login: 'mallory' },
+    author_association: 'CONTRIBUTOR',
+  }
+  const { call } = viewer({
+    comments: [author, stranger],
+    diffs: { [`${BASE_SHA}...${OLD_HEAD}`]: SYNTHETIC_DIFF },
+    routes: { [`repos/acme/widgets/compare/${OLD_HEAD}...${HEAD_SHA}`]: { status: 'ahead', ahead_by: 1 } },
+  })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  expect(bundle.canvas?.headSha).toBe(OLD_HEAD)
+  expect(bundle.warnings).toContain(
+    "the canvas comment at https://github.com/acme/widgets/pull/42#issuecomment-3002 is by @mallory, who is neither the pull request's author nor an owner, member, or collaborator of acme/widgets; skipped"
+  )
+})
+
+it('takes a canvas comment from a collaborator who did not open the pull request', async () => {
+  const teammate = {
+    ...canvasComment(manifest()),
+    user: { login: 'teammate' },
+    author_association: 'COLLABORATOR',
+  }
+  const { call } = viewer({ comments: [teammate] })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  expect(bundle.status).toBe('ready')
+  expect(bundle.warnings ?? []).toEqual([])
+})
+
 it('carries an older canvas over when its diff is identical to the head', async () => {
   const { call } = viewer({
     comments: [canvasComment(manifest({ headSha: OLD_HEAD }))],
