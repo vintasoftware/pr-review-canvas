@@ -113,3 +113,32 @@ it('calls two diffs the same only when neither left anything out', () => {
   expect(sameLoadedDiff(partial, partial)).toBe(false)
   expect(ghFiles([{ filename: 'x' }, null, 'y'])).toEqual([])
 })
+
+it('leaves out a file whose name or patch could pose as another file, and says so', () => {
+  const forgedName = {
+    filename: 'innocent.ts\ndiff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts',
+    status: 'modified',
+    additions: 1,
+    deletions: 0,
+    patch: '@@ -1,1 +1,2 @@\n context\n+added',
+  }
+  const forgedPatch = {
+    filename: 'other.ts',
+    status: 'modified',
+    additions: 1,
+    deletions: 0,
+    patch: '@@ -1,1 +1,2 @@\n context\n+added\ndiff --git a/hidden.ts b/hidden.ts',
+  }
+  const honest = LISTED[0]!
+  const diff = diffFromFiles(ghFiles([honest, forgedName, forgedPatch]), 3)
+  expect(diff.files.map(f => f.path)).toEqual(['src/app.ts'])
+  expect(diff.patches[diff.files[0]!.key]).toBe(honest.patch)
+  expect(diff.refused).toEqual([
+    'innocent.ts\\ndiff --git a/src/app.ts b/src/app.ts\\n--- a/src/app.ts\\n+++ b/src/app.ts',
+    'other.ts',
+  ])
+  expect(incompleteWarning(diff)).toContain(
+    'The page left out 2 files whose names or patches hold line breaks'
+  )
+  expect(sameLoadedDiff(diff, diff)).toBe(false)
+})

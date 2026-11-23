@@ -30,6 +30,11 @@ export interface LoadedDiff {
   /** Files GitHub listed with changes but sent no patch for, because they are too large. */
   missing: string[]
   /**
+   * Files left out of the rebuild because their name or patch could pass for diff text of its own,
+   * shown with control characters escaped.
+   */
+  refused: string[]
+  /**
    * Files GitHub did not list at all, because the change set has more than its list holds:
    * `unknown` when the list was full and GitHub gives no total to count them by.
    */
@@ -52,6 +57,38 @@ function isGhFile(value: unknown): value is GhFile {
 /** The entries of a file list that have the shape the rebuild reads. */
 export function ghFiles(raw: unknown): GhFile[] {
   return Array.isArray(raw) ? raw.filter(isGhFile) : []
+}
+
+/** Whether a name holds a control character, as a newline that would start a line of its own. */
+function hasControl(name: string): boolean {
+  for (let i = 0; i < name.length; i++) {
+    const code = name.charCodeAt(i)
+    if (code < 0x20 || code === 0x7f) return true
+  }
+  return false
+}
+
+/** What every line of a patch starts with: a hunk header, or a context, added, removed, or no-newline line. */
+const PATCH_LINE = /^(@@ |[ +\-\\]|$)/
+
+/**
+ * Whether a file can be written as diff text and read back as itself. Git quotes a name that holds
+ * a newline in its own diff, but the rebuild writes names as they are, so a name with a line break
+ * could pose as another file's header and add or hide files on the page. Such a file is left out.
+ */
+function writable(file: GhFile): boolean {
+  if (
+    hasControl(file.filename) ||
+    (file.previous_filename !== undefined && hasControl(file.previous_filename))
+  ) {
+    return false
+  }
+  return file.patch === undefined || file.patch.split('\n').every(line => PATCH_LINE.test(line))
+}
+
+/** A name as the page can show it: control characters escaped, as JSON writes them. */
+function shownName(name: string): string {
+  return JSON.stringify(name).slice(1, -1)
 }
 
 /** One file as `git diff` prints it, so the server's parser reads it as it reads a real diff. */
@@ -85,7 +122,9 @@ function blockOf(file: GhFile): string[] {
  * change set has, when GitHub says, so the files the list could not hold are counted; `unknown`
  * says the list was full with no total given.
  */
-export function diffFromFiles(files: readonly GhFile[], total: number | 'unknown'): LoadedDiff {
+export function diffFromFiles(listed: readonly GhFile[], total: number | 'unknown'): LoadedDiff {
+  const files = listed.filter(writable)
+  const refused = listed.filter(f => !writable(f)).map(f => shownName(f.filename))
   const text = `${files.flatMap(blockOf).join('\n')}\n`
   const collected = parseUnifiedDiff(text)
   const byPath = new Map(files.map(f => [f.filename, f]))
@@ -93,28 +132,35 @@ export function diffFromFiles(files: readonly GhFile[], total: number | 'unknown
   const patches = toPatchMap(collected)
   const entries = collected.map(file => {
     const entry = toFileEntry(file)
-    const listed = byPath.get(file.path)
-    if (listed !== undefined && listed.additions + listed.deletions > 0 && !listed.patch) {
+    const row = byPath.get(file.path)
+    if (row !== undefined && row.additions + row.deletions > 0 && !row.patch) {
       // The page counts what GitHub reports, and says the file's changes are not shown.
       missing.push(file.path)
       delete patches[file.key]
-      return { ...entry, additions: listed.additions, deletions: listed.deletions }
+      return { ...entry, additions: row.additions, deletions: row.deletions }
     }
     return entry
   })
-  const unlisted = total === 'unknown' ? 'unknown' : Math.max(0, total - files.length)
-  return { text, files: entries, patches, missing, unlisted }
+  const unlisted = total === 'unknown' ? 'unknown' : Math.max(0, total - listed.length)
+  return { text, files: entries, patches, missing, refused, unlisted }
 }
 
 /** A diff GitHub sent whole, as `git diff` text. */
 export function diffFromText(text: string): LoadedDiff {
   const collected = parseUnifiedDiff(text)
-  return { text, files: collected.map(toFileEntry), patches: toPatchMap(collected), missing: [], unlisted: 0 }
+  return {
+    text,
+    files: collected.map(toFileEntry),
+    patches: toPatchMap(collected),
+    missing: [],
+    refused: [],
+    unlisted: 0,
+  }
 }
 
 /** Whether two diffs are the same, as far as either says: one with files left out proves nothing. */
 export function sameLoadedDiff(a: LoadedDiff, b: LoadedDiff): boolean {
-  const partial = (d: LoadedDiff) => d.missing.length > 0 || d.unlisted !== 0
+  const partial = (d: LoadedDiff) => d.missing.length > 0 || d.refused.length > 0 || d.unlisted !== 0
   if (partial(a) || partial(b)) return false
   const keys = Object.keys(a.patches)
   return (
@@ -134,6 +180,12 @@ export function incompleteWarning(diff: LoadedDiff): string | null {
     const more = count > 5 ? `, and ${count - 5} more` : ''
     parts.push(
       `GitHub sent no changes for ${count} ${count === 1 ? 'file' : 'files'} too large to diff (${named}${more}), so the page lists ${count === 1 ? 'it' : 'them'} without ${count === 1 ? 'its' : 'their'} lines`
+    )
+  }
+  if (diff.refused.length > 0) {
+    const n = diff.refused.length
+    parts.push(
+      `The page left out ${n} ${n === 1 ? 'file' : 'files'} whose ${n === 1 ? 'name or patch holds' : 'names or patches hold'} line breaks or other control characters, which could pass for other files (${diff.refused.slice(0, 5).join(', ')}${n > 5 ? `, and ${n - 5} more` : ''})`
     )
   }
   if (diff.unlisted === 'unknown') {
