@@ -1,6 +1,7 @@
 // Review checkouts: one detached git worktree per review, at the commit the chat talks about, so
-// the agent reads the reviewed version of every file without touching the reader's checkout.
-// See docs/adr/0004-chat-reads-a-review-checkout.md.
+// the agent reads the reviewed version of every file without touching the reader's checkout. The
+// agent runs in a folder of the tool's own that holds the checkout as `code`, never in the
+// checkout itself. See docs/adr/0004-chat-reads-a-review-checkout.md.
 import { lstat, mkdir, open, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { execGit, GitError, type GitExec } from '../git/git.js'
@@ -67,7 +68,7 @@ export async function* readCodeAt(input: {
   }
   try {
     await lease.moveTo(input.headSha)
-    return { kind: 'checkout', cwd: lease.dir, sha: input.headSha }
+    return { kind: 'checkout', cwd: lease.cwd, dir: lease.dir, sha: input.headSha }
   } catch (err) {
     const fallback = {
       message: err instanceof Error ? err.message : String(err),
@@ -95,8 +96,10 @@ export interface CheckoutGit {
 
 export function createCheckoutGit(repoRoot: string, exec: GitExec = execGit): CheckoutGit {
   // A checkout is only read, so the repository's own hooks (post-checkout and the like) stay off.
+  // A symbolic link in the reviewed commit is written as a small file holding its target, so
+  // reading it never leads to a file outside the checkout.
   const must = async (cwd: string, args: string[]): Promise<void> => {
-    const full = ['-c', 'core.hooksPath=/dev/null', ...args]
+    const full = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.symlinks=false', ...args]
     const r = await exec(cwd, full)
     if (r.code !== 0) {
       throw new GitError(full, r.stderr, r.code)
@@ -122,6 +125,13 @@ export function createCheckoutGit(repoRoot: string, exec: GitExec = execGit): Ch
 /** One checkout held by a chat turn. Nothing else moves or removes it until `release`. */
 export interface CheckoutLease {
   dir: string
+  /**
+   * The folder an agent runs in while it reads this checkout, which holds the checkout as `code`
+   * and nothing else. acpx and the agents read their own configuration from the folder they start
+   * in, and a checkout holds the files of the commit under review, whose author must not be able
+   * to configure the reader's agent with them.
+   */
+  cwd: string
   /** The commit the checkout is on now, or null when it does not exist yet. */
   head: string | null
   /** Creates the checkout or moves it to `sha`, and records the turn as its last use. */
@@ -225,11 +235,14 @@ export function createReviewCheckouts(opts: {
   now: () => Date
 }): CheckoutStore {
   const { root, git, now } = opts
-  const dirOf = (folder: string): string => path.join(root, folder)
+  const cwdOf = (folder: string): string => path.join(root, `${folder}.cwd`)
+  const dirOf = (folder: string): string => path.join(cwdOf(folder), 'code')
+  /** Where the checkout was while the agent still ran inside it. */
+  const formerDirOf = (folder: string): string => path.join(root, folder)
   /** Who holds each checkout leased in this process. */
   const holders = new Map<string, CheckoutHolder>()
-  const metaOf = (folder: string): string => `${dirOf(folder)}.json`
-  const lockOf = (folder: string): string => `${dirOf(folder)}.lock`
+  const metaOf = (folder: string): string => path.join(root, `${folder}.json`)
+  const lockOf = (folder: string): string => path.join(root, `${folder}.lock`)
 
   /** The metadata this module wrote, or null when the checkout has none (or it was cut short). */
   const readMeta = async (folder: string): Promise<CheckoutMeta | null> => {
@@ -279,11 +292,23 @@ export function createReviewCheckouts(opts: {
   const isLocked = async (folder: string): Promise<boolean> =>
     (await exists(lockOf(folder))) && !(await lockIsStale(lockOf(folder)))
 
-  const removeCheckout = async (folder: string): Promise<void> => {
-    const dir = dirOf(folder)
+  /** Unregisters the worktree at `dir`, and removes `folder`, which is it or holds it. */
+  const removeWorktree = async (dir: string, folder: string): Promise<void> => {
     await git.remove(dir)
     // git leaves the folder when the worktree was never registered or was half created.
-    await rm(dir, { recursive: true, force: true })
+    await rm(folder, { recursive: true, force: true })
+  }
+
+  /** Removes the checkout an earlier version kept where the agent ran in it, when one is left. */
+  const removeFormer = async (folder: string): Promise<void> => {
+    if (await exists(formerDirOf(folder))) {
+      await removeWorktree(formerDirOf(folder), formerDirOf(folder))
+    }
+  }
+
+  const removeCheckout = async (folder: string): Promise<void> => {
+    await removeWorktree(dirOf(folder), cwdOf(folder))
+    await removeFormer(folder)
     await rm(metaOf(folder), { force: true })
   }
 
@@ -357,6 +382,7 @@ export function createReviewCheckouts(opts: {
       }
       let head: string | null
       try {
+        await removeFormer(folder)
         head = await git.head(dir)
       } catch (err) {
         await release()
@@ -364,6 +390,7 @@ export function createReviewCheckouts(opts: {
       }
       return {
         dir,
+        cwd: cwdOf(folder),
         head,
         async moveTo(sha) {
           if (head === null) {

@@ -246,7 +246,7 @@ describe('createChatManager().send', () => {
     expect(prompt).toContain('## Context: the whole pull request')
     expect(prompt).toContain('## Question\n\nis this covered?')
     expect(runner.runs[0]?.session).toBe(T1)
-    expect(runner.runs[0]?.cwd).toBe(path.join(dataDir, 'checkouts', '42'))
+    expect(runner.runs[0]?.cwd).toBe(path.join(dataDir, 'checkouts', '42.cwd'))
   })
 
   it('seeds once per thread, and again after the head moves', async () => {
@@ -875,7 +875,9 @@ describe('a thread whose first message reads like the placeholder', () => {
 
 describe('the review checkout a turn reads', () => {
   const FALLBACK = 'git worktree add failed (128): disk full'
-  const checkoutDir = (): string => path.join(dataDir, 'checkouts', '42')
+  /** Where the agent runs: the folder that holds the checkout as `code`, never the checkout itself. */
+  const agentDir = (): string => path.join(dataDir, 'checkouts', '42.cwd')
+  const checkoutDir = (): string => path.join(agentDir(), 'code')
 
   it('creates it on the first turn and moves it only when the commit changes', async () => {
     await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
@@ -889,10 +891,10 @@ describe('the review checkout a turn reads', () => {
     )
     expect(third[0]).toEqual({ event: 'checkout', status: 'preparing', sha: moved, creating: false })
     expect(checkoutGit.calls.map(c => c[0])).toEqual(['add', 'move'])
-    expect(runner.runs.every(r => r.cwd === checkoutDir())).toBe(true)
+    expect(runner.runs.every(r => r.cwd === agentDir())).toBe(true)
   })
 
-  it('tells the agent the checkout is its working directory, and where installed dependencies are', async () => {
+  it('tells the agent where the checkout is in its working directory, and where installed dependencies are', async () => {
     build({ runner: createFakeRunner() })
     manager = createChatManager({
       runner,
@@ -909,7 +911,9 @@ describe('the review checkout a turn reads', () => {
     })
     await collect(manager.send(target(), { message: 'one', context: { kind: 'pr' } }))
     const prompt = runner.runs[0]?.prompt ?? ''
-    expect(prompt).toContain(`Your working directory, \`${checkoutDir()}\``)
+    expect(prompt).toContain(
+      `is checked out at\n\`${checkoutDir()}\`, the \`code\` folder of your working directory.`
+    )
     expect(prompt).toContain('/repo')
     expect(prompt).toContain('may not be what the pull request uses')
   })
@@ -996,6 +1000,6 @@ describe('the review checkout a turn reads', () => {
     expect(events.find(e => e.event === 'turn')).toMatchObject({ seeded: true })
     expect(runner.ensured).toEqual([T1, T1])
     expect(runner.runs[1]?.prompt).toContain('SEED for')
-    expect(runner.runs[1]?.cwd).toBe(checkoutDir())
+    expect(runner.runs[1]?.cwd).toBe(agentDir())
   })
 })

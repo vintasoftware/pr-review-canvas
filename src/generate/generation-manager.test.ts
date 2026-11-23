@@ -117,7 +117,8 @@ function harness(
       const lease = { key, moved: [] as string[], released: false }
       leases.push(lease)
       return {
-        dir: `/data/checkouts/${String(key)}`,
+        dir: `/data/checkouts/${String(key)}.cwd/code`,
+        cwd: `/data/checkouts/${String(key)}.cwd`,
         head: null,
         async moveTo(sha) {
           if (opts.lease === 'move-fails') {
@@ -232,7 +233,9 @@ describe('prompts', () => {
   })
 
   it('describes each place the agent can read code from', () => {
-    expect(codeNote({ kind: 'checkout', cwd: '/c', sha: HEAD }, HEAD)).toContain(`a checkout of ${HEAD}`)
+    expect(codeNote({ kind: 'checkout', cwd: '/c', dir: '/c/code', sha: HEAD }, HEAD)).toContain(
+      `The repository at ${HEAD}, the head, is checked out at \`/c/code\`, the \`code\` folder of your working directory`
+    )
     const fallback = codeNote({ kind: 'fallback', cwd: '/r', message: 'm', branch: null }, HEAD)
     expect(fallback).toContain(`may be on another commit than ${HEAD}`)
     expect(codeNote({ kind: 'reader-checkout', cwd: '/r' }, HEAD)).toBe(fallback)
@@ -248,7 +251,7 @@ describe('prompts', () => {
 })
 
 describe('createGenerationManager', () => {
-  it('prepares, runs the agent in the review checkout, writes its JSON, and publishes', async () => {
+  it('prepares, runs the agent over the review checkout, writes its JSON, and publishes', async () => {
     const h = harness()
     const started = await h.manager.start(7, { force: false })
     expect(started).toMatchObject({
@@ -276,11 +279,13 @@ describe('createGenerationManager', () => {
     expect(h.leases).toEqual([{ key: 7, moved: [HEAD], released: true }])
 
     const [run] = h.runner.runs
-    expect(run?.cwd).toBe('/data/checkouts/7')
+    // The agent runs in the folder that holds the checkout, never in the checkout itself.
+    expect(run?.cwd).toBe('/data/checkouts/7.cwd')
+    expect(run?.prompt).toContain('is checked out at `/data/checkouts/7.cwd/code`')
     expect(run?.model).toBe('opus')
     expect(run?.session).toMatch(/^pr-review-acme-widgets-7-claude-gen\d+$/)
     expect(h.runner.ensured).toEqual([run?.session])
-    expect(run?.prompt).toContain(`a checkout of ${HEAD}`)
+    expect(run?.prompt).toContain(`The repository at ${HEAD}, the head, is checked out at`)
     expect(run?.prompt).toContain('the task')
     // The first turn sends the skill the job names, between its heading and the task's.
     const prompt = run?.prompt ?? ''
@@ -694,7 +699,7 @@ describe('createGenerationManager', () => {
           { type: 'tool', id: 'a', title: 'Read File', status: 'pending' },
           { type: 'tool', id: 'a', title: `Read ${dir}/derived/patches/a.diff`, status: 'in_progress' },
           { type: 'tool', id: 'a', title: 'tool', status: 'completed' },
-          { type: 'tool', id: 'b', title: 'Read /data/checkouts/7/src/b.ts', status: 'completed' },
+          { type: 'tool', id: 'b', title: 'Read /data/checkouts/7.cwd/code/src/b.ts', status: 'completed' },
           ...Array.from({ length: 9 }, (_, i): AgentEvent => ({
             type: 'tool',
             id: `c${i}`,
@@ -726,7 +731,7 @@ describe('createGenerationManager', () => {
           { type: 'tool', id: 'a', title: 'Read File', status: 'pending' },
           { type: 'tool', id: 'a', title: `Read ${dir}/derived/patches/a.diff`, status: 'in_progress' },
           { type: 'tool', id: 'a', title: 'tool', status: 'completed' },
-          { type: 'tool', id: 'b', title: 'Read /data/checkouts/7/src/b.ts', status: 'completed' },
+          { type: 'tool', id: 'b', title: 'Read /data/checkouts/7.cwd/code/src/b.ts', status: 'completed' },
           { type: 'chunk', text: MODEL },
           { type: 'done', stopReason: 'end_turn' },
         ],

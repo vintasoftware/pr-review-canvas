@@ -28,6 +28,17 @@
 - When you mark a file reviewed, the focus moves to the next file that is not reviewed. That file
   now stays closed when the **Hide code** level hides it whole.
 
+### AI Chat and generation
+
+- The agent runs in the folder that holds the review checkout (`checkouts/<key>.cwd`), with the
+  checkout inside it as `code`, and no longer in the checkout itself. acpx and the agents read
+  their own configuration from the folder they start in, such as `.acpxrc.json` or
+  `.claude/settings.json`, and a pull request must not be able to configure its reviewer's agent
+  with files of its own. A checkout an earlier version made is removed the next time its review is
+  chatted about or generated, and the review's threads start a new agent session.
+- A symbolic link in a review checkout is written as a small file that holds the link's target, so
+  reading it never opens a file outside the checkout.
+
 ## 0.11.1
 
 Changes since 0.11.0.

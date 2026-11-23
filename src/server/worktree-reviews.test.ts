@@ -312,7 +312,10 @@ describe('the review checkouts of the clone', () => {
       fix.ctx.checkouts.lease('branch', 'chat'),
     ])
     const root = clone.checkouts.root
-    expect([mine.dir, theirs.dir]).toEqual([path.join(root, 'branch'), path.join(root, 'branch~fix')])
+    expect([mine.dir, theirs.dir]).toEqual([
+      path.join(root, 'branch.cwd', 'code'),
+      path.join(root, 'branch~fix.cwd', 'code'),
+    ])
     await mine.moveTo(HEAD_SHA)
     clock = new Date('2026-09-10T12:05:00.000Z')
     await theirs.moveTo(BASE_SHA)

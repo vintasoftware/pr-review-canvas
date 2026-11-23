@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process'
-import { lstat, mkdir, readFile, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { envWithoutRepo } from '../git/environment.mjs'
@@ -188,9 +188,14 @@ describe('the idle sweep', () => {
         key: 'branch',
         worktree: 'fix',
         folder: 'branch~fix',
-        dir: path.join(tmp, 'checkouts', 'branch~fix'),
+        dir: path.join(tmp, 'checkouts', 'branch~fix.cwd', 'code'),
       },
-      { key: 'branch', worktree: null, folder: 'branch', dir: path.join(tmp, 'checkouts', 'branch') },
+      {
+        key: 'branch',
+        worktree: null,
+        folder: 'branch',
+        dir: path.join(tmp, 'checkouts', 'branch.cwd', 'code'),
+      },
     ])
     const result = await checkouts.sweep({ olderThanDays: 0.5 })
     expect(result.removed.map(c => c.folder)).toEqual(['branch'])
@@ -206,8 +211,8 @@ describe('checkoutsFor', () => {
     const mine = await main.lease('branch', 'chat')
     const theirs = await linked.lease('branch', 'chat')
     expect([mine.dir, theirs.dir]).toEqual([
-      path.join(tmp, 'checkouts', 'branch'),
-      path.join(tmp, 'checkouts', 'branch~fix'),
+      path.join(tmp, 'checkouts', 'branch.cwd', 'code'),
+      path.join(tmp, 'checkouts', 'branch~fix.cwd', 'code'),
     ])
     await mine.moveTo('a'.repeat(40))
     await theirs.moveTo('b'.repeat(40))
@@ -218,7 +223,7 @@ describe('checkoutsFor', () => {
     })
     await Promise.all([mine.release(), theirs.release(), pr.release()])
     expect((await linked.list()).map(c => c.folder).sort()).toEqual(['branch', 'branch~fix'])
-    expect(await linked.size(path.join(tmp, 'checkouts', 'branch~fix'))).toBe(40)
+    expect(await linked.size(theirs.dir)).toBe(40)
     const swept = await linked.sweep({ all: true })
     expect(swept.removed.map(c => c.folder).sort()).toEqual(['branch', 'branch~fix'])
   })
@@ -308,5 +313,45 @@ describe('createCheckoutGit', () => {
     await retaken.moveTo(second)
     expect(await readFile(path.join(retaken.dir, 'a.txt'), 'utf8')).toBe('two\n')
     await retaken.release()
+  })
+
+  it('keeps the checkout in a folder of its own for the agent to run in, and writes links as plain files', async () => {
+    const repo = path.join(tmp, 'repo')
+    execFileSync('git', ['init', '-q', '-b', 'main', repo], { env: envWithoutRepo() })
+    git(repo, 'config', 'user.email', 't@example.com')
+    git(repo, 'config', 'user.name', 'T')
+    // What the commit under review may hold: files an agent or acpx would read as its own
+    // configuration from the folder it starts in, and a link that leaves the repository.
+    await mkdir(path.join(repo, '.claude'))
+    await writeFile(path.join(repo, '.claude', 'settings.json'), '{}')
+    await writeFile(path.join(repo, '.acpxrc.json'), '{}')
+    await writeFile(path.join(tmp, 'secret.txt'), 'outside the repository\n')
+    await symlink('../secret.txt', path.join(repo, 'notes.txt'))
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-q', '-m', 'one')
+
+    const real = createReviewCheckouts({
+      root: path.join(tmp, 'data', 'checkouts'),
+      git: createCheckoutGit(repo),
+      now: () => now,
+    })
+    const head = git(repo, 'rev-parse', 'HEAD')
+    // A checkout an earlier version made, which the agent ran in, is still on disk.
+    const former = path.join(tmp, 'data', 'checkouts', '7')
+    git(repo, 'worktree', 'add', '-q', '--detach', former, head)
+    const lease = await real.lease('7', 'chat')
+    await lease.moveTo(head)
+    expect(git(repo, 'worktree', 'list')).not.toContain(`${former} `)
+    // Everything of the commit is under `code`; the folder the agent starts in holds nothing else.
+    expect(await readdir(lease.dir)).toContain('.acpxrc.json')
+    expect(lease.dir).toBe(path.join(lease.cwd, 'code'))
+    expect(await readdir(lease.cwd)).toEqual(['code'])
+    expect((await lstat(path.join(lease.dir, 'notes.txt'))).isSymbolicLink()).toBe(false)
+    expect(await readFile(path.join(lease.dir, 'notes.txt'), 'utf8')).toBe('../secret.txt')
+    await lease.release()
+    expect((await real.list()).map(c => c.dir)).toEqual([lease.dir])
+
+    await real.sweep({ all: true })
+    expect(await readdir(path.join(tmp, 'data', 'checkouts'))).toEqual([])
   })
 })

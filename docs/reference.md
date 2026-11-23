@@ -1326,10 +1326,16 @@ first, as it does for unsent text. A timeout or incomplete answer can be retried
 ### Review checkouts
 
 AI Chat reads code from a review checkout: a detached `git worktree` of the repository at
-the reviewed commit, kept under the data directory (`repos/<owner>__<repo>/checkouts/<key>`) and
-apart from your own checkout. Your branch and your uncommitted edits are never touched. The first
+the reviewed commit, kept under the data directory (`repos/<owner>__<repo>/checkouts/<key>.cwd/code`)
+and apart from your own checkout. Your branch and your uncommitted edits are never touched. The first
 chat turn of a review creates it, and each turn moves it to the commit the chat talks about. The
 chat pane shows **Creating the review checkout** or **Checking out** while that runs.
+
+The agent runs in the folder that holds the checkout (`<key>.cwd`), not in the checkout. acpx and
+the agents read their own configuration from the folder they start in, such as `.acpxrc.json`,
+`.claude/settings.json`, or `.mcp.json`. A pull request can add or change those files, and the
+agent of whoever reviews it must not be configured by them. A checkout an earlier version kept at
+`checkouts/<key>` is removed the next time that review is chatted about or generated.
 
 - A pull request and the branch review each get one. The branch review reads the branch's last
   commit, without your uncommitted edits.
@@ -1337,6 +1343,8 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   review.
 - A review checkout holds tracked files only, and no submodules. The agent reads installed
   dependencies from your checkout and is told they may not match a pull request that changes them.
+- A symbolic link in the reviewed commit is written as a small file that holds the link's target,
+  so reading it never opens a file outside the checkout.
 - In a repository that uses Git LFS, creating or moving a review checkout downloads its LFS files,
   like any checkout does. On a large LFS repository the first chat turn of a review can take a
   while and use network and disk; the chat pane shows the checkout while it runs.
@@ -1353,7 +1361,7 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   of them: while one worktree's project answers about it, a turn on the same pull request from
   another worktree, or from a second `pr-review serve`, is refused with `CHAT_BUSY`; ask again once
   the first answer is done. A linked worktree's branch review has a checkout of its own
-  (`checkouts/branch~<worktree>`).
+  (`checkouts/branch~<worktree>.cwd/code`).
 
 The server removes checkouts with no chat turn for `checkoutIdleDays`, when it first opens a
 clone and every `checkoutSweepMinutes` after. `pr-review clean` does the same on demand:
