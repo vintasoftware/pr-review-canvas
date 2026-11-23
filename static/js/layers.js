@@ -431,7 +431,7 @@ export function wireCardReveal(root) {
     // into it, shows that one point.
     if (target instanceof Element) {
       target.closest('[data-point].is-resolved')?.setAttribute('data-revealed', '')
-      // A move that is not the reader's own choice of card leaves the card as the page drew it.
+      // The sender can keep the card itself open or closed, as it is.
       if (!(event instanceof CustomEvent) || event.detail?.openTarget !== false) {
         openCard(target)
       }
