@@ -123,17 +123,23 @@ function blockOf(file: GhFile): string[] {
  * says the list was full with no total given.
  */
 export function diffFromFiles(listed: readonly GhFile[], total: number | 'unknown'): LoadedDiff {
-  const files = listed.filter(writable)
-  const refused = listed.filter(f => !writable(f)).map(f => shownName(f.filename))
+  // A file is written only when its own block parses back as exactly that file. Names the parser
+  // would read differently (spaces at either end, a ` b/` inside) could otherwise show one file
+  // under another's name.
+  const files = listed.filter(file => writable(file) && roundTrips(file))
+  const refused = listed.filter(file => !files.includes(file)).map(file => shownName(file.filename))
   const text = `${files.flatMap(blockOf).join('\n')}\n`
   const collected = parseUnifiedDiff(text)
-  const byPath = new Map(files.map(f => [f.filename, f]))
+  // Each block was checked alone, so the whole parses to the same files in the same order.
+  if (collected.length !== files.length || collected.some((c, i) => c.path !== files[i]!.filename)) {
+    throw new Error('the rebuilt diff does not read back as the files GitHub listed')
+  }
   const missing: string[] = []
   const patches = toPatchMap(collected)
-  const entries = collected.map(file => {
+  const entries = collected.map((file, i) => {
     const entry = toFileEntry(file)
-    const row = byPath.get(file.path)
-    if (row !== undefined && row.additions + row.deletions > 0 && !row.patch) {
+    const row = files[i]!
+    if (row.additions + row.deletions > 0 && !row.patch) {
       // The page counts what GitHub reports, and says the file's changes are not shown.
       missing.push(file.path)
       delete patches[file.key]
@@ -143,6 +149,18 @@ export function diffFromFiles(listed: readonly GhFile[], total: number | 'unknow
   })
   const unlisted = total === 'unknown' ? 'unknown' : Math.max(0, total - listed.length)
   return { text, files: entries, patches, missing, refused, unlisted }
+}
+
+/** Whether a file's block, parsed alone, is that one file under its own name and old name. */
+function roundTrips(file: GhFile): boolean {
+  const parsed = parseUnifiedDiff(`${blockOf(file).join('\n')}\n`)
+  if (parsed.length !== 1) return false
+  const [only] = parsed
+  const renamed = file.status === 'renamed' && file.previous_filename !== undefined
+  return (
+    only!.path === file.filename &&
+    (renamed ? only!.oldPath === file.previous_filename : only!.oldPath === undefined)
+  )
 }
 
 /** A diff GitHub sent whole, as `git diff` text. */
