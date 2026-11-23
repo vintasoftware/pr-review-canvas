@@ -157,14 +157,24 @@ export function renderHeader(bundle, opts) {
           { control: inlineHideSwitchHtml(inline), hint: inlineHideHintHtml(inline) }
         )
   const risk = ready ? riskLineHtml(artifact.risk) : ''
+  // The hosted viewer has no local app to generate, export, or keep settings, so it keeps only the
+  // commands that work from a browser.
+  const localOnly =
+    bundle.viewer === true
+      ? ''
+      : `<button class="cmd" type="button" id="regenerate" title="${esc(generate.title)}" aria-haspopup="dialog"${generate.disabled ? ' disabled' : ''}>${generate.label}</button>` +
+        `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>`
+  const settings =
+    bundle.viewer === true
+      ? ''
+      : '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, point colors, and the AI Chat agent, model, and limits">settings</button>'
   return (
     '<header class="hdr">' +
     headerBarHtml(
       opts,
-      `<button class="cmd" type="button" id="regenerate" title="${esc(generate.title)}" aria-haspopup="dialog"${generate.disabled ? ' disabled' : ''}>${generate.label}</button>` +
-        `<button class="cmd" type="button" id="export-zip" title="Download this canvas as a zip to share on ${esc(hostLabel())}"${hasCanvas ? '' : ' disabled'}>export zip</button>` +
+      localOnly +
         `<button class="cmd" type="button" id="refresh" title="${refreshTitle}">refresh</button>` +
-        '<button class="cmd" type="button" id="settings" data-act="settings" aria-haspopup="dialog" title="Configure the default reading level, how layers show, point colors, and the AI Chat agent, model, and limits">settings</button>' +
+        settings +
         '<button class="cmd" type="button" data-act="help" title="Show keyboard shortcuts and review help" aria-haspopup="dialog">help</button>' +
         (drawn === null ? '' : diffLayoutToggleHtml())
     ) +

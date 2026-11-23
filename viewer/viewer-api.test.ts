@@ -133,6 +133,8 @@ it('shows the canvas comment of the head as a ready canvas over the diff GitHub 
   expect(bundle.files.map(f => f.path)).toContain('src/app.ts')
   expect(bundle.capabilities.canComment).toBe(false)
   expect(bundle.chat.enabled).toBe(false)
+  expect(bundle.viewer).toBe(true)
+  expect(bundle.skillCommand).toBe('/pr-review-canvas 42 --force')
   expect(bundle.warnings).toEqual([])
 
   const patches = (await call('GET', '/api/prs/42/patches')).body as { patches: Record<string, string> }
@@ -196,6 +198,7 @@ it('says so when the pull request has no canvas comment, and skips one for anoth
   const { call } = viewer({ comments: [elsewhere] })
   const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
   expect(bundle.status).toBe('missing')
+  expect(bundle.skillCommand).toBe('/pr-review-canvas 42')
   expect(bundle.artifact).toBeUndefined()
   expect(bundle.warnings).toEqual([
     'the canvas comment at https://github.com/acme/widgets/pull/42#issuecomment-3001 is for acme/other; skipped',

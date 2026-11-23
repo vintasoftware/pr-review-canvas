@@ -163,6 +163,12 @@ export interface PrBundle {
   /** More than 400 files or 50 000 changed lines: the page says the canvas was capped. */
   largePr: boolean
   /**
+   * Set by the hosted static viewer (viewer/), never by the local server. No local app stands behind
+   * the page, so it draws no command that generates, imports, or exports a canvas, or opens the
+   * settings, which live in the local app's settings file.
+   */
+  viewer?: true
+  /**
    * Whether settling shares the canvas comment again: false when `sharing.canvasComment` is off or
    * the review is local, where there is no pull request to share on.
    */

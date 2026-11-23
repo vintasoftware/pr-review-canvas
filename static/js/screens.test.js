@@ -10,7 +10,13 @@ import { renderChatShell } from './chat.js'
 import { fullDate } from './dom.js'
 import { setHost } from './host.js'
 import { drawnCanvas } from './layers.js'
-import { renderEmptyState, renderStaleState, sharedCanvasCalloutHtml, staleBarHtml } from './empty-state.js'
+import {
+  carriedOverBarHtml,
+  renderEmptyState,
+  renderStaleState,
+  sharedCanvasCalloutHtml,
+  staleBarHtml,
+} from './empty-state.js'
 import {
   bareHeaderHtml,
   generateCommand,
@@ -850,5 +856,58 @@ describe('the reading level control', () => {
 
     expect(document.querySelector('select')?.value).toBe('aggressive')
     expect(document.querySelector('.fold-hint')?.textContent).toContain('only the code to judge')
+  })
+})
+
+describe('the hosted viewer', () => {
+  const stale = /** @type {const} */ ({
+    canvasHeadSha: 'a'.repeat(40),
+    currentHeadSha: 'b'.repeat(40),
+    relation: 'ancestor',
+    commitsBehind: 3,
+  })
+
+  it('keeps refresh and help in the header, and drops generate, export, and settings', () => {
+    document.body.innerHTML = renderHeader(bundle({ viewer: true, chat: { enabled: false, acpx: false } }), {
+      host: 'viewer',
+      theme: 'auto',
+      skin: 'terminal',
+      now: NOW,
+    })
+    expect(document.querySelector('#regenerate')).toBeNull()
+    expect(document.querySelector('#export-zip')).toBeNull()
+    expect(document.querySelector('#settings')).toBeNull()
+    expect(document.querySelector('#refresh')).not.toBeNull()
+    expect(document.querySelector('[data-act="help"]')).not.toBeNull()
+  })
+
+  it('tells a reader with no canvas that the author generates it, and offers no drop zone', () => {
+    document.body.innerHTML = renderEmptyState(
+      bundle({
+        viewer: true,
+        status: 'missing',
+        artifact: undefined,
+        skillCommand: 'pr-review open 42',
+        chat: { enabled: false, acpx: false },
+      })
+    )
+    expect(document.querySelector('.hint')?.textContent).toMatch(/^The author generates one/)
+    expect(document.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe('pr-review open 42')
+    expect(document.querySelector('.drop')).toBeNull()
+    expect(document.querySelector('#generate-start')).toBeNull()
+  })
+
+  it('shows an outdated canvas without a command to generate one', () => {
+    const screen = renderStaleState(
+      bundle({ viewer: true, status: 'stale', stale, chat: { enabled: false, acpx: false } })
+    )
+    expect(screen).toContain('id="view-stale"')
+    expect(screen).not.toContain('id="stale-generate"')
+    expect(screen).not.toContain('Drop a canvas zip here')
+    expect(staleBarHtml(stale, undefined, { viewer: true })).not.toContain('stale-generate')
+    expect(staleBarHtml(stale, undefined)).toContain('stale-generate')
+    const carried = { canvasHeadSha: 'a'.repeat(40), currentHeadSha: 'b'.repeat(40) }
+    expect(carriedOverBarHtml(carried, { viewer: true })).not.toContain('regenerate anyway')
+    expect(carriedOverBarHtml(carried)).toContain('regenerate anyway')
   })
 })

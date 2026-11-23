@@ -99,7 +99,11 @@ function footerHtml(version, bundle) {
   const canvas = bundle?.canvas
     ? `<span>canvas <span class="mono">${esc(bundle.canvas.headSha.slice(0, 7))}</span> · ${esc(bundle.canvas.source)}</span>`
     : ''
-  return `<footer><span>pr-review ${esc(version)}</span>${canvas}<span>local review app · ${esc(hostLabel())} operations and AI requests contact their services</span></footer>`
+  // The hosted viewer runs no AI and has no local app behind it: the browser talks to the forge.
+  const where = bundle?.viewer
+    ? `hosted viewer · your browser talks to ${esc(hostLabel())} directly`
+    : `local review app · ${esc(hostLabel())} operations and AI requests contact their services`
+  return `<footer><span>pr-review ${esc(version)}</span>${canvas}<span>${where}</span></footer>`
 }
 
 /** @param {ReadonlyArray<string>} warnings */
@@ -372,9 +376,9 @@ export class PrAppElement extends HTMLElement {
       defineLayerElements()
       const staleBar =
         bundle.status === 'stale' && bundle.stale
-          ? staleBarHtml(bundle.stale, bundle.local)
+          ? staleBarHtml(bundle.stale, bundle.local, { viewer: bundle.viewer })
           : bundle.carriedOver
-            ? carriedOverBarHtml(bundle.carriedOver)
+            ? carriedOverBarHtml(bundle.carriedOver, { viewer: bundle.viewer })
             : ''
       const marksBar =
         bundle.marksCarriedFrom === undefined

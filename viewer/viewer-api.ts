@@ -22,6 +22,7 @@ import { postReview } from '../src/github/post-review.js'
 import { postedFromPending } from '../src/review/posted-comments.js'
 import { buildReviewBody, unreviewedLayers } from '../src/review/review-body.js'
 import { authorSignOffReason } from '../src/review/self-review.js'
+import { buildSkillCommand } from '../src/review/skill-command.js'
 import { draftDiff, sameDiff } from '../static/js/diff-identity.js'
 import type { CanvasManifest } from '../src/contract/canvas-manifest.js'
 import type { CommentsPayload } from '../src/contract/comments.js'
@@ -325,7 +326,9 @@ export function createViewerApi(
       chat: { enabled: false, acpx: false },
       canvasComment: false,
       mentionCanvas: true,
-      skillCommand: `pr-review open ${pr.number}`,
+      // The command the local app shows: a canvas of the head itself is written again with --force.
+      skillCommand: buildSkillCommand(target.number, { force: canvas?.manifest.headSha === pr.headSha }),
+      viewer: true as const,
       warnings,
     }
 
