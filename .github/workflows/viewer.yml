@@ -39,13 +39,19 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # Pinned, but npx resolves wrangler's own dependencies when it runs; a lockfile for the deploy
+  # tooling would pin those too.
   WRANGLER: wrangler@4.158.0
 
 jobs:
+  # Runs the project's dependencies (install, tests, the Vite build) with no secret in reach, and
+  # hands the built site on with its digest.
   build:
     name: Build and test the viewer
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
@@ -65,9 +71,19 @@ jobs:
         run: |
           grep -q "Content-Security-Policy: default-src 'none'" dist-viewer/_headers
           ! grep -rq GITHUB_CLIENT_SECRET dist-viewer
+      - name: Pack the site and record its digest
+        id: digest
+        run: |
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -cf dist-viewer.tar dist-viewer
+          echo "digest=$(sha256sum dist-viewer.tar | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: dist-viewer
+          path: dist-viewer.tar
+          retention-days: 7
 
-  # The deploy builds from the tag itself instead of taking another job's artifact, so what goes
-  # out is exactly what this job, holding the Cloudflare token, built from the tagged commit.
+  # Holds the Cloudflare token, so it runs none of the project's dependencies: it checks the site
+  # against the digest the build recorded, and runs only wrangler, with install scripts off.
   deploy:
     name: Deploy the viewer and its Worker
     if: startsWith(github.ref, 'refs/tags/viewer-v')
@@ -77,6 +93,8 @@ jobs:
     environment:
       name: viewer-production
       url: ${{ vars.VIEWER_ORIGIN }}
+    env:
+      npm_config_ignore_scripts: 'true'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -85,21 +103,18 @@ jobs:
         run: |
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: dist-viewer
+      - name: Check the site is the one the build made
+        run: |
+          echo "$DIGEST  dist-viewer.tar" | sha256sum --check
+          tar -xf dist-viewer.tar
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
-      - run: pnpm install --frozen-lockfile
-      - name: Build
-        run: pnpm viewer:build
-        env:
-          VITE_GITHUB_CLIENT_ID: ${{ vars.VIEWER_GITHUB_CLIENT_ID }}
-          VITE_GITHUB_APP_SLUG: ${{ vars.VIEWER_GITHUB_APP_SLUG }}
-          VITE_AUTH_WORKER_URL: ${{ vars.VIEWER_AUTH_WORKER_URL }}
-      - name: Check the build carries its headers and no secret
-        run: |
-          grep -q "Content-Security-Policy: default-src 'none'" dist-viewer/_headers
-          ! grep -rq GITHUB_CLIENT_SECRET dist-viewer
       - name: Deploy the viewer to Cloudflare Pages
         run: >-
           npx --yes "$WRANGLER" pages deploy dist-viewer
