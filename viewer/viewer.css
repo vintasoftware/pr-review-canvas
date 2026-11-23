@@ -41,3 +41,24 @@
 .viewer-error {
   color: #c62828;
 }
+
+.viewer-account {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.35rem 1rem;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--line, currentcolor);
+}
+
+.viewer-account-status {
+  opacity: 0.8;
+}
+
+.viewer-account-notice {
+  flex-basis: 100%;
+  color: #c62828;
+  text-align: right;
+}
