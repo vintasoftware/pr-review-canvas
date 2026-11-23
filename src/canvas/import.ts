@@ -26,6 +26,12 @@ export interface ImportOptions {
   discovered?: boolean | undefined
 }
 
+/**
+ * A canvas found on a pull request whose commit already holds another review's canvas, one that
+ * pull request cannot read. Only an import with `discovered` raises it, and discovery reports it.
+ */
+export class CanvasCommitTakenError extends Error {}
+
 function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
   return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
 }
@@ -118,21 +124,24 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   const stored = index.canvases[headSha]
   // One canvas is stored per commit, and two pull requests can have the same head commit. Whoever
   // shares a canvas on one is not trusted to explain the other, so a canvas found on a pull request
-  // only fills an empty place or replaces that pull request's own. Anything else stored there stays
-  // as it is: kept when this pull request reads it anyway, and otherwise the import is refused. A
-  // canvas the reader hands over replaces one its pull request cannot read.
+  // only fills an empty place or changes what is that pull request's own, by the store's rule,
+  // other than a canvas generated on this machine for another review. Anything else stored there
+  // stays as it is: kept when this pull request reads it anyway, and otherwise the import is
+  // refused. A canvas the reader hands over replaces one its pull request cannot read.
+  const owned =
+    stored !== undefined && opts.prNumber !== undefined && ctx.canvases.belongsTo(stored, opts.prNumber)
   const readable =
     stored === undefined ||
     opts.prNumber === undefined ||
-    readsCanvas(stored, ctx.canvases.belongsTo(stored, opts.prNumber), headSha === currentHeadSha)
-  const others = opts.discovered === true && stored !== undefined && stored.prNumber !== opts.prNumber
+    readsCanvas(stored, owned, headSha === currentHeadSha)
+  const others =
+    opts.discovered === true &&
+    stored !== undefined &&
+    (!owned || (stored.source === 'local' && stored.prNumber !== opts.prNumber))
   if (others && !readable) {
     const owner = stored.prNumber === undefined ? 'a local review' : `#${stored.prNumber}`
-    throw new AppError(
-      'CANVAS_COMMIT_TAKEN',
-      `the canvas stored for ${headSha.slice(0, 7)} is the one of ${owner}, so the one shared on #${opts.prNumber} was not imported`,
-      409,
-      'generate a canvas for this pull request, or import its zip yourself, to replace the stored one'
+    throw new CanvasCommitTakenError(
+      `the canvas stored for ${headSha.slice(0, 7)} is the one of ${owner}, so the one shared on #${opts.prNumber} was not imported`
     )
   }
   // The author revises a shared canvas by settling points, which keeps its generation time, so a

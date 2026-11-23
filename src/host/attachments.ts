@@ -2,7 +2,7 @@
 // token. The token is read per request, sent to the forge alone, and never logged or stored.
 import { readCanvasComment } from '../canvas/comment.js'
 import { createHash } from 'node:crypto'
-import { importCanvas } from '../canvas/import.js'
+import { CanvasCommitTakenError, importCanvas } from '../canvas/import.js'
 import { type ParsedCanvasName, parseCanvasZipName } from '../canvas/name.js'
 import { CANVAS_ZIP_MAX_BYTES, hasZipMagic } from '../canvas/zip.js'
 import type { ImportResult, SharedCanvasInfo } from '../contract/api.js'
@@ -259,6 +259,9 @@ export async function downloadAttachment(ctx: AppContext, rawUrl: string): Promi
 
 /** A downloaded zip that import refused, told in the words the callout uses. */
 export function importFailureReason(err: unknown): DownloadFailure {
+  if (err instanceof CanvasCommitTakenError) {
+    return 'commit-taken'
+  }
   if (!(err instanceof AppError)) {
     return 'not-zip'
   }
@@ -267,9 +270,6 @@ export function importFailureReason(err: unknown): DownloadFailure {
   }
   if (err.code === 'CANVAS_PR_MISMATCH') {
     return 'pr-mismatch'
-  }
-  if (err.code === 'CANVAS_COMMIT_TAKEN') {
-    return 'commit-taken'
   }
   return err.code === 'CANVAS_REPO_MISMATCH' ? 'name-mismatch' : 'not-zip'
 }

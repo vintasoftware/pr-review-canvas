@@ -872,11 +872,12 @@ membership check fails, that commenter's canvases are skipped with a warning too
 One canvas is stored per commit, and two pull requests can have the same head commit. The author
 of one is not trusted to explain the other, so a canvas imported for one pull request is shown on
 that pull request only; a branch review at that commit does not show it either. A canvas found on a
-pull request fills an empty place or replaces that pull request's own canvas, and changes nothing
-else. A canvas generated on this machine stays as it is, and still shows wherever its commit is
-the head. A canvas imported for another pull request stays too: the page then says the commit's
-canvas is another pull request's. Generate a canvas for this one, or drop its ZIP on the page, and
-it replaces the stored one.
+pull request fills an empty place or replaces that pull request's own canvas, which an imported
+canvas that names no pull request yet also is, and changes nothing else. A canvas generated on
+this machine for another review stays as it is, and still shows wherever its commit is the head. A
+canvas imported for another pull request stays too: the page then says the commit's canvas is
+another pull request's. Generate a canvas for this one, or drop its ZIP on the page, and it
+replaces the stored one.
 
 An attachment exported for a different pull request is reported rather than imported, and is not
 downloaded at all when its filename already names the other PR. The page says so and offers the
@@ -1523,7 +1524,6 @@ sandbox for the agent. Its access also depends on the agent's own permissions. D
 | `CANVAS_REPO_MISMATCH`                  | Check which clone is open; use `import --force` only when importing from the other repository is intentional                                                                                            |
 | `CANVAS_PR_MISMATCH`                    | The ZIP was exported for another pull request; import the canvas of this PR, or import that ZIP without `--pr` to store it under its own                                                                |
 | `CANVAS_TOO_LARGE`                      | The archive exceeds the 20 MiB import limit                                                                                                                                                             |
-| `CANVAS_COMMIT_TAKEN`                   | The canvas stored for that commit was imported for another pull request; generate a canvas for this one, or import its ZIP yourself, to replace it                                                      |
 | `CANVAS_STALE`                          | The PR head moved; prepare again for the current commit                                                                                                                                                 |
 | `CANVAS_ELSEWHERE`                      | `publish` got a canvas dir outside its data dir; publish the `canvasDir` prepare printed, with the `--data-dir` prepare used or none                                                                    |
 | `MODEL_INVALID`                         | Fix the reported problems in `model.json`, validate, then publish again                                                                                                                                 |

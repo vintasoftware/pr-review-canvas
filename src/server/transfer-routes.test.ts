@@ -2,6 +2,7 @@
 // The three transfer routes and the two bundle paths they feed: a stale canvas and a canvas
 // discovered on the pull request.
 import { buildCanvasComment } from '../canvas/comment.js'
+import { importCanvas } from '../canvas/import.js'
 import type { CanvasTally } from '../review/self-review.js'
 import { buildCanvasZip, CANVAS_ZIP_MAX_BYTES, readCanvasZip } from '../canvas/zip.js'
 import type { ImportResult, PrBundle, SharedCanvasFetchResponse } from '../contract/api.js'
@@ -502,14 +503,16 @@ describe('transfer routes', () => {
         }
       }
 
-      /** Both pull requests on the forge; `ownShared` puts #42's canvas in a comment of its author. */
-      async function twoPrs(shared: ReviewArtifact, ownShared: boolean) {
+      /** Both pull requests on the forge; `ownShared` is the canvas #42's author put in a comment. */
+      async function twoPrs(shared: ReviewArtifact, ownShared: ReviewArtifact | null) {
         const options: FakeGhOptions = ghWithBody('')
         options.routes = {
           ...options.routes,
-          ...(ownShared
-            ? { 'repos/acme/widgets/issues/42/comments': ghJson([canvasComment(42, 'octocat', own)]) }
-            : {}),
+          ...(ownShared === null
+            ? {}
+            : {
+                'repos/acme/widgets/issues/42/comments': ghJson([canvasComment(42, 'octocat', ownShared)]),
+              }),
           'repos/acme/widgets/pulls/99': ghJson({
             ...GH_PULL,
             number: 99,
@@ -540,7 +543,7 @@ describe('transfer routes', () => {
       const stored = async () => (await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]
 
       it('leaves a pull request the canvas it imported when the other shares one for the commit', async () => {
-        const { bundle } = await twoPrs(theirs(FUTURE), true)
+        const { bundle } = await twoPrs(theirs(FUTURE), own)
         expect((await bundle(42)).artifact?.summary).toBe(own.summary)
         const other = await bundle(99)
         expect([other.status, other.artifact, other.sharedCanvas?.reason]).toEqual([
@@ -556,7 +559,7 @@ describe('transfer routes', () => {
       })
 
       it('shows a pull request no canvas imported for the other, until the reader hands it its own', async () => {
-        const { app, bundle } = await twoPrs(theirs(FUTURE), true)
+        const { app, bundle } = await twoPrs(theirs(FUTURE), own)
         expect((await bundle(99)).artifact?.summary).toBe('Safe to merge')
         // The commit is #42's head too. The canvas stored for it is not #42's to read, and the
         // one its author shared does not replace what was imported for #99.
@@ -586,6 +589,23 @@ describe('transfer routes', () => {
       })
 
       it.each([
+        ['replaces it with a later one', { ...own, generatedAt: FUTURE, summary: 'Revised' }, 'Revised'],
+        ['keeps it over one that is not later', own, own.summary],
+      ])(
+        'takes an imported canvas that names no pull request as the author’s own: %s',
+        async (_case, shared, summary) => {
+          const { bundle } = await twoPrs(theirs(FUTURE), shared)
+          // The reader imported the author's export from before the pull request existed.
+          const { prNumber: _none, ...beforeThePr } = manifest(HEAD_SHA)
+          const exported = { ...own, pr: { ...own.pr, number: null } }
+          await importCanvas(t.ctx, { bytes: buildCanvasZip(beforeThePr, exported) })
+          expect((await stored())?.prNumber).toBeUndefined()
+          expect((await bundle(42, true)).artifact?.summary).toBe(summary)
+          expect(await stored()).toMatchObject({ prNumber: 42, source: 'import' })
+        }
+      )
+
+      it.each([
         ['numbered for the other pull request, against a later canvas', manifest(HEAD_SHA), FUTURE],
         [
           'numbered for the other pull request, against an earlier canvas',
@@ -600,7 +620,7 @@ describe('transfer routes', () => {
         ],
       ])('leaves a canvas generated on this machine as it is: %s', async (_case, generated, sharedAt) => {
         const { prNumber, ...unnumbered } = generated
-        const { bundle } = await twoPrs(theirs(sharedAt), false)
+        const { bundle } = await twoPrs(theirs(sharedAt), null)
         await t.ctx.canvases.write(HEAD_SHA, own, prNumber === undefined ? unnumbered : generated)
         const before = await stored()
         // #99 reads the canvas of its head commit that was generated here; the one shared on it

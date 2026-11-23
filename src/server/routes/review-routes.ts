@@ -86,6 +86,20 @@ export async function readBody<T>(request: Request, schema: z.ZodType<T>, expect
   return parsed.data
 }
 
+/** Refuses a commit that is not an indexed canvas of this target. */
+async function requireCanvasOf(ctx: AppContext, key: ReviewKey, canvasSha: string): Promise<void> {
+  const entry = (await ctx.canvases.readIndex()).canvases[canvasSha]
+  // The same rule the lookups use, so a mark can only be keyed to a canvas this target shows.
+  if (entry === undefined || !ctx.canvases.belongsTo(entry, key)) {
+    throw new AppError(
+      'CANVAS_NOT_FOUND',
+      `${canvasSha.slice(0, 7)} is not a canvas of ${keyLabel(key)}`,
+      404,
+      'reload the page'
+    )
+  }
+}
+
 /**
  * The canvas the reviewer is signing off on, with the marks made on it: the canvas written for the
  * pull request's head, or for another commit with an identical diff.
@@ -283,20 +297,13 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       requireSameDiff(body, pr)
     }
     // The page sends back the canvas the bundle keyed its marks to, so a toggle costs no git work;
-    // the index, not git, says the commit is a canvas this target reads, the same rule the lookups
-    // use, and its manifest which merge base its diff runs from. The head with no such canvas is
-    // marked against its own diff.
+    // the index, not git, says the commit is a canvas of this target, and its manifest which merge
+    // base its diff runs from.
     const canvasSha = body.canvasSha ?? pr.headSha
-    const stored = (await ctx.canvases.entryFor(key, canvasSha, pr.headSha)) !== undefined
-    if (!stored && canvasSha !== pr.headSha) {
-      throw new AppError(
-        'CANVAS_NOT_FOUND',
-        `${canvasSha.slice(0, 7)} is not a canvas of ${keyLabel(key)}`,
-        404,
-        'reload the page'
-      )
+    if (canvasSha !== pr.headSha) {
+      await requireCanvasOf(ctx, key, canvasSha)
     }
-    const manifest = stored ? await ctx.canvases.readManifest(canvasSha) : null
+    const manifest = await ctx.canvases.readManifest(canvasSha)
     const canvas = { headSha: canvasSha, mergeBaseSha: manifest?.mergeBaseSha ?? pr.mergeBaseSha }
     if (body.canvasMergeBaseSha !== undefined && body.canvasMergeBaseSha !== canvas.mergeBaseSha) {
       throw new AppError(
