@@ -100,6 +100,16 @@ Check each one on GitHub after posting.
    banner names the files GitHub sent no changes for, each of those files says GitHub sent no diff
    for it because it is too large, and over 3000 files the banner says how many are not shown.
 
+## A canvas comment from a stranger
+
+On a public test repository of your own (not this one), with a pull request that has a canvas:
+
+1. From a second GitHub account with no role on that repository, post a copy of the canvas
+   comment's body as a new comment on the pull request.
+2. Open the pull request in the viewer. It still shows the author's canvas, and a warning names the
+   second account and says its comment was skipped.
+3. Add the second account as a collaborator and reload. Its canvas is the one shown now.
+
 ## The canvas comment's link
 
 1. In the test repository's `pr-review.config.yml`, set `sharing.viewerLink:
