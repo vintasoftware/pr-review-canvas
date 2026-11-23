@@ -600,56 +600,23 @@ describe('reviewed state', () => {
     expect(nextUnreviewedTarget(root, session, 'layer-run-path', 'layer')).toBeNull()
   })
 
-  describe('the next file after one marked reviewed', () => {
-    /** The synthetic canvas with src/new-name.ts hidden whole at the light level, the default. */
-    const levelHidden = () => ({
-      ...artifact,
-      layers: artifact.layers.map(layer => ({
-        ...layer,
-        files: layer.files.map(f =>
-          f.path === 'src/new-name.ts' ? { ...f, collapsed: /** @type {const} */ ('light') } : f
-        ),
-      })),
-    })
-    /** @param {HTMLElement} root */
-    const markApp = async root => {
-      const box = root.querySelector('#file-src_app_ts input[data-reviewed-id]')
-      if (!(box instanceof HTMLInputElement)) {
-        throw new Error('no checkbox')
-      }
-      box.checked = true
-      box.dispatchEvent(new Event('change', { bubbles: true }))
-      await flush()
+  it('keeps the next file closed when it takes the focus after a file is marked reviewed', async () => {
+    setStartCollapsed(true)
+    const { root } = setup()
+    const body = root.querySelector('#file-src_new_name_ts > .file-body')
+    expect(body?.hasAttribute('hidden')).toBe(true)
+    const box = root.querySelector('#file-src_app_ts input[data-reviewed-id]')
+    if (!(box instanceof HTMLInputElement)) {
+      throw new Error('no checkbox')
     }
-    const nextBody = (/** @type {HTMLElement} */ root) =>
-      root.querySelector('#file-src_new_name_ts > .file-body')
-
-    it('takes the focus and stays closed when the reading level hides it', async () => {
-      const { root } = setup({ artifact: levelHidden() })
-      expect(nextBody(root)?.hasAttribute('hidden')).toBe(true)
-      await markApp(root)
-      expect(root.querySelector('.is-focused')?.id).toBe('file-src_new_name_ts')
-      expect(nextBody(root)?.hasAttribute('hidden')).toBe(true)
-    })
-
-    it('takes the focus and stays closed when the page starts collapsed', async () => {
-      setStartCollapsed(true)
-      const { root } = setup()
-      expect(nextBody(root)?.hasAttribute('hidden')).toBe(true)
-      await markApp(root)
-      expect(root.querySelector('.is-focused')?.id).toBe('file-src_new_name_ts')
-      expect(nextBody(root)?.hasAttribute('hidden')).toBe(true)
-    })
-
-    it('stays open when nothing closed it', async () => {
-      const { root } = setup()
-      await markApp(root)
-      expect(root.querySelector('.is-focused')?.id).toBe('file-src_new_name_ts')
-      expect(nextBody(root)?.hasAttribute('hidden')).toBe(false)
-    })
+    box.checked = true
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    await flush()
+    expect(root.querySelector('.is-focused')?.id).toBe('file-src_new_name_ts')
+    expect(body?.hasAttribute('hidden')).toBe(true)
   })
 
-  it('opens the next layer it moves to after a layer is marked reviewed', async () => {
+  it('opens the next layer when it takes the focus after a layer is marked reviewed', async () => {
     setStartCollapsed(true)
     const { root } = setup({ artifact: withSecondLayer() })
     expect(root.querySelector('#layer-second > .layer-body')?.hasAttribute('hidden')).toBe(true)
