@@ -29,10 +29,19 @@ import type { CommentsPayload } from '../src/contract/comments.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../src/contract/review-artifact.js'
 import type { PrState } from '../src/contract/state.js'
 import { readCanvasZip } from '../src/canvas/zip.js'
-import { parseUnifiedDiff, toFileEntry, toPatchMap } from '../src/git/diff-collector.js'
 import { fetchComments } from '../src/github/comments.js'
 import { mapPull } from '../src/github/pr.js'
 import { toPr } from '../src/host/pr.js'
+import {
+  COMPARE_FILES_MAX,
+  diffFromFiles,
+  diffFromText,
+  ghFiles,
+  incompleteWarning,
+  type LoadedDiff,
+  PULL_FILES_MAX,
+  sameLoadedDiff,
+} from './diff-fallback.js'
 import type { BrowserGithub } from './github-client.js'
 import { type MarkedCanvas, type ViewerStateStore } from './review-state.js'
 
@@ -147,11 +156,7 @@ function writeError(err: unknown): ViewerError {
   return new ViewerError(502, 'GITHUB_API_ERROR', message)
 }
 
-interface Diff {
-  text: string
-  files: FileEntry[]
-  patches: Record<string, string>
-}
+type Diff = LoadedDiff
 
 interface SharedCanvas {
   manifest: CanvasManifest
@@ -191,13 +196,41 @@ export function createViewerApi(
   /** The canvas the bundle keyed its marks to, so a mark lands on the diff the reader saw. */
   let markedCanvas: MarkedCanvas | null = null
 
+  /**
+   * The diff GitHub could not send whole, rebuilt from a file list: the pull request's own when
+   * the diff is the pull request's, which lists up to 3000 files, otherwise the comparison's,
+   * which lists up to 300.
+   */
+  async function listedDiff(mergeBaseSha: string, headSha: string): Promise<Diff> {
+    const { pr } = await loaded(false)
+    if (headSha === pr.headSha && mergeBaseSha === pr.mergeBaseSha) {
+      const listed: unknown[] = []
+      for (let page = 1; page <= PULL_FILES_MAX / 100; page++) {
+        const batch = await gh.api(`${repoPath}/pulls/${target.number}/files`, {
+          per_page: '100',
+          page: String(page),
+        })
+        const rows = Array.isArray(batch) ? batch : []
+        listed.push(...rows)
+        if (rows.length < 100) break
+      }
+      return diffFromFiles(ghFiles(listed), pr.changedFiles)
+    }
+    const compare = (await gh.api(`${repoPath}/compare/${mergeBaseSha}...${headSha}`)) as { files?: unknown }
+    const files = ghFiles(compare.files)
+    return diffFromFiles(files, files.length >= COMPARE_FILES_MAX ? 'unknown' : files.length)
+  }
+
   function diffOf(mergeBaseSha: string, headSha: string): Promise<Diff> {
     const key = `${mergeBaseSha}...${headSha}`
     let found = diffs.get(key)
     if (found === undefined) {
-      found = gh.diff(target.owner, target.repo, mergeBaseSha, headSha).then(text => {
-        const collected = parseUnifiedDiff(text)
-        return { text, files: collected.map(toFileEntry), patches: toPatchMap(collected) }
+      found = gh.diff(target.owner, target.repo, mergeBaseSha, headSha).then(diffFromText, err => {
+        // 422: "The diff is taking too long to generate". 406: a diff over GitHub's own limits.
+        if (/HTTP (406|422)/.test(err instanceof Error ? err.message : String(err))) {
+          return listedDiff(mergeBaseSha, headSha)
+        }
+        throw err
       })
       found.catch(() => diffs.delete(key))
       diffs.set(key, found)
@@ -335,6 +368,8 @@ export function createViewerApi(
     if (canvas === null) {
       const head = await diffOf(pr.mergeBaseSha, pr.headSha)
       markedCanvas = pr
+      const incomplete = incompleteWarning(head)
+      if (incomplete !== null) warnings.push(incomplete)
       return {
         ...common,
         status: 'missing',
@@ -355,7 +390,7 @@ export function createViewerApi(
     let stale: StaleInfo | undefined
     if (!ofHead) {
       const head = await diffOf(pr.mergeBaseSha, pr.headSha)
-      if (head.text === own.text) {
+      if (sameLoadedDiff(head, own)) {
         const relation = await staleRelation(pr, manifest)
         carriedOver = {
           canvasHeadSha: manifest.headSha,
@@ -368,6 +403,8 @@ export function createViewerApi(
       }
     }
     markedCanvas = { headSha: manifest.headSha, mergeBaseSha: manifest.mergeBaseSha }
+    const incomplete = incompleteWarning(own)
+    if (incomplete !== null) warnings.push(incomplete)
     return {
       ...common,
       status,

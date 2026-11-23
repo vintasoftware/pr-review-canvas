@@ -31,6 +31,8 @@ import { anchorKey, buildThreads } from './threads.js'
 
 /**
  * `headSha` and `mergeBaseSha` are the diff on screen, which the drafts drawn on it belong to.
+ * `unavailable` is what a file card says when the diff on screen has no patch for it; the local
+ * app's sentence when absent.
  * @typedef {{
  *   artifact: ReviewArtifact,
  *   files: ReadonlyArray<FileEntry>,
@@ -40,6 +42,7 @@ import { anchorKey, buildThreads } from './threads.js'
  *   comments: ReadonlyArray<ReviewComment>,
  *   state: PrState,
  *   now: Date,
+ *   unavailable?: string | undefined,
  * }} RenderContext
  */
 
@@ -631,8 +634,10 @@ export function hydrateFileCard(card, ctx, opts = {}) {
   const entry = ctx.files.find(f => f.key === key)
   const patch = ctx.patches?.[key]
   if (!entry || patch === undefined) {
-    host.innerHTML =
-      '<div class="unavailable">Diff not available locally. Fetch the PR head and reload.</div>'
+    const unavailable = document.createElement('div')
+    unavailable.className = 'unavailable'
+    unavailable.textContent = ctx.unavailable ?? 'Diff not available locally. Fetch the PR head and reload.'
+    host.replaceChildren(unavailable)
     return { rendered: false, deferred: false, placed: 0, missed: 0 }
   }
   const lines = patchLineCount(patch)
