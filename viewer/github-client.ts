@@ -153,9 +153,6 @@ export function createBrowserGithub(opts: BrowserGithubOptions = {}) {
   const withQuery = (path: string, params?: Record<string, string>) =>
     params === undefined ? path : `${path}?${new URLSearchParams(params).toString()}`
 
-  const readOnly = (what: string) => () =>
-    Promise.reject(new HostCliError('gh', what, 'the read-only viewer does not write to GitHub', 1))
-
   const client: BrowserGithub = {
     async api(path, params) {
       const { body } = await get(withQuery(path, params), 'application/vnd.github+json')
@@ -169,7 +166,25 @@ export function createBrowserGithub(opts: BrowserGithubOptions = {}) {
       })
       return { status: res?.status ?? 200, headers, body: JSON.parse(body) as unknown }
     },
-    post: readOnly('post'),
+    /**
+     * Writes as the signed-in reader. Everything kept so far is asked for again afterwards, so the
+     * page sees what it just posted.
+     */
+    async post(path, body, method = 'POST') {
+      const { headers, token } = await session('application/vnd.github+json')
+      if (token === null) {
+        throw new HostCliError('gh', path, 'HTTP 401: sign in with GitHub to post', 1)
+      }
+      const res = await doFetch(`${GITHUB_API}/${path.replace(/^\//, '')}`, {
+        method,
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const text = await res.text()
+      if (!res.ok) throw failed(path, res, text, token)
+      refreshedAt = now()
+      return text === '' ? null : (JSON.parse(text) as unknown)
+    },
     // GraphQL needs a token even for public data; anonymous callers degrade without it.
     async graphql(query, variables) {
       const { headers, token } = await session('application/json')

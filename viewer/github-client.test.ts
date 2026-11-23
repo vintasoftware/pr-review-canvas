@@ -61,7 +61,7 @@ it('names the anonymous rate limit when GitHub refuses for it, and a missing pul
   const gh = createBrowserGithub({ fetchImpl, storage: null })
   await expect(gh.api('rate')).rejects.toThrow(/anonymous rate limit of 60 requests an hour/)
   await expect(gh.api('missing')).rejects.toMatchObject({ notFound: true })
-  await expect(gh.post('x', {})).rejects.toThrow(/does not write to GitHub/)
+  await expect(gh.post('x', {})).rejects.toThrow(/sign in with GitHub to post/)
 })
 
 it.each([
@@ -131,4 +131,29 @@ it('asks GraphQL only when signed in, and reports its errors', async () => {
   expect(await gh.graphql('query { viewer { login } }', {})).toEqual({ viewer: { login: 'octocat' } })
   expect(requests[0]).toMatchObject({ url: 'https://api.github.com/graphql' })
   await expect(gh.graphql('query { repository }', {})).rejects.toThrow(/Could not resolve/)
+})
+
+it('posts as the signed-in reader, then asks GitHub again for what it kept', async () => {
+  let clock = 0
+  const { fetchImpl, requests } = scripted([
+    json([{ id: 1 }]),
+    () => new Response(JSON.stringify({ id: 2 }), { status: 201 }),
+    json([{ id: 1 }, { id: 2 }], { etag: '"v2"' }),
+  ])
+  const gh = createBrowserGithub({
+    fetchImpl,
+    storage: null,
+    now: () => clock,
+    token: () => Promise.resolve('ghu_1'),
+  })
+  await gh.api('repos/a/b/issues/1/comments')
+  clock = 1
+  expect(await gh.post('repos/a/b/issues/1/comments', { body: 'hi' })).toEqual({ id: 2 })
+  expect(requests[1]).toMatchObject({
+    url: 'https://api.github.com/repos/a/b/issues/1/comments',
+    headers: { authorization: 'Bearer ghu_1', 'content-type': 'application/json' },
+  })
+  clock = 2
+  expect(await gh.api('repos/a/b/issues/1/comments')).toEqual([{ id: 1 }, { id: 2 }])
+  expect(requests).toHaveLength(3)
 })

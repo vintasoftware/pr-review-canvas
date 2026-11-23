@@ -1,15 +1,28 @@
-// The local server's /api routes, answered in the browser for one public GitHub pull request. The
-// page's modules call fetch as they do against `pr-review serve`; this module answers the read
-// routes from GitHub's API and the canvas comment, keeps marks in the browser, and refuses
-// everything that needs the local app (posting, chat, generation, import).
+// The local server's /api routes, answered in the browser for one GitHub pull request. The page's
+// modules call fetch as they do against `pr-review serve`; this module answers the read routes from
+// GitHub's API and the canvas comment, keeps marks and the pending review in the browser, posts
+// comments and reviews as the signed-in reader, and refuses what needs the local app (chat,
+// generation, import).
+import type { z } from 'zod'
 import type {
   Capabilities,
   CarriedOverInfo,
   ErrorEnvelope,
   PrBundle,
+  ReviewBodyResponse,
   StaleInfo,
   StateResponse,
 } from '../src/contract/api.js'
+import { PostCommentInputSchema } from '../src/contract/comments.js'
+import { AddPendingInputSchema, EditPendingInputSchema } from '../src/contract/pending.js'
+import { PostReviewInputSchema } from '../src/contract/reviews.js'
+import { checkInlineTarget } from '../src/git/patch-lines.js'
+import { postComment } from '../src/github/post-comment.js'
+import { postReview } from '../src/github/post-review.js'
+import { postedFromPending } from '../src/review/posted-comments.js'
+import { buildReviewBody, unreviewedLayers } from '../src/review/review-body.js'
+import { authorSignOffReason } from '../src/review/self-review.js'
+import { draftDiff, sameDiff } from '../static/js/diff-identity.js'
 import type { CanvasManifest } from '../src/contract/canvas-manifest.js'
 import type { CommentsPayload } from '../src/contract/comments.js'
 import type { FileEntry, Pr, ReviewArtifact } from '../src/contract/review-artifact.js'
@@ -51,7 +64,7 @@ class ViewerError extends Error {
 const LOCAL_APP_HINT = 'install the CLI and run pr-review serve for this'
 
 const notInViewer = (what: string) =>
-  new ViewerError(501, 'NOT_IMPLEMENTED', `${what} is not available in the read-only viewer`, LOCAL_APP_HINT)
+  new ViewerError(501, 'NOT_IMPLEMENTED', `${what} is not available in the viewer`, LOCAL_APP_HINT)
 
 /** The canvas comment's envelope, as src/canvas/comment.ts writes it. */
 const CANVAS_ENVELOPE = /<!-- pr-review-canvas:v1\n([A-Za-z0-9._-]+\.zip)\n([A-Za-z0-9+/]+={0,2})\n-->/
@@ -69,15 +82,68 @@ function largePr(files: readonly FileEntry[]): boolean {
   return files.length > 400 || lines > 50_000
 }
 
-/** The viewer posts nothing yet, signed in or not; the login names who is reading. */
+const APP_WRITE_HINT =
+  'the GitHub App needs the Pull requests: read and write permission, and must be installed on this repository'
+
+/**
+ * Signed out, the reader cannot post. Signed in, a GitHub App token cannot say what it may do, so
+ * posting is offered and GitHub decides, as the local app does with a fine-grained token.
+ */
 function capabilitiesFor(login: string | null): Capabilities {
-  return {
-    canComment: false,
-    tokenKind: login === null ? 'none' : 'github-app',
-    login,
-    reason: 'the viewer reads pull requests and posts nothing to GitHub',
-    hint: LOCAL_APP_HINT,
+  if (login === null) {
+    return {
+      canComment: false,
+      tokenKind: 'none',
+      login,
+      reason: 'sign in with GitHub to post comments and reviews',
+      hint: 'use sign in with GitHub at the top of the page',
+    }
   }
+  return {
+    canComment: 'unknown',
+    tokenKind: 'github-app',
+    login,
+    reason: 'GitHub decides whether the app may post here',
+    hint: APP_WRITE_HINT,
+  }
+}
+
+/** A route's answer with a status other than 200, as a write's 201. */
+class Answer {
+  readonly status: number
+  readonly body: unknown
+
+  constructor(status: number, body: unknown) {
+    this.status = status
+    this.body = body
+  }
+}
+
+/** The page's JSON body, checked against the schema the server reads it with. */
+function parseBody<T>(schema: z.ZodType<T>, body: unknown, expected: string): T {
+  const parsed = schema.safeParse(body)
+  if (!parsed.success) {
+    throw new ViewerError(
+      400,
+      'BAD_REQUEST',
+      `send a JSON body: ${expected}`,
+      parsed.error.issues[0]?.message
+    )
+  }
+  return parsed.data
+}
+
+/** GitHub's refusal of a write, as the page's error envelope. */
+function writeError(err: unknown): ViewerError {
+  if (err instanceof ViewerError) return err
+  const message = err instanceof Error ? err.message : String(err)
+  if (/HTTP 401/.test(message)) {
+    return new ViewerError(401, 'GH_UNAUTHENTICATED', 'sign in with GitHub to post', 'sign in again')
+  }
+  if (/HTTP 40[34]/.test(message)) {
+    return new ViewerError(403, 'COMMENT_FORBIDDEN', `GitHub refused the post: ${message}`, APP_WRITE_HINT)
+  }
+  return new ViewerError(502, 'GITHUB_API_ERROR', message)
 }
 
 interface Diff {
@@ -242,12 +308,13 @@ export function createViewerApi(
   async function bundle(refresh: boolean): Promise<PrBundle> {
     const { pr, comments, canvas, warnings: loadWarnings } = await loaded(refresh)
     const warnings = [...loadWarnings]
+    const reader = await login()
     const common = {
       pr,
       comments,
-      capabilities: capabilitiesFor(await login()),
+      capabilities: capabilitiesFor(reader),
       selfReview: false,
-      authorSignOffReason: null,
+      authorSignOffReason: authorSignOffReason(reader, pr, 'pull request'),
       chat: { enabled: false, acpx: false },
       canvasComment: false,
       mentionCanvas: true,
@@ -272,11 +339,11 @@ export function createViewerApi(
     const artifact: ReviewArtifact = { ...canvas.artifact, source: 'import' }
     const info = { headSha: manifest.headSha, source: 'import' as const, manifest }
     const own = await diffOf(manifest.mergeBaseSha, manifest.headSha)
-    const sameDiff = manifest.headSha === pr.headSha && manifest.mergeBaseSha === pr.mergeBaseSha
+    const ofHead = manifest.headSha === pr.headSha && manifest.mergeBaseSha === pr.mergeBaseSha
     let status: PrBundle['status'] = 'ready'
     let carriedOver: CarriedOverInfo | undefined
     let stale: StaleInfo | undefined
-    if (!sameDiff) {
+    if (!ofHead) {
       const head = await diffOf(pr.mergeBaseSha, pr.headSha)
       if (head.text === own.text) {
         const relation = await staleRelation(pr, manifest)
@@ -319,6 +386,174 @@ export function createViewerApi(
 
   const stateBody = (s: PrState): StateResponse => ({ prNumber: target.number, state: s })
 
+  /** The pull request as loaded, refusing a write made from a page drawn on another diff. */
+  async function currentPr(page: { headSha?: string | undefined; mergeBaseSha?: string | undefined }) {
+    const { pr } = await loaded(false)
+    const moved = (seen: string | undefined, current: string) => seen !== undefined && seen !== current
+    if (moved(page.headSha, pr.headSha) || moved(page.mergeBaseSha, pr.mergeBaseSha)) {
+      throw new ViewerError(
+        409,
+        'CANVAS_STALE',
+        'the pull request has a new head commit or base since this page was drawn',
+        'reload the page and try again'
+      )
+    }
+    return pr
+  }
+
+  /** Refuses a line the diff on screen does not show. */
+  async function requireInlineTarget(pr: Pr, line: Parameters<typeof checkInlineTarget>[1]) {
+    const problem = checkInlineTarget((await diffOf(pr.mergeBaseSha, pr.headSha)).files, line)
+    if (problem !== null) {
+      throw new ViewerError(422, 'COMMENT_LINE_NOT_IN_DIFF', problem, 'comment on a line the diff shows')
+    }
+  }
+
+  async function requireLogin(): Promise<string> {
+    const who = await login()
+    if (who === null) {
+      throw new ViewerError(
+        401,
+        'GH_UNAUTHENTICATED',
+        'sign in with GitHub to post',
+        'use sign in with GitHub at the top of the page'
+      )
+    }
+    return who
+  }
+
+  /** The canvas a review signs off on, with the marks made on it: only one that describes the head. */
+  async function signOffCanvas(): Promise<{
+    artifact: ReviewArtifact
+    state: PrState
+    comments: CommentsPayload
+    pr: Pr
+  }> {
+    const shown = await bundle(false)
+    if (shown.status !== 'ready' || shown.artifact === undefined) {
+      throw new ViewerError(
+        409,
+        'SIGNOFF_INCOMPLETE',
+        'the canvas on screen was generated for another commit or another base',
+        'regenerate the canvas for the current head, then review its layers'
+      )
+    }
+    return { artifact: shown.artifact, state: shown.state, comments: shown.comments, pr: shown.pr }
+  }
+
+  async function postOnPr(body: unknown): Promise<Answer> {
+    const input = parseBody(PostCommentInputSchema, body, 'an inline, reply, or issue comment')
+    await requireLogin()
+    const pr = await currentPr(input)
+    if (input.kind === 'inline') await requireInlineTarget(pr, input)
+    let posted: Awaited<ReturnType<typeof postComment>>
+    try {
+      posted = await postComment(gh, pr.repo, target.number, pr.headSha, input)
+    } catch (err) {
+      throw writeError(err)
+    }
+    const entry = {
+      commentId: posted.comment.id,
+      ...(input.kind === 'inline' && input.pointFingerprint !== undefined
+        ? { pointFingerprint: input.pointFingerprint }
+        : {}),
+      ...(input.kind === 'inline' && input.proposalFingerprint !== undefined
+        ? { proposalFingerprint: input.proposalFingerprint }
+        : {}),
+    }
+    return new Answer(201, { ...posted, state: state.addPosted([entry]) })
+  }
+
+  async function reviewBody(): Promise<ReviewBodyResponse> {
+    const { artifact, state: marks, comments, pr } = await signOffCanvas()
+    return {
+      headSha: pr.headSha,
+      body: buildReviewBody({ artifact, state: marks, comments, headSha: pr.headSha, mentionCanvas: true }),
+      unreviewed: unreviewedLayers(artifact, marks).map(l => l.title),
+      pending: marks.pending.length,
+    }
+  }
+
+  async function submitReview(body: unknown): Promise<Answer> {
+    const input = parseBody(PostReviewInputSchema, body, '{ "event": "APPROVE" }')
+    const who = await requireLogin()
+    const pr = await currentPr(input)
+    const byAuthor = input.event === 'COMMENT' ? null : authorSignOffReason(who, pr, 'pull request')
+    if (byAuthor !== null) {
+      throw new ViewerError(
+        403,
+        'SIGNOFF_BY_AUTHOR',
+        byAuthor,
+        'ask another reviewer to sign off, or post a comment-only review'
+      )
+    }
+    const { artifact, state: marks, comments } = await signOffCanvas()
+    if (input.event === 'APPROVE') {
+      const missing = unreviewedLayers(artifact, marks)
+      if (missing.length > 0) {
+        throw new ViewerError(
+          409,
+          'SIGNOFF_INCOMPLETE',
+          `${missing.length} ${missing.length === 1 ? 'layer is' : 'layers are'} not reviewed yet`,
+          missing.map(l => l.title).join(', ')
+        )
+      }
+    }
+    const text =
+      input.body ??
+      buildReviewBody({ artifact, state: marks, comments, headSha: pr.headSha, mentionCanvas: true })
+    const pending = input.includePending ? state.read().pending : []
+    // The viewer keeps no older diffs to compare, so a draft goes out only on the diff it was written on.
+    if (pending.some(p => !sameDiff(draftDiff(p, pr), pr))) {
+      throw new ViewerError(
+        409,
+        'CANVAS_STALE',
+        'pending comments were written on a different diff',
+        'copy or delete the drafts written on an earlier diff in the pending review, then comment on the current code'
+      )
+    }
+    let posted: Awaited<ReturnType<typeof postReview>>
+    try {
+      posted = await postReview(gh, pr.repo, target.number, pr.headSha, {
+        event: input.event,
+        body: text,
+        comments: pending,
+      })
+    } catch (err) {
+      throw writeError(err)
+    }
+    const { comments: submittedComments, warnings, ...review } = posted
+    const next =
+      pending.length === 0
+        ? state.read()
+        : state.completePending(
+            pending.map(p => ({ ...p, reviewId: review.id })),
+            postedFromPending(pending, submittedComments)
+          )
+    return new Answer(201, {
+      review,
+      submitted: pending.length,
+      state: next,
+      comments: submittedComments,
+      warnings,
+    })
+  }
+
+  async function addPending(body: unknown): Promise<Answer> {
+    const input = parseBody(AddPendingInputSchema, body, 'a comment on a line of the diff')
+    const pr = await currentPr(input)
+    await requireInlineTarget(pr, input)
+    return new Answer(201, stateBody(state.addPending(input, pr)))
+  }
+
+  function editPending(id: string, body: unknown): StateResponse {
+    const { body: text } = parseBody(EditPendingInputSchema, body, '{ "body": "…" }')
+    if (!state.read().pending.some(p => p.id === id)) {
+      throw new ViewerError(404, 'NOT_FOUND', `no pending comment ${id}`, 'reload the page')
+    }
+    return stateBody(state.editPending(id, text))
+  }
+
   async function route(method: string, url: URL, body: unknown): Promise<unknown> {
     const parts = url.pathname.split('/').filter(Boolean)
     // ['api', 'prs', '<n>', ...rest] or ['api', '<name>']
@@ -355,13 +590,26 @@ export function createViewerApi(
     if (method === 'PUT' && rest[0] === 'threads' && rest[2] === 'hidden') {
       return stateBody(state.setThreadHidden(Number(rest[1]), input['hidden'] === true))
     }
-    throw notInViewer(rest[0] === 'chat' ? 'AI chat' : 'posting to GitHub')
+    if (method === 'POST' && sub === 'comments') return postOnPr(body)
+    if (method === 'POST' && sub === 'pending') return addPending(body)
+    if (method === 'DELETE' && sub === 'pending') return stateBody(state.clearPending())
+    if (rest[0] === 'pending' && rest.length === 2) {
+      const id = decodeURIComponent(rest[1]!)
+      if (method === 'PATCH') return editPending(id, body)
+      if (method === 'DELETE') return stateBody(state.removePending(id))
+    }
+    if (method === 'GET' && sub === 'review/body') return reviewBody()
+    if (method === 'POST' && sub === 'review') return submitReview(body)
+    throw notInViewer(rest[0] === 'chat' ? 'AI chat' : 'this')
   }
 
   /** One request, answered as the server would: JSON, or the error envelope. */
   async function handle(method: string, url: URL, body: unknown): Promise<ApiAnswer> {
     try {
-      return { status: 200, body: await route(method, url, body) }
+      const answer = await route(method, url, body)
+      return answer instanceof Answer
+        ? { status: answer.status, body: answer.body }
+        : { status: 200, body: answer }
     } catch (err) {
       if (err instanceof ViewerError) {
         const error: ErrorEnvelope['error'] = { code: err.code, message: err.message }

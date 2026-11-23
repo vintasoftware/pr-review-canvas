@@ -59,7 +59,10 @@ function fakeGithub(opts: {
   diffs?: Record<string, string>
   routes?: Record<string, unknown>
   signedIn?: boolean
+  /** What GitHub answers to each write, by path; an Error is thrown as GitHub's refusal. */
+  writes?: Record<string, unknown>
 }) {
+  const posts: Array<{ path: string; body: unknown }> = []
   const calls: string[] = []
   const routes: Record<string, unknown> = {
     'repos/acme/widgets/pulls/42': GH_PULL,
@@ -79,7 +82,14 @@ function fakeGithub(opts: {
       return Promise.resolve(params?.['page'] === '2' ? [] : body)
     },
     apiWithHeaders: () => Promise.reject(new Error('unused')),
-    post: () => Promise.reject(new Error('read-only')),
+    post(path, body) {
+      posts.push({ path, body })
+      const answer = opts.writes?.[path]
+      if (answer instanceof Error) return Promise.reject(answer)
+      return answer === undefined
+        ? Promise.reject(new Error(`HTTP 404: no write ${path}`))
+        : Promise.resolve(answer)
+    },
     graphql: () => Promise.reject(new Error('needs a token')),
     authStatus: () =>
       Promise.resolve({ installed: true, authenticated: opts.signedIn === true, detail: 'fake' }),
@@ -91,7 +101,7 @@ function fakeGithub(opts: {
     },
     refresh: () => calls.push('refresh'),
   }
-  return { gh, calls }
+  return { gh, calls, posts }
 }
 
 function viewer(opts: Parameters<typeof fakeGithub>[0] = {}) {
@@ -215,8 +225,6 @@ it('keeps review marks per canvas, and dismissals and hidden threads, in the bro
 it('refuses what needs the local app with the error envelope the page reads', async () => {
   const { call } = viewer()
   for (const [method, path] of [
-    ['POST', '/api/prs/42/comments'],
-    ['POST', '/api/prs/42/review'],
     ['POST', '/api/prs/42/chat'],
     ['POST', '/api/prs/42/import'],
     ['GET', '/api/settings'],
@@ -260,7 +268,11 @@ it('names the signed-in reader, and points a missing private pull request at the
     installUrl: 'https://github.com/apps/pr-review-canvas/installations/new',
   })
   const bundle = (await api.handle('GET', new URL('http://viewer.test/api/prs/42'), null)).body as PrBundle
-  expect(bundle.capabilities).toMatchObject({ login: 'octocat', tokenKind: 'github-app', canComment: false })
+  expect(bundle.capabilities).toMatchObject({
+    login: 'octocat',
+    tokenKind: 'github-app',
+    canComment: 'unknown',
+  })
 
   const other = createViewerApi(
     { ...target, number: 43 },
@@ -281,4 +293,162 @@ it('names the signed-in reader, and points a missing private pull request at the
       },
     },
   })
+})
+
+/** GitHub's answer to a review comment on src/app.ts, line 2 of the new side. */
+const GH_POSTED_INLINE = {
+  id: 5001,
+  user: { login: 'octocat' },
+  body: 'Why b?',
+  path: 'src/app.ts',
+  line: 2,
+  side: 'RIGHT',
+  commit_id: HEAD_SHA,
+  created_at: '2026-11-23T12:00:00Z',
+  updated_at: '2026-11-23T12:00:00Z',
+  html_url: 'https://github.com/acme/widgets/pull/42#discussion_r5001',
+  pull_request_review_id: 7001,
+}
+
+function signedInViewer(writes: Record<string, unknown> = {}, extra: Parameters<typeof fakeGithub>[0] = {}) {
+  return viewer({
+    comments: [canvasComment(manifest())],
+    signedIn: true,
+    ...extra,
+    routes: { user: { login: 'reviewer' }, ...extra.routes },
+    writes,
+  })
+}
+
+it('asks a signed-out reader to sign in before posting, and offers posting once they have', async () => {
+  const anonymous = viewer({ comments: [canvasComment(manifest())] })
+  expect(((await anonymous.call('GET', '/api/prs/42')).body as PrBundle).capabilities.canComment).toBe(false)
+  const refused = await anonymous.call('POST', '/api/prs/42/comments', { kind: 'issue', body: 'hi' })
+  expect(refused).toMatchObject({ status: 401, body: { error: { code: 'GH_UNAUTHENTICATED' } } })
+  expect(anonymous.posts).toEqual([])
+
+  const { call } = signedInViewer()
+  expect(((await call('GET', '/api/prs/42')).body as PrBundle).capabilities).toMatchObject({
+    canComment: 'unknown',
+    login: 'reviewer',
+  })
+})
+
+it('posts an inline comment on the head and records it against its attention point', async () => {
+  const { call, posts } = signedInViewer({ 'repos/acme/widgets/pulls/42/comments': GH_POSTED_INLINE })
+  const answer = await call('POST', '/api/prs/42/comments', {
+    kind: 'inline',
+    path: 'src/app.ts',
+    line: 2,
+    side: 'new',
+    body: 'Why b?',
+    pointFingerprint: 'fp-1',
+    headSha: HEAD_SHA,
+    mergeBaseSha: BASE_SHA,
+  })
+  expect(answer.status).toBe(201)
+  expect(posts).toEqual([
+    {
+      path: 'repos/acme/widgets/pulls/42/comments',
+      body: { body: 'Why b?', commit_id: HEAD_SHA, path: 'src/app.ts', line: 2, side: 'RIGHT' },
+    },
+  ])
+  const body = answer.body as { kind: string; comment: { id: number }; state: StateResponse['state'] }
+  expect(body.kind).toBe('review')
+  expect(body.comment.id).toBe(5001)
+  expect(body.state.posted).toEqual([{ commentId: 5001, pointFingerprint: 'fp-1', at: now().toISOString() }])
+})
+
+it('refuses a comment on a line the diff does not show, or from a page drawn on another head', async () => {
+  const { call, posts } = signedInViewer()
+  const offDiff = await call('POST', '/api/prs/42/comments', {
+    kind: 'inline',
+    path: 'src/app.ts',
+    line: 400,
+    side: 'new',
+    body: 'here?',
+  })
+  expect(offDiff).toMatchObject({ status: 422, body: { error: { code: 'COMMENT_LINE_NOT_IN_DIFF' } } })
+  const moved = await call('POST', '/api/prs/42/comments', { kind: 'issue', body: 'hi', headSha: OLD_HEAD })
+  expect(moved).toMatchObject({ status: 409, body: { error: { code: 'CANVAS_STALE' } } })
+  expect(posts).toEqual([])
+})
+
+it('names the app permission when GitHub refuses the post', async () => {
+  const { call } = signedInViewer({
+    'repos/acme/widgets/issues/42/comments': new Error('HTTP 403: Resource not accessible by integration'),
+  })
+  const answer = await call('POST', '/api/prs/42/comments', { kind: 'issue', body: 'hi' })
+  expect(answer).toMatchObject({
+    status: 403,
+    body: {
+      error: {
+        code: 'COMMENT_FORBIDDEN',
+        hint: expect.stringContaining('Pull requests: read and write'),
+      },
+    },
+  })
+})
+
+it('keeps the pending review in the browser and submits it with the review', async () => {
+  const { call, posts } = signedInViewer(
+    {
+      'repos/acme/widgets/pulls/42/reviews': {
+        id: 7001,
+        state: 'COMMENTED',
+        html_url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-7001',
+        submitted_at: '2026-11-23T12:00:00Z',
+      },
+    },
+    { routes: { 'repos/acme/widgets/pulls/42/reviews/7001/comments': [GH_POSTED_INLINE] } }
+  )
+  await call('GET', '/api/prs/42')
+  const draft = {
+    path: 'src/app.ts',
+    line: 2,
+    side: 'new',
+    body: 'Why b?',
+    headSha: HEAD_SHA,
+    mergeBaseSha: BASE_SHA,
+  }
+  const added = (await call('POST', '/api/prs/42/pending', draft)).body as StateResponse
+  expect(added.state.pending).toHaveLength(1)
+  const id = added.state.pending[0]!.id
+  await call('PATCH', `/api/prs/42/pending/${id}`, { body: 'Why b?' })
+  expect((await call('PATCH', '/api/prs/42/pending/nope', { body: 'x' })).status).toBe(404)
+
+  const summary = (await call('GET', '/api/prs/42/review/body')).body as {
+    pending: number
+    unreviewed: string[]
+  }
+  expect(summary.pending).toBe(1)
+  expect(summary.unreviewed.length).toBeGreaterThan(0)
+
+  const approve = await call('POST', '/api/prs/42/review', { event: 'APPROVE', headSha: HEAD_SHA })
+  expect(approve).toMatchObject({ status: 409, body: { error: { code: 'SIGNOFF_INCOMPLETE' } } })
+
+  const submitted = await call('POST', '/api/prs/42/review', { event: 'COMMENT', body: 'Looks fine.' })
+  expect(submitted.status).toBe(201)
+  expect(posts.at(-1)).toEqual({
+    path: 'repos/acme/widgets/pulls/42/reviews',
+    body: {
+      event: 'COMMENT',
+      body: 'Looks fine.',
+      commit_id: HEAD_SHA,
+      comments: [{ path: 'src/app.ts', body: 'Why b?', line: 2, side: 'RIGHT' }],
+    },
+  })
+  const { state, submitted: count } = submitted.body as { state: StateResponse['state']; submitted: number }
+  expect(count).toBe(1)
+  expect(state.pending).toEqual([])
+  expect(state.submitted).toMatchObject([{ id, reviewId: 7001 }])
+  expect(state.posted).toMatchObject([{ commentId: 5001 }])
+})
+
+it("refuses the author's own approval, and clears the pending review on request", async () => {
+  const { call } = signedInViewer({}, { routes: { user: { login: 'octocat' } } })
+  const own = await call('POST', '/api/prs/42/review', { event: 'APPROVE' })
+  expect(own).toMatchObject({ status: 403, body: { error: { code: 'SIGNOFF_BY_AUTHOR' } } })
+  await call('POST', '/api/prs/42/pending', { path: 'src/app.ts', line: 2, side: 'new', body: 'a' })
+  expect(((await call('DELETE', '/api/prs/42/pending')).body as StateResponse).state.pending).toEqual([])
 })

@@ -23,8 +23,15 @@ the page's `/api` calls, and `viewer-api.ts` answers them in the browser:
   (`src/git/diff-collector.ts`).
 - The canvas is the newest canvas comment on the pull request, read with `readCanvasZip` like an
   import. It shows as ready, carried over, or outdated by the same rules as the local app.
-- Review marks, dismissals, hidden threads, and the skin and theme stay in `localStorage`.
-- Posting, the pending review, AI chat, generation, and import answer `NOT_IMPLEMENTED`.
+- Review marks, dismissals, hidden threads, the pending review, and the skin and theme stay in
+  `localStorage`.
+- A signed-in reader posts comments (on a line, as a reply, or on the pull request) and submits
+  reviews with the server's own GitHub code (`src/github/post-comment.ts`,
+  `src/github/post-review.ts`). The same checks run first: the line must be in the diff, the page
+  must show the current head, an approval needs every layer reviewed, and the author cannot
+  approve their own pull request. A pending comment goes out only with a review on the diff it was
+  written on.
+- AI chat, generation, and import answer `NOT_IMPLEMENTED`.
 
 ## Sign in with GitHub
 
@@ -51,8 +58,10 @@ In GitHub, open Settings, then Developer settings, then GitHub Apps, then New Gi
   redirects only to these, and the host must match the one in the address bar (`127.0.0.1`, not
   `localhost`).
 - Leave "Expire user authorization tokens" on. Turn the webhook off.
-- Repository permissions: Contents read-only and Pull requests read-only. Metadata read-only is
-  added on its own. The viewer posts nothing yet, so it asks for no write access.
+- Repository permissions: Contents read-only, and Pull requests read and write, which posting
+  comments and reviews needs. Metadata read-only is added on its own. When you raise a permission
+  on an app that is already installed, each installation's owner has to accept the change before
+  it applies there.
 - Generate a client secret.
 
 Install the app on each account or organization whose private pull requests should open.
@@ -92,4 +101,4 @@ VITE_GITHUB_CLIENT_ID=<client id> VITE_AUTH_WORKER_URL=https://<worker host> VIT
 - Anonymous readers see resolved review threads as open: GitHub's GraphQL API, which reports
   them, needs a token.
 - Screens built for the local app still offer its commands, such as generating a canvas or
-  dropping a zip, and those fail with a "not available in the read-only viewer" message.
+  dropping a zip, and those fail with a "not available in the viewer" message.

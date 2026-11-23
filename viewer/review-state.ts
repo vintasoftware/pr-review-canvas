@@ -1,6 +1,15 @@
-// Review state in the reader's browser: the marks, dismissals and hidden threads the server keeps
-// in .pr-review/ for the local app. The rules mirror src/store/state-store.ts.
+// Review state in the reader's browser: the marks, dismissals, hidden threads, pending review and
+// posted comments the server keeps in .pr-review/ for the local app. The rules mirror
+// src/store/state-store.ts.
+import type { AddPendingInput, PendingComment } from '../src/contract/pending.js'
 import { emptyState, type PrState, PrStateSchema } from '../src/contract/state.js'
+
+/** A comment posted from the page, tied to the attention point or chat proposal it came from. */
+export interface PostedEntry {
+  commentId: number
+  pointFingerprint?: string
+  proposalFingerprint?: string
+}
 
 /** The canvas a mark is made on: its commit and the merge base its diff runs from. */
 export interface MarkedCanvas {
@@ -15,6 +24,14 @@ export interface ViewerStateStore {
   setReviewed(id: string, reviewed: boolean, canvas: MarkedCanvas): PrState
   setDismissed(fingerprint: string, dismissed: boolean, reason?: string): PrState
   setThreadHidden(rootCommentId: number, hidden: boolean): PrState
+  addPosted(entries: readonly PostedEntry[]): PrState
+  /** Keeps a draft of the pending review, written on the diff `diff`. */
+  addPending(input: AddPendingInput, diff: MarkedCanvas): PrState
+  editPending(id: string, body: string): PrState
+  removePending(id: string): PrState
+  clearPending(): PrState
+  /** Moves the drafts a review carried out of the pending review, and records what they became. */
+  completePending(submitted: readonly PendingComment[], posted: readonly PostedEntry[]): PrState
 }
 
 function localStore(): Storage | null {
@@ -40,6 +57,7 @@ export function createViewerState(
   const now = opts.now ?? (() => new Date())
   const storageKey = `pr-review-viewer:state:${key}`
   let memory: PrState | null = null
+  let pendingSeq = 0
 
   const read = (): PrState => {
     if (memory !== null) return memory
@@ -111,6 +129,57 @@ export function createViewerState(
         if (hidden) next[String(rootCommentId)] = { at: now().toISOString() }
         else delete next[String(rootCommentId)]
         return { ...state, hiddenThreads: next }
+      }),
+    addPosted: entries =>
+      update(state => {
+        const known = new Set(state.posted.map(p => p.commentId))
+        const added = entries.filter(entry => !known.has(entry.commentId))
+        if (added.length === 0) return state
+        const at = now().toISOString()
+        return { ...state, posted: [...state.posted, ...added.map(entry => ({ ...entry, at }))] }
+      }),
+    addPending: (input, diff) => {
+      pendingSeq += 1
+      const at = now().toISOString()
+      const draft: PendingComment = {
+        id: `p${now().getTime().toString(36)}-${pendingSeq.toString(36)}`,
+        path: input.path,
+        line: input.line,
+        side: input.side,
+        ...(input.startLine === undefined ? {} : { startLine: input.startLine }),
+        body: input.body,
+        ...(input.pointFingerprint === undefined ? {} : { pointFingerprint: input.pointFingerprint }),
+        ...(input.proposalFingerprint === undefined
+          ? {}
+          : { proposalFingerprint: input.proposalFingerprint }),
+        headSha: diff.headSha,
+        mergeBaseSha: diff.mergeBaseSha,
+        createdAt: at,
+        updatedAt: at,
+      }
+      return update(state => ({ ...state, pending: [...state.pending, draft] }))
+    },
+    editPending: (id, body) =>
+      update(state => ({
+        ...state,
+        pending: state.pending.map(p => (p.id === id ? { ...p, body, updatedAt: now().toISOString() } : p)),
+      })),
+    removePending: id => update(state => ({ ...state, pending: state.pending.filter(p => p.id !== id) })),
+    clearPending: () => update(state => ({ ...state, pending: [] })),
+    completePending: (submitted, posted) =>
+      update(state => {
+        const at = now().toISOString()
+        return {
+          ...state,
+          pending: state.pending.filter(p => !submitted.some(s => s.id === p.id && s.body === p.body)),
+          submitted: [...state.submitted, ...submitted],
+          posted: [
+            ...state.posted,
+            ...posted
+              .filter(p => !state.posted.some(s => s.commentId === p.commentId))
+              .map(p => ({ ...p, at })),
+          ],
+        }
       }),
   }
 }
