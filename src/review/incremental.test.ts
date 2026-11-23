@@ -386,4 +386,13 @@ describe('findResolutionSource', () => {
     expect(await findResolutionSource(canvases, git, undefined, HEAD_SHA)).toBe(HEAD_SHA)
     expect(await findResolutionSource(store({}), git, 42, HEAD_SHA)).toBeNull()
   })
+
+  it('leaves out the head’s canvas when it was imported for another pull request', async () => {
+    const imported = { ...at('2026-09-09T00:00:00Z'), source: 'import' as const, prNumber: 7 }
+    const canvases = store({ [HEAD_SHA]: imported })
+    expect(await findResolutionSource(canvases, git, 7, HEAD_SHA)).toBe(HEAD_SHA)
+    expect(await findResolutionSource(canvases, git, 42, HEAD_SHA)).toBeNull()
+    expect(await findResolutionSource(canvases, git, 'branch', HEAD_SHA)).toBeNull()
+    expect(await findResolutionSource(canvases, git, undefined, HEAD_SHA)).toBeNull()
+  })
 })

@@ -29,6 +29,10 @@
   repository: an owner, member, or collaborator on GitHub, a project member on GitLab. A canvas
   comment or ZIP link from anyone else is skipped, with a warning naming the commenter, so a
   stranger's comment on a public PR can no longer stand in for the author's canvas.
+- A canvas imported for one pull request is shown on that pull request only. Before, a pull
+  request opened with another one's head commit could carry a canvas for that commit, and both
+  pages showed it. The other pull request now shows no canvas for the commit until its own is
+  imported or generated, and neither its resolutions nor its next generated canvas read the foreign one.
 
 ## 0.11.1
 

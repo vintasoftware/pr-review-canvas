@@ -59,6 +59,16 @@ export function canvasBelongsTo(entry: CanvasEntry, key: ReviewKey, worktree: st
   return entry.worktree !== true && (entry.prNumber === undefined || entry.prNumber === key)
 }
 
+/**
+ * True for a canvas imported for another pull request than the one asking, given whether the asker
+ * owns it. Whoever shared it was taken at their word for that pull request alone, so no other target
+ * reads it, at its own head commit either. A canvas generated on this machine describes its commit
+ * whoever it was generated for.
+ */
+export function importedForAnother(entry: CanvasEntry, owned: boolean): boolean {
+  return entry.source === 'import' && !owned
+}
+
 export interface CanvasStore {
   readonly root: string
   /** `canvasBelongsTo` for this store's checkout. */
@@ -78,8 +88,9 @@ export interface CanvasStore {
     flags?: { worktree?: boolean }
   ): Promise<void>
   /**
-   * The best canvas for this PR: the one written for its current head, else the newest one the
-   * head was built on top of, else one from a branch the head no longer contains.
+   * The best canvas for this PR: the one written for its current head, unless it was imported for
+   * another pull request, else the newest one the head was built on top of, else one from a branch
+   * the head no longer contains.
    */
   findForPr(prNumber: number, currentHeadSha: string): Promise<CanvasLookup>
   /**
@@ -138,7 +149,8 @@ export function createCanvasStore(repoRoot: string, git: Git, worktree: string |
     accept: (entry: CanvasEntry) => boolean
   ): Promise<CanvasLookup> => {
     const index = await readIndex()
-    if (index.canvases[currentHeadSha] !== undefined) {
+    const own = index.canvases[currentHeadSha]
+    if (own !== undefined && !importedForAnother(own, accept(own))) {
       return { status: 'ready', headSha: currentHeadSha }
     }
     const candidates = Object.entries(index.canvases).filter(

@@ -868,6 +868,12 @@ commenter. Anyone can comment on a public PR, so a canvas from anyone else, whet
 comment or a ZIP link, is skipped, and the page warns with the commenter's name. When GitLab's
 membership check fails, that commenter's canvases are skipped with a warning too.
 
+A canvas imported for one pull request is shown on that pull request only. Two pull requests can
+have the same head commit, and the author of one is not trusted to explain the other, so the other
+shows no canvas for that commit until it gets its own, which replaces the stored one. The same holds
+for a branch review at that commit. A canvas generated on this machine still shows wherever its
+commit is the head.
+
 An attachment exported for a different pull request is reported rather than imported, and is not
 downloaded at all when its filename already names the other PR. The page says so and offers the
 drop zone, which applies the same check: a ZIP whose name or manifest belongs to another PR is

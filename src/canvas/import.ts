@@ -5,6 +5,7 @@ import { canvasRevision } from '../contract/canvas-manifest.js'
 import { type DiffedCommit, staleRelation, standsForHead } from '../review/carry-over.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
+import { importedForAnother } from '../store/canvas-store.js'
 import { type CanvasZipContents, CanvasZipError, readCanvasZip } from './zip.js'
 
 export interface ImportOptions {
@@ -68,7 +69,8 @@ function errorText(err: unknown): string {
 
 /**
  * Validates the zip, stores it under its head sha, and says how it relates to the PR head. A
- * canvas already on disk is kept unless the incoming one was generated or revised later.
+ * canvas already on disk is kept unless the incoming one was generated or revised later, or the
+ * one on disk was imported for another pull request.
  */
 export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promise<ImportResult> {
   let contents: CanvasZipContents
@@ -110,8 +112,13 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   const index = await ctx.canvases.readIndex()
   const stored = index.canvases[headSha]
   // The author revises a shared canvas by settling points, which keeps its generation time, so a
-  // copy is newer when it was generated or revised later.
-  const keepStored = stored !== undefined && canvasRevision(stored) >= canvasRevision(artifact)
+  // copy is newer when it was generated or revised later. A copy imported for another pull request
+  // is replaced however new it claims to be: kept, it would be handed to this one under its number.
+  const keepStored =
+    stored !== undefined &&
+    canvasRevision(stored) >= canvasRevision(artifact) &&
+    (opts.prNumber === undefined ||
+      !importedForAnother(stored, ctx.canvases.belongsTo(stored, opts.prNumber)))
   if (!keepStored) {
     const importedAt = ctx.now().toISOString()
     await ctx.canvases.write(headSha, { ...artifact, source: 'import', importedAt }, manifest, opts.prNumber)

@@ -22,7 +22,7 @@ import type { GenerationModels } from '../project-config.js'
 import type { AppContext } from '../server/context.js'
 import { readText, writeJsonAtomic, writeTextAtomic } from '../store/atomic-json.js'
 import type { Derived } from '../store/derived-store.js'
-import { fileDelta, findBasisCanvas, findResolutionSource, splitBasis } from './incremental.js'
+import { fileDelta, findBasisCanvas, findResolutionSource, reviewKeyOf, splitBasis } from './incremental.js'
 import { carriedPointLines } from './point-carry.js'
 import { loadPromptSources, type PromptSources, renderPrompt } from './prompt.js'
 import { isAuthor } from '../../static/js/host.js'
@@ -211,8 +211,7 @@ async function resolveResolutions(
   target: PrepareTarget,
   headSha: string
 ): Promise<Resolutions | null> {
-  const key = target.kind === 'pr' ? target.number : target.kind === 'local' ? target.source : undefined
-  const sha = await findResolutionSource(ctx.canvases, ctx.git, key, headSha)
+  const sha = await findResolutionSource(ctx.canvases, ctx.git, reviewKeyOf(target), headSha)
   const artifact = sha === null ? null : await ctx.canvases.readArtifact(sha).catch(() => null)
   if (sha === null || artifact === null) {
     return null

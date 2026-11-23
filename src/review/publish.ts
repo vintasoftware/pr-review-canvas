@@ -13,6 +13,7 @@ import { fetchPrRefs } from '../git/pr-refs.js'
 import type { AppContext } from '../server/context.js'
 import { readJson, readText } from '../store/atomic-json.js'
 import { standsForHead } from './carry-over.js'
+import { findResolutionSource, reviewKeyOf } from './incremental.js'
 import { normalize } from './normalize.js'
 import { keptReopens, keptSettlements } from './self-review.js'
 import { coveredTestPaths, type ValidationInput, validateModelOutput } from './validate.js'
@@ -203,17 +204,19 @@ export function buildManifest(
 /**
  * What the author did on the canvas that still applies to this one: the settlements and reopened
  * decisions of the canvas `prepare` took the resolutions from, read again now, under the points this
- * canvas still has. A context written before that canvas was recorded reads the basis canvas, or
- * the one this run replaces.
+ * canvas still has. When `prepare` found none, the same rule is asked again: publishing the commit
+ * a second time from one context finds the canvas the first publish stored.
  */
 async function answersToKeep(
   ctx: AppContext,
   context: GenerationContext,
   artifact: ReviewArtifact
 ): Promise<{ settled: Record<string, Settlement>; reopened: Record<string, ReopenedDecision> }> {
-  const sha = context.resolutions?.canvasSha ?? context.basis?.canvasSha ?? context.headSha
+  const sha =
+    context.resolutions?.canvasSha ??
+    (await findResolutionSource(ctx.canvases, ctx.git, reviewKeyOf(context.target), context.headSha))
   // A canvas in a format this version no longer reads has no settlement it could keep.
-  const source = await ctx.canvases.readArtifact(sha).catch(() => null)
+  const source = sha === null ? null : await ctx.canvases.readArtifact(sha).catch(() => null)
   return { settled: keptSettlements(artifact, source), reopened: keptReopens(artifact, source) }
 }
 

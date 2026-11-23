@@ -47,6 +47,16 @@ describe('CanvasStore.findForPr', () => {
     expect(await s.findForPr(42, HEAD)).toEqual({ status: 'ready', headSha: HEAD })
   })
 
+  it('takes the head’s canvas generated here for another PR, and not one imported for it', async () => {
+    const s = await store({})
+    await put(s, HEAD, '2026-09-10T11:00:00.000Z', 7)
+    expect(await s.findForPr(42, HEAD)).toEqual({ status: 'ready', headSha: HEAD })
+    await s.write(HEAD, { ...syntheticArtifact(), source: 'import' }, manifest(HEAD, 7), 7)
+    expect(await s.findForPr(42, HEAD)).toEqual({ status: 'missing' })
+    expect(await s.findForLocal('branch', HEAD)).toEqual({ status: 'missing' })
+    expect(await s.findForPr(7, HEAD)).toEqual({ status: 'ready', headSha: HEAD })
+  })
+
   it('reports missing when nothing is stored for the PR', async () => {
     const s = await store({})
     await put(s, OLD, '2026-09-10T11:00:00.000Z', 7)

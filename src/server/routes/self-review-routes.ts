@@ -7,6 +7,7 @@ import type { Pr, Settlement } from '../../contract/review-artifact.js'
 import { isLocalKey, type ReviewKey } from '../../contract/review-key.js'
 import { shareCanvasOnPr } from '../../canvas/share.js'
 import { lookupCanvas } from '../../review/carry-over.js'
+import { importedForAnother } from '../../store/canvas-store.js'
 import { isAuthor } from '../../../static/js/host.js'
 import { settlementCommentBody, withSettlement } from '../../review/self-review.js'
 import { type PrLoader, runDiscovery } from '../bundle.js'
@@ -125,7 +126,11 @@ export function selfReviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     if (ctx.fixtureArtifact === null) {
       await runDiscovery(ctx, await loader.currentPr(number), comments, { refresh: false })
     }
-    const artifact = ctx.fixtureArtifact ?? (await ctx.canvases.readArtifact(canvasSha))
+    // The commit's canvas may since have been replaced by one imported for another pull request,
+    // whose resolutions are not this one's.
+    const entry = (await ctx.canvases.readIndex()).canvases[canvasSha]
+    const readable = entry !== undefined && !importedForAnother(entry, ctx.canvases.belongsTo(entry, number))
+    const artifact = ctx.fixtureArtifact ?? (readable ? await ctx.canvases.readArtifact(canvasSha) : null)
     if (artifact === null) {
       throw new AppError('NOT_FOUND', `no canvas for ${canvasSha.slice(0, 7)}`, 404, 'reload the page')
     }
