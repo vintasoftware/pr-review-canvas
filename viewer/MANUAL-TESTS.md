@@ -100,13 +100,26 @@ Check each one on GitHub after posting.
    banner names the files GitHub sent no changes for, each of those files says GitHub sent no diff
    for it because it is too large, and over 3000 files the banner says how many are not shown.
 
+## The built page and its headers
+
+Run `pnpm viewer:build` and `pnpm viewer:preview` (with the dev server stopped), then open
+http://127.0.0.1:4174.
+
+1. Open a pull request with a canvas, sign in, and post a comment. Everything works as under
+   `pnpm viewer:dev`, and the console shows no Content-Security-Policy errors.
+2. Open a canvas with a mermaid diagram. It draws.
+3. The footer reads `pr-review <version>+<commit>`, with the commit the build was made from.
+4. In devtools, the page's response carries `Content-Security-Policy`, `Referrer-Policy:
+no-referrer`, and the other headers in `viewer/headers.ts`.
+5. After a deploy, repeat 1 to 4 on the hosted site, where `Strict-Transport-Security` is sent too.
+
 ## Not covered yet
 
 - A pull request large enough for GitHub to refuse its diff (see "Large pull requests"); the
   rebuild is covered by unit tests and was checked against TypeScript#65291's real file list.
 - A pull request from a fork.
 - A pull request with more than 100 comments.
-- The hosted build behind Cloudflare, with its CSP header.
+- The hosted site on Cloudflare: nothing is deployed yet.
 
 ## Runs
 

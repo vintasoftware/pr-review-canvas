@@ -7,4 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_AUTH_WORKER_URL?: string
   /** The GitHub App's slug, to link its install page when a private repository is not found. */
   readonly VITE_GITHUB_APP_SLUG?: string
+  /** The short commit the build was made from, set by viewer/vite.config.js. */
+  readonly VITE_VIEWER_COMMIT?: string
 }

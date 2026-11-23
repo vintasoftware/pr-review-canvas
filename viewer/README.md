@@ -83,23 +83,56 @@ app's slug. `pnpm viewer:dev` then runs the Worker inside the dev server at
 `/__auth`. The secret stays in the dev server's process: only names that start with `VITE_` reach
 the page.
 
+### Run the built page locally
+
+`pnpm viewer:build` then `pnpm viewer:preview` serves the production build at
+http://127.0.0.1:4174 with the same response headers Cloudflare Pages sends, including the
+Content-Security-Policy. The preview server runs the Worker at `/__auth` too, so sign-in works there
+the same way it does under `pnpm viewer:dev`. Stop the dev server first: both use port 4174.
+
+## Hosting
+
+The viewer is static files on Cloudflare Pages, and the auth Worker runs on Cloudflare Workers.
+The build writes `dist-viewer/_headers` (see `headers.ts`), which Pages sends with every page:
+
+- `Content-Security-Policy`: script only from the page's own origin, no inline script, network
+  requests only to `api.github.com` and the auth Worker, images only from GitHub, and no framing.
+  Inline styles are allowed, as the local app allows them, for computed widths and colors and the
+  style element mermaid draws with each diagram.
+- `Referrer-Policy: no-referrer`, since the address holds a pull request's name, and GitHub's
+  sign-in code on the way back from GitHub.
+- `X-Content-Type-Options`, `X-Frame-Options`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`,
+  and `Strict-Transport-Security`.
+
+The footer names the build as `<version>+<commit>`, so the code running can be matched to a commit.
+
 ### Deploy
 
-Set `GITHUB_CLIENT_ID` and `ALLOWED_ORIGINS` in [`worker/wrangler.toml`](../worker/wrangler.toml),
-then:
+`.github/workflows/viewer.yml` tests and builds the viewer on every pull request and push to main
+that touches it, and deploys only from a `viewer-v*` tag on a commit of main, through the
+`viewer-production` GitHub environment. Nobody deploys from a laptop.
+
+One-time setup:
+
+1. In Cloudflare, create a Pages project for the viewer, and an API token that can edit that
+   project and Workers on the account, and nothing else.
+2. Set the Worker's client secret once:
+
+   ```bash
+   npx wrangler@4.158.0 secret put GITHUB_CLIENT_SECRET --config worker/wrangler.toml
+   ```
+
+3. In the repository's settings, add the `viewer-production` environment, limited to `viewer-v*`
+   tags, with the secret `CLOUDFLARE_API_TOKEN`. Add the repository variables
+   `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_PAGES_PROJECT`, `VIEWER_ORIGIN` (the Pages site, as
+   `https://viewer.example.com`), `VIEWER_AUTH_WORKER_URL`, `VIEWER_GITHUB_CLIENT_ID`, and
+   `VIEWER_GITHUB_APP_SLUG`.
+4. Add `VIEWER_ORIGIN` followed by `/` to the GitHub App's callback URLs.
+
+Then a release is a tag:
 
 ```bash
-npx wrangler secret put GITHUB_CLIENT_SECRET --config worker/wrangler.toml
-```
-
-```bash
-npx wrangler deploy --config worker/wrangler.toml
-```
-
-Build the viewer with the app and the Worker named:
-
-```bash
-VITE_GITHUB_CLIENT_ID=<client id> VITE_AUTH_WORKER_URL=https://<worker host> VITE_GITHUB_APP_SLUG=<slug> pnpm viewer:build
+git tag viewer-v0.1.0 && git push origin viewer-v0.1.0
 ```
 
 ## Limits

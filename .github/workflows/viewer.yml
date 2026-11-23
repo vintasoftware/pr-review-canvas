@@ -1,0 +1,114 @@
+name: Static viewer
+
+# Builds and tests the static viewer and its auth Worker on every change to them. Deploys only
+# from a `viewer-v*` tag on a commit of main, through the `viewer-production` environment, so
+# the code people run always matches a tagged commit (docs/adr/0005-static-read-only-viewer.md).
+#
+# Repository variables: VIEWER_GITHUB_CLIENT_ID, VIEWER_GITHUB_APP_SLUG, VIEWER_AUTH_WORKER_URL,
+# VIEWER_ORIGIN, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_PAGES_PROJECT.
+# Environment secret of viewer-production: CLOUDFLARE_API_TOKEN, scoped to Pages and Workers
+# of that account. The Worker's GITHUB_CLIENT_SECRET is set once with `wrangler secret put`.
+
+on:
+  push:
+    branches: [main]
+    tags: ['viewer-v*']
+    paths:
+      - 'viewer/**'
+      - 'worker/**'
+      - 'static/**'
+      - 'src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/viewer.yml'
+  pull_request:
+    paths:
+      - 'viewer/**'
+      - 'worker/**'
+      - 'static/**'
+      - 'src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/viewer.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: viewer-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+env:
+  WRANGLER: wrangler@4.158.0
+
+jobs:
+  build:
+    name: Build and test the viewer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node_modules/.bin/vitest run viewer worker
+      - name: Build
+        run: pnpm viewer:build
+        env:
+          VITE_GITHUB_CLIENT_ID: ${{ vars.VIEWER_GITHUB_CLIENT_ID }}
+          VITE_GITHUB_APP_SLUG: ${{ vars.VIEWER_GITHUB_APP_SLUG }}
+          VITE_AUTH_WORKER_URL: ${{ vars.VIEWER_AUTH_WORKER_URL }}
+      - name: Check the build carries its headers and no secret
+        run: |
+          grep -q "Content-Security-Policy: default-src 'none'" dist-viewer/_headers
+          ! grep -rq GITHUB_CLIENT_SECRET dist-viewer
+      - uses: actions/upload-artifact@v6
+        with:
+          name: dist-viewer
+          path: dist-viewer
+          retention-days: 7
+
+  deploy:
+    name: Deploy the viewer and its Worker
+    if: startsWith(github.ref, 'refs/tags/viewer-v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: viewer-production
+      url: ${{ vars.VIEWER_ORIGIN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Refuse a tag that is not on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/download-artifact@v6
+        with:
+          name: dist-viewer
+          path: dist-viewer
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Deploy the viewer to Cloudflare Pages
+        run: >-
+          npx --yes "$WRANGLER" pages deploy dist-viewer
+          --project-name "$PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      - name: Deploy the auth Worker
+        run: >-
+          npx --yes "$WRANGLER" deploy --config worker/wrangler.toml
+          --var "GITHUB_CLIENT_ID:$CLIENT_ID" --var "ALLOWED_ORIGINS:$VIEWER_ORIGIN"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLIENT_ID: ${{ vars.VIEWER_GITHUB_CLIENT_ID }}
+          VIEWER_ORIGIN: ${{ vars.VIEWER_ORIGIN }}
