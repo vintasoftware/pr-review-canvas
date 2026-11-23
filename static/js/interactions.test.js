@@ -616,7 +616,7 @@ describe('reviewed state', () => {
     expect(body?.hasAttribute('hidden')).toBe(false)
   })
 
-  it('opens the next layer when it takes the focus after a layer is marked reviewed', async () => {
+  it('opens the next layer after a layer is marked reviewed', async () => {
     setStartCollapsed(true)
     const { root } = setup({ artifact: withSecondLayer() })
     expect(root.querySelector('#layer-second > .layer-body')?.hasAttribute('hidden')).toBe(true)
