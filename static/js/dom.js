@@ -110,9 +110,13 @@ export function flash(el, ms = 2000) {
  * would hide its heading above the fold.
  * @param {Element} el
  * @param {ScrollLogicalPosition} [block]
+ * @param {{ openTarget?: boolean }} [opts] `openTarget: false` opens what is around a card but
+ *   leaves the card itself as the page drew it, open or closed
  */
-export function scrollIntoViewSafe(el, block = 'center') {
-  el.dispatchEvent(new Event('reveal-code', { bubbles: true }))
+export function scrollIntoViewSafe(el, block = 'center', opts = {}) {
+  el.dispatchEvent(
+    new CustomEvent('reveal-code', { bubbles: true, detail: { openTarget: opts.openTarget !== false } })
+  )
   if (typeof el.scrollIntoView === 'function') {
     el.scrollIntoView({ block })
   }

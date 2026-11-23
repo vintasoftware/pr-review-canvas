@@ -442,8 +442,9 @@ export function wireReview(root, session, opts = {}) {
    * @param {Element | null} el
    * @param {ScrollLogicalPosition | null} [block] `start` for a card, `center` for a point, and
    *   null for what a stop of the one-point view shows, which the stop already put on screen
+   * @param {{ openTarget?: boolean }} [reveal] `openTarget: false` leaves a closed card closed
    */
-  const focusItem = (el, block = 'start') => {
+  const focusItem = (el, block = 'start', reveal = {}) => {
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
       marked.classList.remove('is-focused')
     }
@@ -454,9 +455,9 @@ export function wireReview(root, session, opts = {}) {
       // The page's scroll padding already clears the outdated bar; this is the gap under it.
       el.style.scrollMarginTop = `${FOCUS_GAP}px`
       if (block !== null) {
-        // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around
-        // the element: a hidden element cannot take the focus.
-        scrollIntoViewSafe(el, block)
+        // Scrolls first, which opens closed details or a hidden layer around the element, and the
+        // card itself unless `reveal` keeps it closed: a hidden element cannot take the focus.
+        scrollIntoViewSafe(el, block, reveal)
         // A card this scroll brought on screen draws its diff and grows, which would push the
         // element away again: the cards draw now and the scroll repeats until none is left.
         for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
@@ -753,7 +754,9 @@ export function wireReview(root, session, opts = {}) {
         if (reviewed) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
           if (next instanceof HTMLElement) {
-            focusItem(next)
+            // The next file keeps the fold the reading level or Start collapsed gave it; the next
+            // layer opens, as the reader moves on to read it.
+            focusItem(next, 'start', { openTarget: kind === 'layer' })
           }
         }
       }
