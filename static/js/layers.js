@@ -925,6 +925,29 @@ export function hydrateAll(root, ctx) {
 }
 
 /**
+ * True when a level hides a file whole. A file with points or comments stays open at every level.
+ * @param {LayerFile} lf
+ * @param {string} layerId
+ * @param {RenderContext} ctx
+ * @param {import('./contract-types.js').FoldLevel} level
+ * @param {ReadonlySet<string>} commentPaths
+ */
+function levelHides(lf, layerId, ctx, level, commentPaths) {
+  return collapsesAt(lf, level) && !cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths)
+}
+
+/**
+ * True for a file card that the page's reading level hides whole.
+ * @param {Element} card
+ */
+export function hiddenByLevel(card) {
+  const ctx = renderContext
+  const layerId = card.getAttribute('data-layer') ?? ''
+  const lf = ctx === null ? undefined : layerFileOf(ctx, layerId, card.getAttribute('data-path') ?? '')
+  return ctx !== null && lf !== undefined && levelHides(lf, layerId, ctx, foldLevel, commentPathsOf(ctx))
+}
+
+/**
  * Switches how much code the page hides. A card the reader opened or closed by hand follows the
  * new level too: changing the level is a request to change exactly that. With startCollapsed the
  * reader opens what they read, so the level only closes the cards it hides whole and opens none.
@@ -946,9 +969,7 @@ export function setFoldLevel(root, level) {
         ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
         : undefined
     if (card instanceof HTMLElement && lf !== undefined) {
-      const hidden =
-        collapsesAt(lf, level) &&
-        !cardKeepsOpen(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths)
+      const hidden = levelHides(lf, card.getAttribute('data-layer') ?? '', ctx, level, commentPaths)
       if (hidden || !startCollapsed) {
         setCardCollapsed(card, hidden || card.classList.contains('is-reviewed'))
       }

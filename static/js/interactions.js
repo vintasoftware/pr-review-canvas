@@ -44,6 +44,7 @@ import {
   getFoldLevel,
   getRenderContext,
   getStartCollapsed,
+  hiddenByLevel,
   pathSet,
   refreshCardDecorations,
   refreshFolds,
@@ -754,8 +755,8 @@ export function wireReview(root, session, opts = {}) {
         if (reviewed) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
           if (next instanceof HTMLElement) {
-            // The next file stays open or closed. The next layer opens.
-            focusItem(next, 'start', { openTarget: kind === 'layer' })
+            // The next card opens, but not a file that the reading level hides whole.
+            focusItem(next, 'start', { openTarget: !hiddenByLevel(next) })
           }
         }
       }
