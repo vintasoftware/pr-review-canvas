@@ -168,7 +168,7 @@ async function authorCanvas(t: Parameters<NonNullable<ChatServerOptions['setup']
   t.ctx.fixtureArtifact = null
   t.ctx.projectConfig = {
     ...t.ctx.projectConfig,
-    config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false } },
+    config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false, viewerLink: false } },
   }
   const artifact = syntheticArtifact()
   await t.ctx.canvases.write(

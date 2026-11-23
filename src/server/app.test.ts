@@ -674,7 +674,10 @@ describe('createApp', () => {
         git: gitFor42(),
         gh: ghFor42(),
         projectConfig: {
-          config: { ...DEFAULT_PROJECT_CONFIG, sharing: { canvasComment: true, mentionCanvas: false } },
+          config: {
+            ...DEFAULT_PROJECT_CONFIG,
+            sharing: { canvasComment: true, mentionCanvas: false, viewerLink: false },
+          },
           warnings: [],
           source: null,
         },

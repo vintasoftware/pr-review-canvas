@@ -100,6 +100,14 @@ Check each one on GitHub after posting.
    banner names the files GitHub sent no changes for, each of those files says GitHub sent no diff
    for it because it is too large, and over 3000 files the banner says how many are not shown.
 
+## The canvas comment's link
+
+1. In the test repository's `pr-review.config.yml`, set `sharing.viewerLink:
+http://127.0.0.1:4174`, and publish a canvas. The canvas comment on the pull request opens
+   with "Open the canvas in the viewer", which opens that pull request in the viewer.
+2. Remove the setting and publish again. The comment says only to run `pr-review serve`.
+3. Set `viewerLink: true`. The CLI warns that the config is invalid and uses the defaults.
+
 ## The built page and its headers
 
 Run `pnpm viewer:build` and `pnpm viewer:preview` (with the dev server stopped), then open

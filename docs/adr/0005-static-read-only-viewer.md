@@ -23,9 +23,10 @@ against it, keeps using the local app, which this ADR does not change.
 
 Two controls enforce this:
 
-- The project config gets `sharing.viewerLink`, false by default. Only when it is true does the
-  canvas comment link to the viewer. It is a project setting with no personal override, because
-  the decision belongs to the project and not to one reviewer.
+- The project config gets `sharing.viewerLink`, false by default. Only when it names a viewer's
+  address does the canvas comment link to the viewer. It takes an address rather than `true`, so a
+  project that hosts its own copy of the viewer links that one. It is a project setting with no
+  personal override, because the decision belongs to the project and not to one reviewer.
 - On GitHub, the viewer cannot read a private repository until an admin of its organization
   installs the GitHub App, so installing the app is the project's approval. GitLab has no such
   step: a reviewer's own sign-in reaches every project they can see, so for GitLab projects the
@@ -149,9 +150,9 @@ viewer has it on every load. Deploy access is therefore the main control:
 
 ## Consequences
 
-- In a project with `sharing.viewerLink: true`, the canvas comment links to the viewer for that pull
-  request and keeps "Run `pr-review serve`" as the second option. Every other project's comment
-  stays as it is now.
+- In a project whose `sharing.viewerLink` names a viewer, the canvas comment on a GitHub pull
+  request links to the viewer's page for it and keeps "run `pr-review serve`" as the second option.
+  Every other project's comment, and every GitLab merge request's, stays as it is now.
 - Every feature the viewer offers must keep working in the local app. A project that cannot use
   the viewer loses nothing but the convenience.
 - Vinta runs a GitHub App registration, a Cloudflare account, and a Worker holding a secret. The

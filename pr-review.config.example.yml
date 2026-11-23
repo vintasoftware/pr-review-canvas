@@ -91,6 +91,10 @@ chat:
 sharing:
   canvasComment: true # false: publish keeps the canvas local and posts no PR/MR comment
   mentionCanvas: true # false: nothing the review page posts names the canvas
+  # The static viewer the canvas comment links to on GitHub pull requests, so reviewers can read
+  # the canvas with nothing to install. Set it only once the project has agreed a third-party
+  # page may read its repository (docs/adr/0005-static-read-only-viewer.md). No personal override.
+  viewerLink: false # or the viewer's address, such as https://viewer.example.com
 
 canvas:
   # A canvas stays current for a later head whose diff is identical to the one it was generated
