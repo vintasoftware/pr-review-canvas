@@ -26,7 +26,7 @@
 ### Fixes
 
 - When you mark a file reviewed, the focus moves to the next file that is not reviewed. That file
-  now stays closed when the **Hide code** level or **Start collapsed** closed it.
+  now stays closed when the **Hide code** level hides it whole.
 
 ## 0.11.1
 
