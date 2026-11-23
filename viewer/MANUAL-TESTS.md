@@ -91,10 +91,19 @@ Check each one on GitHub after posting.
 4. With a draft written before that push, submit a review. It is refused until the draft is
    copied or deleted.
 
+## Large pull requests
+
+1. Open a pull request with several hundred files, such as `?pr=microsoft/TypeScript/65291` (964
+   files). The whole diff loads and no banner shows.
+2. The rebuild from GitHub's file list only runs when GitHub refuses the diff with 422, which needs
+   a change set far larger than most pull requests. When one turns up, open it and check: the
+   banner names the files GitHub sent no changes for, each of those files says GitHub sent no diff
+   for it because it is too large, and over 3000 files the banner says how many are not shown.
+
 ## Not covered yet
 
-- A large pull request (hundreds of files, or one very large file). The ADR asks the viewer to
-  list the files GitHub did not send in full; that is not built.
+- A pull request large enough for GitHub to refuse its diff (see "Large pull requests"); the
+  rebuild is covered by unit tests and was checked against TypeScript#65291's real file list.
 - A pull request from a fork.
 - A pull request with more than 100 comments.
 - The hosted build behind Cloudflare, with its CSP header.

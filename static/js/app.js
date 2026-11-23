@@ -372,6 +372,12 @@ export class PrAppElement extends HTMLElement {
         comments: bundle.comments.reviewComments,
         state: bundle.state,
         now,
+        // The viewer has no clone to fetch into: a missing patch is one GitHub would not send.
+        ...(bundle.viewer
+          ? {
+              unavailable: `${hostLabel()} sent no diff for this file because it is too large. Read it on ${hostLabel()}, or in the local app.`,
+            }
+          : {}),
       })
       defineLayerElements()
       const staleBar =

@@ -24,6 +24,12 @@ the page's `/api` calls, and `viewer-api.ts` answers them in the browser:
 - The pull request, its comments, and the diff come from GitHub's REST API (`github-client.ts`),
   read with the server's own mappers (`src/github/pr.ts`, `src/github/comments.ts`) and diff parser
   (`src/git/diff-collector.ts`).
+- The diff is GitHub's compare diff, which held 964 files and 4 MB when tried. For a larger range
+  GitHub answers 422, "The diff is taking too long to generate", and `diff-fallback.ts` rebuilds
+  the diff from a file list instead: the pull request's, up to 3000 files, or a comparison's, up to
+  300 for an older canvas. GitHub sends no patch for a file too large to diff, so the page lists
+  that file with its line counts and says its diff was not sent, and a banner names the files left
+  out and the ones past the list's limit.
 - The canvas is the newest canvas comment on the pull request, read with `readCanvasZip` like an
   import. It shows as ready, carried over, or outdated by the same rules as the local app.
 - Review marks, dismissals, hidden threads, the pending review, and the skin and theme stay in
@@ -97,6 +103,10 @@ VITE_GITHUB_CLIENT_ID=<client id> VITE_AUTH_WORKER_URL=https://<worker host> VIT
 ```
 
 ## Limits
+
+- A diff rebuilt from a file list can group hunks differently from `git diff`: GitHub's list joined
+  two nearby hunks of one file into one, in one file of 964 tried. A note the canvas pins to the
+  second of those hunks then has no hunk of its own. Only very large pull requests use the rebuild.
 
 - Anonymous reads are limited to 60 requests an hour per address, and GitHub counts a 304 against
   that too. A cold load of a pull request costs about six requests. Answers are reused for five

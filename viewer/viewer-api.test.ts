@@ -56,7 +56,8 @@ function canvasComment(m: CanvasManifest, id = 3001) {
 /** GitHub for acme/widgets#42 at HEAD_SHA, with `diffs` keyed `base...head`. */
 function fakeGithub(opts: {
   comments?: unknown[]
-  diffs?: Record<string, string>
+  /** The raw diff of each `base...head`; an Error is GitHub refusing to send it. */
+  diffs?: Record<string, string | Error>
   routes?: Record<string, unknown>
   signedIn?: boolean
   /** What GitHub answers to each write, by path; an Error is thrown as GitHub's refusal. */
@@ -72,7 +73,10 @@ function fakeGithub(opts: {
     'repos/acme/widgets/issues/42/comments': [...GH_ISSUE_COMMENTS, ...(opts.comments ?? [])],
     ...opts.routes,
   }
-  const diffs: Record<string, string> = { [`${BASE_SHA}...${HEAD_SHA}`]: SYNTHETIC_DIFF, ...opts.diffs }
+  const diffs: Record<string, string | Error> = {
+    [`${BASE_SHA}...${HEAD_SHA}`]: SYNTHETIC_DIFF,
+    ...opts.diffs,
+  }
   const gh: BrowserGithub = {
     api(path, params) {
       calls.push(path)
@@ -97,6 +101,7 @@ function fakeGithub(opts: {
     diff(_owner, _repo, base, head) {
       calls.push(`diff ${base}...${head}`)
       const text = diffs[`${base}...${head}`]
+      if (text instanceof Error) return Promise.reject(text)
       return text === undefined ? Promise.reject(new Error('HTTP 404: no diff')) : Promise.resolve(text)
     },
     refresh: () => calls.push('refresh'),
@@ -510,4 +515,61 @@ it("keeps each reader's drafts and marks apart, so one never submits another's",
 
   reader = 'alice'
   expect(((await call('GET', '/api/prs/42/state')).body as StateResponse).state.pending).toHaveLength(1)
+})
+
+it('rebuilds a diff GitHub is too slow to send from the file list, and names the files it left out', async () => {
+  const tooSlow = new Error('HTTP 422: The diff is taking too long to generate.')
+  const listed = [
+    {
+      filename: 'src/app.ts',
+      status: 'modified',
+      additions: 1,
+      deletions: 0,
+      patch: "@@ -1,1 +1,2 @@\n import { a } from './a'\n+import { b } from './b'",
+    },
+    { filename: 'data/huge.json', status: 'modified', additions: 90000, deletions: 3 },
+  ]
+  const { call, calls } = viewer({
+    comments: [canvasComment(manifest())],
+    diffs: { [`${BASE_SHA}...${HEAD_SHA}`]: tooSlow },
+    routes: { 'repos/acme/widgets/pulls/42/files': listed },
+  })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  expect(bundle.status).toBe('ready')
+  expect(calls).toContain('repos/acme/widgets/pulls/42/files')
+  expect(bundle.files.find(f => f.path === 'data/huge.json')).toMatchObject({
+    additions: 90000,
+    deletions: 3,
+  })
+  // The pull request changes 7 files, and the list GitHub sent holds 2: both gaps are said once.
+  expect(bundle.warnings).toHaveLength(1)
+  expect(bundle.warnings[0]).toMatch(/too large to diff \(data\/huge\.json\).*so 5 files are not shown/)
+
+  const { patches } = (await call('GET', '/api/prs/42/patches')).body as { patches: Record<string, string> }
+  const huge = bundle.files.find(f => f.path === 'data/huge.json')!
+  expect(patches[huge.key]).toBeUndefined()
+  expect(Object.keys(patches)).toHaveLength(1)
+})
+
+it('rebuilds the diff of an older canvas from the comparison, which lists at most 300 files', async () => {
+  const listed = Array.from({ length: 300 }, (_, i) => ({
+    filename: `gen/file-${i}.ts`,
+    status: 'added',
+    additions: 1,
+    deletions: 0,
+    patch: `@@ -0,0 +1,1 @@\n+export const n = ${i}`,
+  }))
+  const { call } = viewer({
+    comments: [canvasComment(manifest({ headSha: OLD_HEAD }))],
+    diffs: { [`${BASE_SHA}...${OLD_HEAD}`]: new Error('HTTP 422: The diff is taking too long to generate.') },
+    routes: {
+      [`repos/acme/widgets/compare/${BASE_SHA}...${OLD_HEAD}`]: { files: listed },
+      [`repos/acme/widgets/compare/${OLD_HEAD}...${HEAD_SHA}`]: { status: 'ahead', ahead_by: 1 },
+    },
+  })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  // A diff with files left out never proves the head's identical, so the canvas reads as outdated.
+  expect(bundle.status).toBe('stale')
+  expect(bundle.files).toHaveLength(300)
+  expect(bundle.warnings).toEqual([expect.stringContaining('GitHub lists at most 300 files of a comparison')])
 })
