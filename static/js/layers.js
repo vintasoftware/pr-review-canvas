@@ -925,15 +925,14 @@ export function hydrateAll(root, ctx) {
 }
 
 /**
- * True when a level hides a file whole. A file with points or comments stays open at every level.
+ * True when the reading level hides a file whole. A file with points or comments stays open.
  * @param {LayerFile} lf
  * @param {string} layerId
- * @param {RenderContext} ctx
- * @param {import('./contract-types.js').FoldLevel} level
+ * @param {ReviewArtifact} artifact
  * @param {ReadonlySet<string>} commentPaths
  */
-function levelHides(lf, layerId, ctx, level, commentPaths) {
-  return collapsesAt(lf, level) && !cardKeepsOpen(lf, layerId, ctx.artifact, commentPaths)
+function levelHides(lf, layerId, artifact, commentPaths) {
+  return collapsesAt(lf, foldLevel) && !cardKeepsOpen(lf, layerId, artifact, commentPaths)
 }
 
 /**
@@ -942,9 +941,12 @@ function levelHides(lf, layerId, ctx, level, commentPaths) {
  */
 export function hiddenByLevel(card) {
   const ctx = renderContext
+  if (ctx === null) {
+    return false
+  }
   const layerId = card.getAttribute('data-layer') ?? ''
-  const lf = ctx === null ? undefined : layerFileOf(ctx, layerId, card.getAttribute('data-path') ?? '')
-  return ctx !== null && lf !== undefined && levelHides(lf, layerId, ctx, foldLevel, commentPathsOf(ctx))
+  const lf = layerFileOf(ctx, layerId, card.getAttribute('data-path') ?? '')
+  return lf !== undefined && levelHides(lf, layerId, ctx.artifact, commentPathsOf(ctx))
 }
 
 /**
@@ -969,7 +971,7 @@ export function setFoldLevel(root, level) {
         ? layerFileOf(ctx, card.getAttribute('data-layer') ?? '', card.getAttribute('data-path') ?? '')
         : undefined
     if (card instanceof HTMLElement && lf !== undefined) {
-      const hidden = levelHides(lf, card.getAttribute('data-layer') ?? '', ctx, level, commentPaths)
+      const hidden = levelHides(lf, card.getAttribute('data-layer') ?? '', ctx.artifact, commentPaths)
       if (hidden || !startCollapsed) {
         setCardCollapsed(card, hidden || card.classList.contains('is-reviewed'))
       }
