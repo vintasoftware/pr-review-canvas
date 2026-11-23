@@ -111,8 +111,9 @@ function renderLanding(error: string | null, canSignIn: boolean): void {
     <button class="cmd" type="submit">open</button>
   </form>
   ${error === null ? '' : '<p class="viewer-error" role="alert"></p>'}
-  <p class="muted">For example <a href="?pr=${example}">${example}</a>. Comments and AI chat need
-  the local app: <code>pr-review serve</code>.</p>
+  <p class="muted">For example <a href="?pr=${example}">${example}</a>. Signed in, you can
+  comment and submit reviews. AI chat and generating a canvas need the local app:
+  <code>pr-review serve</code>.</p>
 </main>`
   const alert = document.querySelector('.viewer-error')
   if (alert !== null && error !== null) alert.textContent = error
