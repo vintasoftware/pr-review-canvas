@@ -754,8 +754,8 @@ export function wireReview(root, session, opts = {}) {
         if (reviewed) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
           if (next instanceof HTMLElement) {
-            // The next file keeps the fold the reading level or Start collapsed gave it; the next
-            // layer opens, as the reader moves on to read it.
+            // The next file stays open or closed as the reading level or Start collapsed drew it;
+            // the next layer opens, as the reader moves on to read it.
             focusItem(next, 'start', { openTarget: kind === 'layer' })
           }
         }
