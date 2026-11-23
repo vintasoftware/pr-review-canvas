@@ -1,4 +1,4 @@
-import { publishedSyntheticArtifact } from '../src/testing/synthetic.js'
+import { publishedSyntheticArtifact, syntheticArtifact } from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
 test('shows one layer at a time once the setting is saved, on this page and after a reload', async ({
@@ -144,6 +144,44 @@ for (const layerView of ['all', 'one'] as const) {
       await link.click()
       await expect(card.locator('.p-summary')).toBeVisible()
       await expect(card.locator('.prose')).toBeHidden()
+    })
+  })
+}
+
+/** The synthetic canvas with src/new-name.ts hidden whole at the light level. */
+function withLevelHiddenFile() {
+  const artifact = syntheticArtifact()
+  return {
+    ...artifact,
+    layers: artifact.layers.map(layer => ({
+      ...layer,
+      files: layer.files.map(f => (f.path === 'src/new-name.ts' ? { ...f, collapsed: 'light' as const } : f)),
+    })),
+  }
+}
+
+for (const layerView of ['all', 'one'] as const) {
+  test.describe(`the file after one marked reviewed, ${layerView === 'all' ? 'all at once' : 'one at a time'}`, () => {
+    test.use({ settings: { layerView, foldLevel: 'light' } })
+
+    test('takes the focus and stays closed when the reading level hides it', async ({ page, chatServer }) => {
+      const server = await chatServer({
+        setup: async ({ ctx }) => {
+          ctx.fixtureArtifact = withLevelHiddenFile()
+        },
+      })
+      await page.goto(server.url + '#layer-run-path')
+      const app = page.locator('#file-src_app_ts')
+      const next = page.locator('#file-src_new_name_ts')
+      await expect(app.locator('.file-body')).toBeVisible()
+      await expect(next.locator('.file-body')).toBeHidden()
+
+      await app.locator('input[data-reviewed-id]').check()
+      await expect(app.locator('.file-body')).toBeHidden()
+      await expect(next).toHaveClass(/\bis-focused\b/)
+      await expect(next.locator('.file-h')).toBeInViewport()
+      await expect(next.locator('.file-body')).toBeHidden()
+      await expect(page.locator('#layer-run-path')).toBeVisible()
     })
   })
 }
