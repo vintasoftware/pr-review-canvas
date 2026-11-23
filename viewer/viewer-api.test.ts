@@ -106,7 +106,12 @@ function fakeGithub(opts: {
 
 function viewer(opts: Parameters<typeof fakeGithub>[0] = {}) {
   const github = fakeGithub(opts)
-  const state = createViewerState('github/acme/widgets/42', { storage: null, now })
+  const stores = new Map<string, ReturnType<typeof createViewerState>>()
+  const state = (reader: string | null) => {
+    const key = reader ?? 'anonymous'
+    if (!stores.has(key)) stores.set(key, createViewerState(key, { storage: null, now }))
+    return stores.get(key)!
+  }
   const api = createViewerApi(target, { gh: github.gh, state, now })
   const call = (method: string, path: string, body: unknown = null) =>
     api.handle(method, new URL(path, 'http://viewer.test'), body)
@@ -240,7 +245,7 @@ it('reports a pull request GitHub does not serve as not found', async () => {
   const { gh } = fakeGithub({})
   const api = createViewerApi(
     { ...target, number: 43 },
-    { gh, state: createViewerState('x', { storage: null }), now }
+    { gh, state: () => createViewerState('x', { storage: null }), now }
   )
   const answer = await api.handle('GET', new URL('http://viewer.test/api/prs/43'), null)
   expect(answer).toMatchObject({
@@ -263,7 +268,7 @@ it('names the signed-in reader, and points a missing private pull request at the
   const { gh } = fakeGithub({ signedIn: true, routes: { user: { login: 'octocat' } } })
   const api = createViewerApi(target, {
     gh,
-    state: createViewerState('x', { storage: null }),
+    state: () => createViewerState('x', { storage: null }),
     now,
     installUrl: 'https://github.com/apps/pr-review-canvas/installations/new',
   })
@@ -278,7 +283,7 @@ it('names the signed-in reader, and points a missing private pull request at the
     { ...target, number: 43 },
     {
       gh,
-      state: createViewerState('y', { storage: null }),
+      state: () => createViewerState('y', { storage: null }),
       now,
       installUrl: 'https://github.com/apps/pr-review-canvas/installations/new',
     }
@@ -451,4 +456,55 @@ it("refuses the author's own approval, and clears the pending review on request"
   expect(own).toMatchObject({ status: 403, body: { error: { code: 'SIGNOFF_BY_AUTHOR' } } })
   await call('POST', '/api/prs/42/pending', { path: 'src/app.ts', line: 2, side: 'new', body: 'a' })
   expect(((await call('DELETE', '/api/prs/42/pending')).body as StateResponse).state.pending).toEqual([])
+})
+
+it("keeps each reader's drafts and marks apart, so one never submits another's", async () => {
+  let reader = 'alice'
+  const github = fakeGithub({
+    comments: [canvasComment(manifest())],
+    signedIn: true,
+    writes: {
+      'repos/acme/widgets/pulls/42/reviews': {
+        id: 7002,
+        state: 'COMMENTED',
+        html_url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-7002',
+      },
+    },
+  })
+  const api = (gh: typeof github.gh) =>
+    createViewerApi(target, {
+      gh: {
+        ...gh,
+        api: (path, params) => (path === 'user' ? Promise.resolve({ login: reader }) : gh.api(path, params)),
+      },
+      state: who => stores(who),
+      now,
+    })
+  const kept = new Map<string, ReturnType<typeof createViewerState>>()
+  const stores = (who: string | null) => {
+    const key = who ?? 'anonymous'
+    if (!kept.has(key)) kept.set(key, createViewerState(key, { storage: null, now }))
+    return kept.get(key)!
+  }
+  const viewerApi = api(github.gh)
+  const call = (method: string, path: string, body: unknown = null) =>
+    viewerApi.handle(method, new URL(path, 'http://viewer.test'), body)
+
+  await call('POST', '/api/prs/42/pending', {
+    path: 'src/app.ts',
+    line: 2,
+    side: 'new',
+    body: "alice's draft",
+  })
+  await call('PUT', '/api/prs/42/reviewed/layer:run-path', { reviewed: true })
+
+  reader = 'bob'
+  const { state } = (await call('GET', '/api/prs/42/state')).body as StateResponse
+  expect(state.pending).toEqual([])
+  expect(state.reviewed).toEqual({})
+  await call('POST', '/api/prs/42/review', { event: 'COMMENT', body: 'from bob' })
+  expect(github.posts.at(-1)?.body).not.toHaveProperty('comments')
+
+  reader = 'alice'
+  expect(((await call('GET', '/api/prs/42/state')).body as StateResponse).state.pending).toHaveLength(1)
 })

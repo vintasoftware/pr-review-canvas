@@ -193,7 +193,8 @@ async function main(): Promise<void> {
   const key = `github/${target.owner}/${target.repo}/${target.number}`.toLowerCase()
   const api = createViewerApi(target, {
     gh,
-    state: createViewerState(key),
+    // Anonymous reading keeps the key it always had; each login gets its own.
+    state: reader => createViewerState(reader === null ? key : `${key}@${reader.toLowerCase()}`),
     ...(config?.installUrl === undefined ? {} : { installUrl: config.installUrl }),
   })
   installApi(api.handle, realFetch)

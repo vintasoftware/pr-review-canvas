@@ -13,6 +13,9 @@ Then open http://127.0.0.1:4174/?pr=vintasoftware/pr-review-canvas/110. The `pr`
 `owner/repo/123`, `owner/repo#123`, or the pull request's URL. `pnpm viewer:build` writes the static
 files to `dist-viewer/`.
 
+Before a change ships, run the checks in [MANUAL-TESTS.md](MANUAL-TESTS.md), and add to it when a
+feature lands.
+
 ## How it works
 
 The page boots the same `static/js/app.js` the local server serves. `main.ts` replaces `fetch` for
