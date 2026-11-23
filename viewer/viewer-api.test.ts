@@ -58,6 +58,7 @@ function fakeGithub(opts: {
   comments?: unknown[]
   diffs?: Record<string, string>
   routes?: Record<string, unknown>
+  signedIn?: boolean
 }) {
   const calls: string[] = []
   const routes: Record<string, unknown> = {
@@ -80,7 +81,8 @@ function fakeGithub(opts: {
     apiWithHeaders: () => Promise.reject(new Error('unused')),
     post: () => Promise.reject(new Error('read-only')),
     graphql: () => Promise.reject(new Error('needs a token')),
-    authStatus: () => Promise.resolve({ installed: true, authenticated: false, detail: 'anonymous' }),
+    authStatus: () =>
+      Promise.resolve({ installed: true, authenticated: opts.signedIn === true, detail: 'fake' }),
     authToken: () => Promise.resolve(null),
     diff(_owner, _repo, base, head) {
       calls.push(`diff ${base}...${head}`)
@@ -247,4 +249,36 @@ it('asks GitHub again on refresh', async () => {
   await call('GET', '/api/prs/42?refresh=1')
   expect(calls).toContain('refresh')
   expect(calls.filter(c => c === 'repos/acme/widgets/pulls/42')).toHaveLength(2)
+})
+
+it('names the signed-in reader, and points a missing private pull request at the app install', async () => {
+  const { gh } = fakeGithub({ signedIn: true, routes: { user: { login: 'octocat' } } })
+  const api = createViewerApi(target, {
+    gh,
+    state: createViewerState('x', { storage: null }),
+    now,
+    installUrl: 'https://github.com/apps/pr-review-canvas/installations/new',
+  })
+  const bundle = (await api.handle('GET', new URL('http://viewer.test/api/prs/42'), null)).body as PrBundle
+  expect(bundle.capabilities).toMatchObject({ login: 'octocat', tokenKind: 'github-app', canComment: false })
+
+  const other = createViewerApi(
+    { ...target, number: 43 },
+    {
+      gh,
+      state: createViewerState('y', { storage: null }),
+      now,
+      installUrl: 'https://github.com/apps/pr-review-canvas/installations/new',
+    }
+  )
+  expect(await other.handle('GET', new URL('http://viewer.test/api/prs/43'), null)).toMatchObject({
+    status: 404,
+    body: {
+      error: {
+        message:
+          'acme/widgets#43 was not found, or the GitHub App is not installed where it can read acme/widgets',
+        hint: 'ask an admin of acme to install the app: https://github.com/apps/pr-review-canvas/installations/new',
+      },
+    },
+  })
 })

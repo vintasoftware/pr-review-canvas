@@ -1,12 +1,15 @@
 // The static viewer's entry. With `?pr=<owner>/<repo>/<number>` it answers the review page's
 // /api calls in the browser (viewer-api.ts) and boots the same app module the local server
-// serves; without one it shows a form that asks for a public pull request.
+// serves; without one it shows a form that asks for a pull request. When the build names a GitHub
+// App, the reader can sign in (auth.ts) to read the private repositories it is installed on.
 import { version } from '../package.json'
 import type { ReviewBootstrap } from '../src/contract/api.js'
 import { type Appearance, DEFAULT_SETTINGS } from '../src/contract/settings.js'
 import { isSkin } from '../static/js/skin.js'
 import { isTheme } from '../static/js/theme.js'
-import { createBrowserGithub } from './github-client.js'
+import { authConfigFrom, configProblem, renderAccount, safeReturnTo } from './account.js'
+import { type Auth, createAuth } from './auth.js'
+import { type BrowserGithub, createBrowserGithub } from './github-client.js'
 import { createViewerState } from './review-state.js'
 import { parseTarget } from './target.js'
 import { createViewerApi, type ViewerTarget } from './viewer-api.js'
@@ -92,24 +95,62 @@ function installApi(handle: ReturnType<typeof createViewerApi>['handle'], realFe
   }
 }
 
-function renderLanding(error: string | null): void {
+function renderLanding(error: string | null, canSignIn: boolean): void {
   document.title = 'PR review canvas viewer'
   const example = 'vintasoftware/pr-review-canvas/123'
+  const which = canSignIn
+    ? 'a GitHub pull request. Public ones open as they are; sign in to open private ones'
+    : 'a public GitHub pull request'
   document.body.innerHTML = `<main class="viewer-landing">
   <h1><img src="/static/brand.svg" width="32" height="32" alt=""> PR review canvas viewer</h1>
-  <p>Open the canvas published on a public GitHub pull request. Nothing to install: the page reads
-  the pull request from GitHub's public API, and your review marks stay in this browser.</p>
+  <p>Open the canvas published on ${which}. Nothing to install: the page reads the pull request
+  from GitHub's API, and your review marks stay in this browser.</p>
   <form class="viewer-form" method="get">
     <label for="pr">Pull request</label>
     <input id="pr" name="pr" required placeholder="https://github.com/owner/repo/pull/123" autocomplete="off">
     <button class="cmd" type="submit">open</button>
   </form>
   ${error === null ? '' : '<p class="viewer-error" role="alert"></p>'}
-  <p class="muted">For example <a href="?pr=${example}">${example}</a>. Private repositories, comments
-  and AI chat need the local app: <code>pr-review serve</code>.</p>
+  <p class="muted">For example <a href="?pr=${example}">${example}</a>. Comments and AI chat need
+  the local app: <code>pr-review serve</code>.</p>
 </main>`
   const alert = document.querySelector('.viewer-error')
   if (alert !== null && error !== null) alert.textContent = error
+}
+
+/** Finishes a sign-in when GitHub just redirected back, and puts the reader's page back in place. */
+async function finishSignIn(auth: Auth, redirectUri: string): Promise<string | null> {
+  const result = await auth.completeSignIn(new URL(location.href), redirectUri)
+  if (result.status === 'none') return null
+  history.replaceState(null, '', safeReturnTo(result.returnTo))
+  return result.status === 'failed' ? result.error : null
+}
+
+/** The bar that holds the sign-in control, on every page. */
+function mountAccount(
+  auth: Auth | null,
+  gh: BrowserGithub,
+  redirectUri: string,
+  notice: string | null
+): (message: string) => void {
+  if (auth === null) return () => {}
+  const host = document.createElement('div')
+  host.className = 'viewer-account'
+  host.setAttribute('aria-label', 'GitHub sign-in')
+  document.body.prepend(host)
+  return renderAccount(host, {
+    auth,
+    redirectUri,
+    notice,
+    login: async () => {
+      try {
+        const user = (await gh.api('user')) as { login?: unknown }
+        return typeof user.login === 'string' ? user.login : null
+      } catch {
+        return null
+      }
+    },
+  })
 }
 
 async function main(): Promise<void> {
@@ -117,20 +158,42 @@ async function main(): Promise<void> {
   document.documentElement.dataset['skin'] = appearance.skin
   document.documentElement.dataset['theme'] = appearance.theme
 
+  const realFetch = window.fetch.bind(window)
+  const config = authConfigFrom(import.meta.env)
+  const auth = config === null ? null : createAuth(config)
+  const redirectUri = `${location.origin}${location.pathname}`
+  const notice = auth === null ? null : (configProblem(config!) ?? (await finishSignIn(auth, redirectUri)))
+  /** Says a line in the account bar, once it is drawn. */
+  let say: (message: string) => void = () => {}
+  const gh = createBrowserGithub({
+    fetchImpl: realFetch,
+    ...(auth === null
+      ? {}
+      : {
+          token: () => auth.token(),
+          onUnauthorized: () => {
+            auth.signOut()
+            say('GitHub no longer accepts your sign-in; the page reads anonymously. Sign in again.')
+          },
+        }),
+  })
+
   const raw = new URL(location.href).searchParams.get('pr')
   const target = parseTarget(raw)
   if (target === null) {
     renderLanding(
-      raw === null ? null : `"${raw}" is not a GitHub pull request; use owner/repo/123 or its URL`
+      raw === null ? null : `"${raw}" is not a GitHub pull request; use owner/repo/123 or its URL`,
+      auth !== null
     )
+    say = mountAccount(auth, gh, redirectUri, notice)
     return
   }
 
-  const realFetch = window.fetch.bind(window)
   const key = `github/${target.owner}/${target.repo}/${target.number}`.toLowerCase()
   const api = createViewerApi(target, {
-    gh: createBrowserGithub({ fetchImpl: realFetch }),
+    gh,
     state: createViewerState(key),
+    ...(config?.installUrl === undefined ? {} : { installUrl: config.installUrl }),
   })
   installApi(api.handle, realFetch)
 
@@ -142,6 +205,7 @@ async function main(): Promise<void> {
   document.head.append(bootstrap)
   document.body.innerHTML = `<a class="skip" href="#main">Skip to content</a>
 <pr-app class="page" data-pr="${target.number}"><div class="loading">Loading PR #${target.number}…</div></pr-app>`
+  say = mountAccount(auth, gh, redirectUri, notice)
   await import('../static/js/app.js')
 }
 

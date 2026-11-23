@@ -69,12 +69,15 @@ function largePr(files: readonly FileEntry[]): boolean {
   return files.length > 400 || lines > 50_000
 }
 
-const CAPABILITIES: Capabilities = {
-  canComment: false,
-  tokenKind: 'none',
-  login: null,
-  reason: 'the read-only viewer reads public pull requests and posts nothing to GitHub',
-  hint: LOCAL_APP_HINT,
+/** The viewer posts nothing yet, signed in or not; the login names who is reading. */
+function capabilitiesFor(login: string | null): Capabilities {
+  return {
+    canComment: false,
+    tokenKind: login === null ? 'none' : 'github-app',
+    login,
+    reason: 'the viewer reads pull requests and posts nothing to GitHub',
+    hint: LOCAL_APP_HINT,
+  }
 }
 
 interface Diff {
@@ -98,7 +101,13 @@ interface Loaded {
 
 export function createViewerApi(
   target: ViewerTarget,
-  deps: { gh: BrowserGithub; state: ViewerStateStore; now?: () => Date }
+  deps: {
+    gh: BrowserGithub
+    state: ViewerStateStore
+    now?: () => Date
+    /** Where an owner installs the GitHub App, to name in a not-found answer to a signed-in reader. */
+    installUrl?: string
+  }
 ) {
   const { gh, state } = deps
   const now = deps.now ?? (() => new Date())
@@ -166,6 +175,13 @@ export function createViewerApi(
     return typeof parent === 'string' ? parent : encodeURIComponent(baseRef)
   }
 
+  /** The signed-in reader's login, or null when reading anonymously. */
+  async function login(): Promise<string | null> {
+    if (!(await gh.authStatus()).authenticated) return null
+    const user = (await gh.api('user')) as { login?: unknown }
+    return typeof user.login === 'string' ? user.login : null
+  }
+
   async function load(): Promise<Loaded> {
     const meta = mapPull(await gh.api(`${repoPath}/pulls/${target.number}`))
     const compare = (await gh.api(
@@ -229,7 +245,7 @@ export function createViewerApi(
     const common = {
       pr,
       comments,
-      capabilities: CAPABILITIES,
+      capabilities: capabilitiesFor(await login()),
       selfReview: false,
       authorSignOffReason: null,
       chat: { enabled: false, acpx: false },
@@ -316,7 +332,7 @@ export function createViewerApi(
     if (method === 'GET' && sub === '') return bundle(url.searchParams.get('refresh') === '1')
     if (method === 'GET' && sub === 'patches') return patches(url.searchParams.get('headSha'))
     if (method === 'GET' && sub === 'state') return stateBody(state.read())
-    if (method === 'GET' && sub === 'capabilities') return CAPABILITIES
+    if (method === 'GET' && sub === 'capabilities') return capabilitiesFor(await login())
     if (method === 'GET' && sub === 'comments') return (await loaded(true)).comments
     if (method === 'GET' && sub === 'chat/threads') return { threads: [] }
     const input = (body ?? {}) as Record<string, unknown>
@@ -353,18 +369,23 @@ export function createViewerApi(
         return { status: err.status, body: { error } }
       }
       const message = err instanceof Error ? err.message : String(err)
-      const notFound = /HTTP 404/.test(message)
-      return {
-        status: notFound ? 404 : 502,
-        body: {
-          error: {
-            code: notFound ? 'PR_NOT_FOUND' : 'GITHUB_API_ERROR',
-            message: notFound
-              ? `${target.owner}/${target.repo}#${target.number} was not found, or is not public`
-              : message,
-          },
-        },
+      if (!/HTTP 404/.test(message)) {
+        return { status: 502, body: { error: { code: 'GITHUB_API_ERROR', message } } }
       }
+      const name = `${target.owner}/${target.repo}#${target.number}`
+      const signedIn = (await gh.authStatus()).authenticated
+      const error: ErrorEnvelope['error'] = {
+        code: 'PR_NOT_FOUND',
+        message: signedIn
+          ? `${name} was not found, or the GitHub App is not installed where it can read ${target.owner}/${target.repo}`
+          : `${name} was not found, or is not public`,
+      }
+      if (signedIn && deps.installUrl !== undefined) {
+        error.hint = `ask an admin of ${target.owner} to install the app: ${deps.installUrl}`
+      } else if (!signedIn) {
+        error.hint = 'sign in with GitHub to open a private repository'
+      }
+      return { status: 404, body: { error } }
     }
   }
 

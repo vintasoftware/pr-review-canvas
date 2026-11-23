@@ -15,7 +15,7 @@ export default defineConfig({
     name: 'pr-review',
     globals: true,
     environment: 'node',
-    include: ['src/**/*.test.ts', 'static/js/**/*.test.js', 'viewer/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'static/js/**/*.test.js', 'viewer/**/*.test.ts', 'worker/**/*.test.ts'],
     setupFiles: ['./vitest.setup.ts'],
     // Half the cores, so a run (the pre-commit hook runs one on every commit) leaves the machine
     // usable. `--maxWorkers` on the command line overrides it.

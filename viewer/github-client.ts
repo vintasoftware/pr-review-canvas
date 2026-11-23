@@ -1,6 +1,6 @@
-// The GitHub REST API from the browser, with no token: enough for a public repository. It answers
-// through the same HostClient interface the server's gh client does, so the server's mappers
-// (pull request, comments) run here unchanged.
+// The GitHub REST API from the browser: anonymous for a public repository, or with the reader's
+// GitHub App token once they sign in. It answers through the same HostClient interface the
+// server's gh client does, so the server's mappers (pull request, comments) run here unchanged.
 import { type CliResponse, type HostClient, HostCliError } from '../src/host/client.js'
 
 export const GITHUB_API = 'https://api.github.com'
@@ -15,6 +15,17 @@ export interface BrowserGithub extends HostClient {
   refresh(): void
 }
 
+export interface BrowserGithubOptions {
+  fetchImpl?: typeof fetch
+  /** Where anonymous answers are kept across reloads; sessionStorage by default. */
+  storage?: Storage | null
+  now?: () => number
+  /** The reader's token, or null to read anonymously. Asked before every request. */
+  token?: () => Promise<string | null>
+  /** GitHub refused the token: it expired early or was revoked. */
+  onUnauthorized?: () => void
+}
+
 interface Cached {
   etag: string
   body: string
@@ -27,8 +38,8 @@ export const FRESH_MS = 5 * 60 * 1000
 
 /**
  * The anonymous rate limit is 60 requests an hour per address, and GitHub counts an anonymous 304
- * against it too. So every GET keeps its answer for the tab: one younger than FRESH_MS is reused
- * as is, and an older one is asked for again with its ETag.
+ * against it too. So every GET keeps its answer: one younger than FRESH_MS is reused as is, and an
+ * older one is asked for again with its ETag. With no storage, answers last as long as the page.
  */
 function etagCache(storage: Storage | null) {
   const memory = new Map<string, Cached>()
@@ -52,6 +63,9 @@ function etagCache(storage: Storage | null) {
         // A full or blocked storage only costs the next load a request.
       }
     },
+    clear(): void {
+      memory.clear()
+    },
   }
 }
 
@@ -64,7 +78,7 @@ function sessionStore(): Storage | null {
 }
 
 /** The error the server's gh client would throw, so `notFound` and friends read the same. */
-function apiError(path: string, res: Response, body: string): HostCliError {
+function apiError(path: string, res: Response, body: string, signedIn: boolean): HostCliError {
   let message = body
   try {
     const parsed = JSON.parse(body) as { message?: unknown }
@@ -75,29 +89,54 @@ function apiError(path: string, res: Response, body: string): HostCliError {
   if ((res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0') {
     const reset = Number(res.headers.get('x-ratelimit-reset'))
     const at = Number.isFinite(reset) ? new Date(reset * 1000).toLocaleTimeString() : 'within the hour'
-    message = `GitHub's anonymous rate limit of 60 requests an hour is used up; it resets at ${at}`
+    message = signedIn
+      ? `GitHub's rate limit for your account is used up; it resets at ${at}`
+      : `GitHub's anonymous rate limit of 60 requests an hour is used up; sign in, or wait until ${at}`
+  }
+  if (res.status === 401 && signedIn) {
+    message = 'GitHub no longer accepts your sign-in; sign in again'
   }
   return new HostCliError('gh', path, `HTTP ${res.status}: ${message}`, 1)
 }
 
-export function createBrowserGithub(
-  opts: { fetchImpl?: typeof fetch; storage?: Storage | null; now?: () => number } = {}
-) {
+export function createBrowserGithub(opts: BrowserGithubOptions = {}) {
   const doFetch = opts.fetchImpl ?? globalThis.fetch.bind(globalThis)
-  const cache = etagCache(opts.storage === undefined ? sessionStore() : opts.storage)
+  const tokenOf = opts.token ?? (() => Promise.resolve(null))
+  const anonymous = etagCache(opts.storage === undefined ? sessionStore() : opts.storage)
+  // A signed-in reader may read private code: those answers stay in this page's memory only.
+  const signedIn = etagCache(null)
+  let lastToken: string | null = null
 
   const now = opts.now ?? (() => Date.now())
   /** Answers kept up to this moment are asked for again. */
   let refreshedAt = -1
 
+  /** The headers of one request, and the cache its answers belong to. */
+  async function session(accept: string) {
+    const token = await tokenOf()
+    // Another reader, or the same one signed in again, must not see the last one's answers.
+    if (token !== lastToken) {
+      signedIn.clear()
+      lastToken = token
+    }
+    const headers: Record<string, string> = { accept, 'x-github-api-version': '2022-11-28' }
+    if (token !== null) headers['authorization'] = `Bearer ${token}`
+    return { headers, cache: token === null ? anonymous : signedIn, token }
+  }
+
+  function failed(path: string, res: Response, body: string, token: string | null): HostCliError {
+    if (res.status === 401 && token !== null) opts.onUnauthorized?.()
+    return apiError(path, res, body, token !== null)
+  }
+
   async function get(path: string, accept: string): Promise<{ res: Response | null; body: string }> {
     const url = `${GITHUB_API}/${path.replace(/^\//, '')}`
     const cacheKey = `${accept} ${url}`
+    const { headers, cache, token } = await session(accept)
     const cached = cache.get(cacheKey)
     if (cached !== null && cached.at > refreshedAt && now() - cached.at < FRESH_MS) {
       return { res: null, body: cached.body }
     }
-    const headers: Record<string, string> = { accept, 'x-github-api-version': '2022-11-28' }
     if (cached !== null) headers['if-none-match'] = cached.etag
     const res = await doFetch(url, { headers })
     if (res.status === 304 && cached !== null) {
@@ -105,7 +144,7 @@ export function createBrowserGithub(
       return { res, body: cached.body }
     }
     const body = await res.text()
-    if (!res.ok) throw apiError(path, res, body)
+    if (!res.ok) throw failed(path, res, body, token)
     const etag = res.headers.get('etag')
     if (etag !== null) cache.set(cacheKey, { etag, body, at: now() })
     return { res, body }
@@ -131,10 +170,33 @@ export function createBrowserGithub(
       return { status: res?.status ?? 200, headers, body: JSON.parse(body) as unknown }
     },
     post: readOnly('post'),
-    // GraphQL needs a token even for public data; callers degrade without it.
-    graphql: readOnly('graphql'),
-    authStatus: () => Promise.resolve({ installed: true, authenticated: false, detail: 'anonymous' }),
-    authToken: () => Promise.resolve(null),
+    // GraphQL needs a token even for public data; anonymous callers degrade without it.
+    async graphql(query, variables) {
+      const { headers, token } = await session('application/json')
+      if (token === null) throw new HostCliError('gh', 'graphql', 'GraphQL needs a signed-in reader', 1)
+      const res = await doFetch(`${GITHUB_API}/graphql`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ query, variables }),
+      })
+      const body = await res.text()
+      if (!res.ok) throw failed('graphql', res, body, token)
+      const parsed = JSON.parse(body) as { data?: unknown; errors?: Array<{ message?: unknown }> }
+      if (parsed.errors?.length) {
+        const message = parsed.errors.map(e => String(e.message)).join('; ')
+        throw new HostCliError('gh', 'graphql', message, 1)
+      }
+      return parsed.data
+    },
+    async authStatus() {
+      const token = await tokenOf()
+      return {
+        installed: true,
+        authenticated: token !== null,
+        detail: token === null ? 'anonymous' : 'signed in',
+      }
+    },
+    authToken: () => tokenOf(),
     async diff(owner, repo, base, head) {
       const { body } = await get(`repos/${owner}/${repo}/compare/${base}...${head}`, DIFF_MEDIA_TYPE)
       return body

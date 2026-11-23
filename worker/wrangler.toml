@@ -1,0 +1,16 @@
+# The auth Worker of the static viewer (docs/adr/0005-static-read-only-viewer.md).
+# Deploy with `npx wrangler deploy --config worker/wrangler.toml` after setting the values below
+# and the secret: `npx wrangler secret put GITHUB_CLIENT_SECRET --config worker/wrangler.toml`.
+name = "pr-review-canvas-auth"
+main = "auth-worker.ts"
+compatibility_date = "2026-11-01"
+
+[vars]
+# The GitHub App's client ID.
+GITHUB_CLIENT_ID = ""
+# The viewer's origins, comma separated, as "https://viewer.example.com".
+ALLOWED_ORIGINS = ""
+
+# The Worker logs nothing; keep Workers Logs off so request metadata is not kept either.
+[observability]
+enabled = false

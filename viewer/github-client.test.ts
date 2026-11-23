@@ -76,3 +76,59 @@ it.each([
 ])('reads %s as the pull request to open', (raw, expected) => {
   expect(parseTarget(raw)).toEqual(expected)
 })
+
+it('sends the token when signed in, and keeps those answers out of browser storage', async () => {
+  const stored = new Map<string, string>()
+  const storage = {
+    getItem: (k: string) => stored.get(k) ?? null,
+    setItem: (k: string, v: string) => void stored.set(k, v),
+  } as unknown as Storage
+  let token: string | null = 'ghu_1'
+  const { fetchImpl, requests } = scripted([
+    json({ private: true }),
+    json({ public: true }),
+    json({ again: true }),
+  ])
+  const gh = createBrowserGithub({ fetchImpl, storage, token: () => Promise.resolve(token) })
+  expect(await gh.api('repos/a/private/pulls/1')).toEqual({ private: true })
+  expect(requests[0]?.headers['authorization']).toBe('Bearer ghu_1')
+  expect(stored.size).toBe(0)
+  expect(await gh.authStatus()).toMatchObject({ authenticated: true })
+
+  token = null
+  expect(await gh.api('repos/a/public/pulls/1')).toEqual({ public: true })
+  expect(requests[1]?.headers['authorization']).toBeUndefined()
+  expect(stored.size).toBe(1)
+
+  // Signing in again as anyone starts from an empty cache.
+  token = 'ghu_2'
+  expect(await gh.api('repos/a/private/pulls/1')).toEqual({ again: true })
+})
+
+it('tells the page when GitHub refuses the token', async () => {
+  let refused = 0
+  const { fetchImpl } = scripted([() => new Response('{"message":"Bad credentials"}', { status: 401 })])
+  const gh = createBrowserGithub({
+    fetchImpl,
+    storage: null,
+    token: () => Promise.resolve('ghu_old'),
+    onUnauthorized: () => refused++,
+  })
+  await expect(gh.api('user')).rejects.toThrow(/sign in again/)
+  expect(refused).toBe(1)
+})
+
+it('asks GraphQL only when signed in, and reports its errors', async () => {
+  const { fetchImpl, requests } = scripted([
+    json({ data: { viewer: { login: 'octocat' } } }),
+    json({ errors: [{ message: 'Could not resolve to a Repository' }] }),
+  ])
+  const anonymous = createBrowserGithub({ fetchImpl, storage: null })
+  await expect(anonymous.graphql('query { viewer { login } }', {})).rejects.toThrow(/signed-in reader/)
+  expect(requests).toHaveLength(0)
+
+  const gh = createBrowserGithub({ fetchImpl, storage: null, token: () => Promise.resolve('ghu_1') })
+  expect(await gh.graphql('query { viewer { login } }', {})).toEqual({ viewer: { login: 'octocat' } })
+  expect(requests[0]).toMatchObject({ url: 'https://api.github.com/graphql' })
+  await expect(gh.graphql('query { repository }', {})).rejects.toThrow(/Could not resolve/)
+})
