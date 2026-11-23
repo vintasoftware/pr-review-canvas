@@ -453,7 +453,8 @@ describe('transfer routes', () => {
         'repos/acme/widgets/issues/42/comments': ghJson([
           {
             id: 1,
-            user: { login: 'author' },
+            // The pull request's author, who may republish its canvas.
+            user: { login: 'octocat' },
             body,
             created_at: updated.generatedAt,
             html_url: 'https://github.com/acme/widgets/pull/42#issuecomment-1',

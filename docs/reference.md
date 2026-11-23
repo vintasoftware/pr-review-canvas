@@ -861,6 +861,13 @@ matching the current head, then the PR number, then the most recently edited sou
 If a candidate fails, it tries other matching canvases. Keep the exported filename so the
 canvas can be recognized. **Refresh** also checks for regenerated canvases at the same head commit.
 
+Discovery takes a canvas only from the PR's author or from someone with a role on the repository.
+On GitHub that is an owner, member, or collaborator, as the comment's `author_association` says.
+On GitLab, where a note carries no role, discovery asks the project's members API, once per
+commenter. Anyone can comment on a public PR, so a canvas from anyone else, whether a canvas
+comment or a ZIP link, is skipped, and the page warns with the commenter's name. When GitLab's
+membership check fails, that commenter's canvases are skipped with a warning too.
+
 An attachment exported for a different pull request is reported rather than imported, and is not
 downloaded at all when its filename already names the other PR. The page says so and offers the
 drop zone, which applies the same check: a ZIP whose name or manifest belongs to another PR is

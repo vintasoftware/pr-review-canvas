@@ -23,6 +23,13 @@
   - On GitLab, the rule is new. It also applies on a project that lets authors approve their own
     merge requests.
 
+### Shared canvases
+
+- Discovery takes a canvas only from the PR's author or from someone with a role on the
+  repository: an owner, member, or collaborator on GitHub, a project member on GitLab. A canvas
+  comment or ZIP link from anyone else is skipped, with a warning naming the commenter, so a
+  stranger's comment on a public PR can no longer stand in for the author's canvas.
+
 ## 0.11.1
 
 Changes since 0.11.0.
