@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { ORIGIN_HINT, readEnv } from '../config.js'
-import type { Git } from '../git/git.js'
+import { type Git, redactCredentials } from '../git/git.js'
 import { CLI_INFO, type HostCli, type HostClient } from '../host/client.js'
 import { GITHUB_HOST, type Host } from '../host/host.js'
 import { parseOriginRemote } from '../host/remote.js'
@@ -181,7 +181,11 @@ export async function runDoctorChecks(
     const url = await deps.git.remoteUrl('origin')
     const parsed = url === null ? null : parseOriginRemote(url, readEnv(deps.env, 'PR_REVIEW_HOST'))
     if (parsed === null) {
-      origin = { ok: false, detail: url ?? 'no origin remote', hint: ORIGIN_HINT }
+      origin = {
+        ok: false,
+        detail: url === null ? 'no origin remote' : redactCredentials(url),
+        hint: ORIGIN_HINT,
+      }
     } else {
       host = parsed.host
       origin = { ok: true, detail: `${parsed.repo.owner}/${parsed.repo.name} (${host.label})` }

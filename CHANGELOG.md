@@ -47,6 +47,10 @@
 - Import refuses a canvas dated more than a day in the future, and one whose dates are not ISO
   times. The newest copy of a commit's canvas wins by the dates the canvas states, so a canvas
   dated ahead was never replaced.
+- A token kept in the origin remote's URL is no longer printed by `pr-review doctor`, by the
+  "origin is not a GitHub or GitLab URL" error, or with a logged git error.
+- Values in forge API queries are sent as plain text. A value that starts with `@`, as a branch
+  name may, was read as a file to send.
 
 ## 0.11.1
 

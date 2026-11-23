@@ -172,6 +172,19 @@ describe('runDoctorChecks', () => {
     })
   })
 
+  it('names an origin it cannot use without the token kept in its URL', async () => {
+    const report = await runDoctorChecks(
+      deps({
+        git: createFakeGit({ remotes: { origin: 'https://oauth2:glpat-secret@bitbucket.org/a/b.git' } }),
+      })
+    )
+    expect(report.checks.origin).toEqual({
+      ok: false,
+      detail: 'https://***@bitbucket.org/a/b.git',
+      hint: ORIGIN_HINT,
+    })
+  })
+
   it('reports what is wrong and how to fix it, one hint per failing check', async () => {
     // A data dir under a regular file cannot be created, which is the failure a read-only or
     // wrongly owned path produces too.

@@ -1,7 +1,7 @@
 import path from 'node:path'
 import type { Repo } from './contract/review-artifact.js'
 import { isChatAgent, type SettingsOverrides } from './contract/settings.js'
-import { type Git, GitError } from './git/git.js'
+import { type Git, GitError, redactCredentials } from './git/git.js'
 import type { Host } from './host/host.js'
 import { type OriginRemote, parseOriginRemote } from './host/remote.js'
 import { basePathOf, projectSlug, worktreeOf } from './hub/slug.js'
@@ -91,7 +91,11 @@ export async function resolveOrigin(
   }
   const parsed = parseOriginRemote(url, host)
   if (parsed === null) {
-    throw new ConfigError('NO_ORIGIN', `origin is not a GitHub or GitLab URL: ${url}`, ORIGIN_HINT)
+    throw new ConfigError(
+      'NO_ORIGIN',
+      `origin is not a GitHub or GitLab URL: ${redactCredentials(url)}`,
+      ORIGIN_HINT
+    )
   }
   return parsed
 }

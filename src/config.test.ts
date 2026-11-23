@@ -41,6 +41,14 @@ describe('resolveRepoRoot and resolveOrigin', () => {
       message: 'origin is not a GitHub or GitLab URL: git@bitbucket.org:a/b.git',
       hint: ORIGIN_HINT,
     })
+    // A token kept in the remote's URL is not repeated in the message.
+    await expect(
+      resolveOrigin(
+        createFakeGit({ remotes: { origin: 'https://oauth2:glpat-secret@bitbucket.org/a/b.git' } })
+      )
+    ).rejects.toMatchObject({
+      message: 'origin is not a GitHub or GitLab URL: https://***@bitbucket.org/a/b.git',
+    })
     await expect(
       resolveOrigin(createFakeGit({ remotes: { origin: 'git@bitbucket.org:a/b.git' } }), {
         PR_REVIEW_HOST: 'gitlab',
