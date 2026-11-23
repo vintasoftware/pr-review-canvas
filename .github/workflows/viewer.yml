@@ -106,18 +106,27 @@ jobs:
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: dist-viewer
-      - name: Check the site is the one the build made
+      # The archive is data from a job that ran third-party code: it is checked, then unpacked
+      # away from the checkout, so it cannot plant a .npmrc or overwrite the Worker's config for
+      # the steps below.
+      - name: Check the site is the one the build made, and unpack it apart
         run: |
           echo "$DIGEST  dist-viewer.tar" | sha256sum --check
-          tar -xf dist-viewer.tar
+          if tar -tvf dist-viewer.tar | grep -Ev '^[-d]'; then echo 'archive holds a link or device' >&2; exit 1; fi
+          if tar -tf dist-viewer.tar | grep -Ev '^dist-viewer(/|$)'; then echo 'archive holds a path outside dist-viewer/' >&2; exit 1; fi
+          if tar -tf dist-viewer.tar | grep -E '(^|/)\.\.(/|$)'; then echo 'archive holds a .. path' >&2; exit 1; fi
+          mkdir -p "$RUNNER_TEMP/site"
+          tar -xf dist-viewer.tar -C "$RUNNER_TEMP/site" --no-same-owner --no-same-permissions
+          rm dist-viewer.tar
         env:
           DIGEST: ${{ needs.build.outputs.digest }}
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
       - name: Deploy the viewer to Cloudflare Pages
+        working-directory: ${{ runner.temp }}
         run: >-
-          npx --yes "$WRANGLER" pages deploy dist-viewer
+          npx --yes "$WRANGLER" pages deploy "$RUNNER_TEMP/site/dist-viewer"
           --project-name "$PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
