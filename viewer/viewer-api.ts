@@ -169,13 +169,20 @@ export function createViewerApi(
   target: ViewerTarget,
   deps: {
     gh: BrowserGithub
-    state: ViewerStateStore
+    /**
+     * The review state of one reader: `null` is the anonymous reader. Each GitHub login gets its
+     * own, so a browser shared by two people never sends one person's drafts, or counts their
+     * marks, under the other's name.
+     */
+    state: (reader: string | null) => ViewerStateStore
     now?: () => Date
     /** Where an owner installs the GitHub App, to name in a not-found answer to a signed-in reader. */
     installUrl?: string
   }
 ) {
-  const { gh, state } = deps
+  const { gh } = deps
+  /** The store of the reader making the current request, set as each request starts. */
+  let state: ViewerStateStore = deps.state(null)
   const now = deps.now ?? (() => new Date())
   const repoPath = `repos/${target.owner}/${target.repo}`
   const diffs = new Map<string, Promise<Diff>>()
@@ -606,6 +613,7 @@ export function createViewerApi(
   /** One request, answered as the server would: JSON, or the error envelope. */
   async function handle(method: string, url: URL, body: unknown): Promise<ApiAnswer> {
     try {
+      state = deps.state(await login())
       const answer = await route(method, url, body)
       return answer instanceof Answer
         ? { status: answer.status, body: answer.body }

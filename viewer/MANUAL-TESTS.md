@@ -1,0 +1,102 @@
+# Static viewer: manual tests
+
+The checks to run by hand before a viewer change ships. Unit tests cover the routes and the
+sign-in flow against fakes; these cover what only a real GitHub, a real GitHub App, and a real
+browser show. Add a section when a feature lands, and record the last run at the bottom.
+
+## Setup
+
+- `viewer/.env.local` filled from `viewer/.env.example`, with the app's Client ID (it starts with
+  `Iv`), its client secret, and its slug.
+- The GitHub App has Contents read-only and Pull requests read and write, and is installed on the
+  test repository.
+- `pnpm viewer:dev`, then http://127.0.0.1:4174 (not `localhost`: the callback URL names
+  `127.0.0.1`).
+- A private test repository with a pull request that has a canvas comment, generated with the
+  CLI. For the sign-off tests, a second GitHub account that did not open that pull request.
+
+## Reading without signing in
+
+1. Open a public pull request whose canvas matches its head, such as
+   `?pr=vintasoftware/pr-review-canvas/110`. The canvas opens ready, with layers, diffs, and points.
+2. Open one whose canvas is older, such as `/123`. The page says the canvas is outdated, and
+   "view stale canvas" shows it with its own diffs.
+3. Open one with no canvas comment, such as `/131`. The page says there is no canvas.
+4. Mark a file reviewed and reload. The mark is still there.
+5. The top strip reads "Reading anonymously: public pull requests only." and posting is off, with
+   "sign in with GitHub to post comments and reviews".
+6. Open a private pull request. The page says it was not found, or is not public, and suggests
+   signing in.
+
+## Sign-in
+
+1. Click "sign in with GitHub". GitHub's authorize page names the app; approve it. The page comes
+   back to the same pull request and the strip shows "Signed in to GitHub as @login."
+2. Cancel on GitHub's authorize page instead. The page comes back and says the sign-in was
+   cancelled.
+3. Open the viewer in a new tab. It is signed out: the token ends with the tab.
+4. Sign out. The strip goes back to reading anonymously, and a reload stays signed out.
+5. In devtools, set `expiresAt` of the `pr-review-viewer:auth` session storage entry to a past
+   time, and reload. The page refreshes the token through the Worker and stays signed in.
+6. Revoke the app in GitHub (Settings, Applications, Authorized GitHub Apps) and reload. The strip
+   says GitHub no longer accepts the sign-in, and the page carries on anonymously.
+7. With `VITE_GITHUB_CLIENT_ID` set to the numeric App ID, the strip says it looks like the App
+   ID.
+
+## Reading a private repository
+
+1. Signed in, open the private test pull request. It opens like a public one.
+2. Open a private pull request in a repository the app is not installed on. The page says it was
+   not found, or the app is not installed, and links the install page.
+3. Resolve a review thread on GitHub and refresh. Signed in, it shows as resolved; signed out, as
+   open.
+
+## Comments
+
+Check each one on GitHub after posting.
+
+1. A comment on one line of the new side.
+2. A comment on a range: drag across several lines.
+3. A comment on a deleted line, on the old side.
+4. A reply in an existing thread.
+5. A comment on the whole pull request.
+6. A comment from an attention point. After a reload, the point shows as posted.
+7. With the app's Pull requests permission set to read-only, posting fails and names the
+   permission the app needs.
+
+## Pending review and sign-off
+
+1. Add two drafts, edit one, delete the other, and reload. The edited draft is still there.
+2. Submit a comment-only review. The draft arrives on GitHub inside that one review, and the
+   pending list empties.
+3. Write new drafts and discard them. Nothing reaches GitHub.
+4. As the pull request's author, try approve and request changes. Both are refused with "You
+   opened this pull request…"; a comment-only review still goes through.
+5. As the second account, approve before marking every layer reviewed. It is refused and names
+   the layers left. Mark them, approve again, and it goes through.
+6. Write a draft as one account, sign out, and sign in as the other in the same browser. The
+   draft and the marks are not there, and a review submitted now carries no comments. Sign back
+   in as the first account: the draft is back.
+
+## New commits on the pull request
+
+1. Push a commit that leaves the diff the same, such as merging the base in. The canvas stays
+   current, marked as carried over.
+2. Push a commit that changes code. The canvas shows as outdated.
+3. Post from a tab left open on the old head. It is refused: the pull request has a new head.
+4. With a draft written before that push, submit a review. It is refused until the draft is
+   copied or deleted.
+
+## Not covered yet
+
+- A large pull request (hundreds of files, or one very large file). The ADR asks the viewer to
+  list the files GitHub did not send in full; that is not built.
+- A pull request from a fork.
+- A pull request with more than 100 comments.
+- The hosted build behind Cloudflare, with its CSP header.
+
+## Runs
+
+| Date       | Commit    | Who | Result                                                                |
+| ---------- | --------- | --- | --------------------------------------------------------------------- |
+| 2026-11-23 | `e53405a` |     | Sign-in, reading a private pull request, and one comment: all worked. |
