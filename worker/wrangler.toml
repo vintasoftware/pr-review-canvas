@@ -1,6 +1,6 @@
 # The auth Worker of the static viewer (docs/adr/0005-static-read-only-viewer.md).
-# Deploy with `npx wrangler deploy --config worker/wrangler.toml` after setting the values below
-# and the secret: `npx wrangler secret put GITHUB_CLIENT_SECRET --config worker/wrangler.toml`.
+# CI deploys it (.github/workflows/viewer.yml) with the wrangler locked in .github/deploy-tools.
+# Set the secret once with that wrangler: see "Deploy" in viewer/README.md.
 name = "pr-review-canvas-auth"
 main = "auth-worker.ts"
 compatibility_date = "2026-11-01"

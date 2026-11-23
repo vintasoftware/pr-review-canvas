@@ -112,14 +112,26 @@ The footer names the build as `<version>+<commit>`, so the code running can be m
 that touches it, and deploys only from a `viewer-v*` tag on a commit of main, through the
 `viewer-production` GitHub environment. Nobody deploys from a laptop.
 
+The deploy job runs wrangler from `.github/deploy-tools`, which has its own `package-lock.json`, so
+wrangler and every package under it are pinned. To move to a newer wrangler, change its version in
+`.github/deploy-tools/package.json`, then refresh the lockfile:
+
+```bash
+npm install --prefix .github/deploy-tools --package-lock-only --ignore-scripts
+```
+
 One-time setup:
 
 1. In Cloudflare, create a Pages project for the viewer, and an API token that can edit that
    project and Workers on the account, and nothing else.
-2. Set the Worker's client secret once:
+2. Set the Worker's client secret once, with the locked wrangler:
 
    ```bash
-   npx wrangler@4.158.0 secret put GITHUB_CLIENT_SECRET --config worker/wrangler.toml
+   npm ci --prefix .github/deploy-tools --ignore-scripts
+   ```
+
+   ```bash
+   .github/deploy-tools/node_modules/.bin/wrangler secret put GITHUB_CLIENT_SECRET --config worker/wrangler.toml
    ```
 
 3. In the repository's settings, add the `viewer-production` environment, limited to `viewer-v*`
