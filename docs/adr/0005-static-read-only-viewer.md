@@ -66,21 +66,40 @@ The canvas stores hunk headers, not diff text. The viewer fetches the diff betwe
 `mergeBaseSha` and the canvas's head from the host API (`compare` on GitHub, the repository compare
 endpoint on GitLab) and checks every file and hunk against the canvas before rendering. If the head
 moved, the carried-over and outdated rules apply as they do locally: an identical diff shows the
-canvas as current, and any other diff shows the outdated bar. When the API truncates or omits a
-patch (large files, large pull requests), the viewer shows which files it could not load and points
-to the local app, rather than rendering the canvas over a partial diff.
+canvas as current, and any other diff shows the outdated bar.
+
+The viewer uses the compare diff because the pull request diff refuses more than 300 files. The
+compare diff has its own limit: it answers 422 when a range takes too long to generate. On a 422
+the viewer rebuilds the diff from the pull
+request's file list (up to 3000 files) or the compare file list. That list leaves out the patch of
+any file that is too large, and the viewer drops any file whose name or patch could be read as
+other diff text. The canvas then renders with a warning naming each file it could not load, and
+those files show as unavailable, with a pointer to the local app. A rebuilt diff can group nearby
+hunks differently from `git diff`, so a canvas note on the second of two merged hunks loses its
+place.
 
 ### Review state
 
-Progress, dismissals, hidden threads, and the pending review live in IndexedDB, keyed the same way
-as the local store (host, repository, pull request, canvas head). They stay in that browser. Moving
-between machines or between the viewer and the local app does not carry them.
+Progress, dismissals, hidden threads, and the pending review live in `localStorage`, keyed by
+repository, pull request, and the signed-in GitHub login, so two accounts in one browser keep
+separate reviews. Review marks reset when a new canvas replaces the one they were made on, as they
+do locally. The state stays in that browser: moving between machines, or between the viewer and
+the local app, does not carry it.
+
+Answers from the GitHub API are cached by ETag. Anonymous answers, which are public data, go in
+`sessionStorage`; answers fetched with a token stay in memory, so private code is never written to
+browser storage and is gone when the tab closes.
 
 ### API seam
 
-`static/js/api.js` is the one place the browser calls the server. The viewer build swaps it for a
-browser adapter that implements the read and review calls against the host API and IndexedDB, and
-reports generation, chat, and import as unavailable. The rendering modules do not change.
+`static/js/api.js` is the one place the browser calls the server, and it does so with `fetch`. The
+viewer leaves that file as it is: before the app loads, it replaces `window.fetch` with a version
+that answers the app's API paths in the browser, against the host API and browser storage, and
+passes every other request through. It reuses the server's own code for mapping pull requests,
+reading the canvas zip, checking inline comment targets, and building review bodies, and it answers
+generation, chat, and import as not available. The bundle it returns carries `viewer: true`, which
+hides the local app's commands (regenerate, export, settings, the drop zone). No other rendering
+code changes.
 
 ## Sign-in
 
@@ -128,11 +147,17 @@ its headers can ship JavaScript that reads every repository a signed-in reviewer
 next page load runs it. The local app has the same exposure only when a user upgrades from npm; the
 viewer has it on every load. Deploy access is therefore the main control:
 
-- Only the CI workflow on protected `main` deploys, through a scoped Cloudflare API token, never a
-  developer's machine.
+- Only the CI workflow deploys. It runs from a `viewer-v*` tag on a commit of protected `main`,
+  through a GitHub environment that holds a scoped Cloudflare API token, so no developer machine
+  holds deploy access.
+- The token never shares a job with the project's dependencies. One job installs, tests, and
+  builds with no secret in reach, then packs the site and records its SHA-256. The deploy job
+  checks the archive against that digest, refuses links and paths outside the site, unpacks it away
+  from the checkout, and runs only wrangler, with install scripts off. Every action is pinned by
+  commit.
 - The Cloudflare account requires MFA and has as few members as the work allows.
-- Each deploy is a tagged release, and the viewer shows its version, so a reviewer or auditor can
-  match the running code to a commit.
+- The viewer's footer shows its version and the commit it was built from, so a reviewer or auditor
+  can tell which code is running.
 - The viewer loads no third-party scripts, analytics, or error reporting. Every dependency is
   bundled at build time from the lockfile.
 
@@ -160,7 +185,8 @@ viewer has it on every load. Deploy access is therefore the main control:
   the GitHub App, since control of either reaches reviewers' repositories.
 - The viewer and the local app keep separate review state, so a reviewer who switches between them
   starts with no marks on the other side.
-- Pull requests whose diff the host API truncates still need the local app.
+- Pull requests whose diff GitHub refuses open in the viewer with a warning, but files GitHub sends
+  no patch for still need the local app.
 - `pnpm verify` gains a viewer build and browser tests that run the app with the browser adapter and
   a mocked host API.
 
@@ -171,7 +197,7 @@ viewer has it on every load. Deploy access is therefore the main control:
   baseline.
 - HIPAA: code, diffs, and comments never reach Vinta's infrastructure. Cloudflare Pages serves
   static files and the Worker sees only authorization codes and tokens, so the data path is the one
-  the local app already has, with IndexedDB in place of `~/.pr-review`. Our reading is that this
+  the local app already has, with browser storage in place of `~/.pr-review`. Our reading is that this
   adds no new party that creates, receives, keeps, or transmits PHI, provided the viewer and Worker
   keep to the no-analytics, no-error-reporting, no-logging rules above. The compliance owner has to
   confirm that reading, and each project still decides on its own, since client BAAs and security
