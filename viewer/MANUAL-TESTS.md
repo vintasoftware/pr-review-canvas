@@ -27,6 +27,10 @@ browser show. Add a section when a feature lands, and record the last run at the
    "sign in with GitHub to post comments and reviews".
 6. Open a private pull request. The page says it was not found, or is not public, and suggests
    signing in.
+7. On every screen (ready, outdated, no canvas, and an outdated canvas opened with "view stale
+   canvas"), the header has refresh and help but no regenerate, export zip, or settings; nothing
+   offers to generate a canvas or to drop a zip; and the footer says "hosted viewer". With no
+   canvas, the page shows the author `/pr-review-canvas <number>` to run.
 
 ## Sign-in
 

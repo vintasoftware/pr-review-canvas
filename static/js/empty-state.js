@@ -112,8 +112,13 @@ export function sharedCanvasCalloutHtml(bundle) {
  */
 function skillCommandHtml(bundle) {
   const run = bundle.chat.enabled ? 'Or run this' : 'Run this'
+  // The hosted viewer is read by reviewers, who generate nothing: the command is the author's.
+  const where =
+    bundle.viewer === true
+      ? 'The author generates one by running this in Claude Code or Codex in their clone of the repository. Refresh once it is published.'
+      : `${run} in Claude Code or Codex from this repo. The page updates when the canvas is published.`
   return (
-    `<p class="hint">${run} in Claude Code or Codex from this repo. The page updates when the canvas is published.</p>` +
+    `<p class="hint">${where}</p>` +
     `<div class="cmdbox"><code>${esc(bundle.skillCommand)}</code><button class="cmd${bundle.chat.enabled ? '' : ' fill'}" type="button" data-copy="${esc(bundle.skillCommand)}" title="Copy">copy</button></div>`
   )
 }
@@ -146,7 +151,7 @@ function dropZoneHtml() {
  */
 export function renderEmptyState(bundle) {
   const heading = LOCAL_HEADINGS[bundle.local ?? ''] ?? 'No review canvas for this PR yet'
-  const transfer = bundle.local ? '' : dropZoneHtml() + sharedCanvasCalloutHtml(bundle)
+  const transfer = bundle.local || bundle.viewer ? '' : dropZoneHtml() + sharedCanvasCalloutHtml(bundle)
   return (
     '<section class="panel empty" id="empty-state" aria-labelledby="es-h">' +
     `<div class="panel-h"><h2 id="es-h">${heading}</h2></div>` +
@@ -195,19 +200,24 @@ function barHtml(kind, name, text) {
   return `<div class="stale-bar ${kind}" role="status" data-bar="${esc(name)}"><span class="bar-text">${text}</span>${DISMISS_BAR_HTML}</div>`
 }
 
+/** The command that generates a canvas for the head, where a local app can run it. */
+const STALE_GENERATE_HTML =
+  '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">generate for current head</button>'
+
 /**
  * The bar that stays on screen while a stale canvas is shown, so the reader is never misled about
  * which commit the diffs come from, until they dismiss it for this pair of commits.
  * @param {NonNullable<PrBundle['stale']>} stale
  * @param {PrBundle['local']} [local]
+ * @param {{ viewer?: boolean | undefined }} [opts] `viewer`: the hosted viewer, which generates nothing
  * @returns {string}
  */
-export function staleBarHtml(stale, local) {
+export function staleBarHtml(stale, local, opts = {}) {
   return barHtml(
     'outdated-bar',
     `outdated:${stale.canvasHeadSha}:${stale.currentHeadSha}${stale.relation === 'other-base' ? `:${stale.currentMergeBaseSha}` : ''}`,
-    `<strong>Canvas is outdated.</strong> You are reading ${stale.relation === 'other-base' ? 'an older diff' : 'an older commit'}. ${esc(staleSummary(stale, local))} ` +
-      '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">generate for current head</button>'
+    `<strong>Canvas is outdated.</strong> You are reading ${stale.relation === 'other-base' ? 'an older diff' : 'an older commit'}. ${esc(staleSummary(stale, local))}` +
+      (opts.viewer ? '' : ` ${STALE_GENERATE_HTML}`)
   )
 }
 
@@ -215,9 +225,10 @@ export function staleBarHtml(stale, local) {
  * The note above a canvas that was generated for another commit of the pull request whose diff is
  * identical to the head's, so the canvas still applies.
  * @param {NonNullable<PrBundle['carriedOver']>} carried
+ * @param {{ viewer?: boolean | undefined }} [opts] `viewer`: the hosted viewer, which generates nothing
  * @returns {string}
  */
-export function carriedOverBarHtml(carried) {
+export function carriedOverBarHtml(carried, opts = {}) {
   const canvas = carried.canvasHeadSha.slice(0, 7)
   const head = carried.currentHeadSha.slice(0, 7)
   // How far the head moved, when the bundle knows: a head that reached the same diff by a rebase
@@ -228,8 +239,10 @@ export function carriedOverBarHtml(carried) {
     'carried-over-bar',
     `carried-over:${carried.canvasHeadSha}:${carried.currentHeadSha}`,
     '<strong>Canvas still applies.</strong> ' +
-      `${esc(`It was generated for ${canvas}; the head ${head}${distance} has the identical diff.`)} ` +
-      '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">regenerate anyway</button>'
+      esc(`It was generated for ${canvas}; the head ${head}${distance} has the identical diff.`) +
+      (opts.viewer
+        ? ''
+        : ' <button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">regenerate anyway</button>')
   )
 }
 
@@ -259,14 +272,15 @@ export function marksCarriedBarHtml(markedCanvasSha, canvasSha) {
  */
 export function renderStaleState(bundle) {
   const stale = bundle.stale
-  const transfer = bundle.local ? '' : dropZoneHtml() + sharedCanvasCalloutHtml(bundle)
+  const transfer = bundle.local || bundle.viewer ? '' : dropZoneHtml() + sharedCanvasCalloutHtml(bundle)
   return (
     '<section class="panel empty" id="empty-state" aria-labelledby="es-h">' +
     '<div class="panel-h"><h2 id="es-h">Canvas is outdated</h2></div>' +
     '<div class="body center">' +
     `<p class="hint">${stale ? esc(staleSummary(stale, bundle.local)) : ''}</p>` +
     '<div class="cmdbox"><button class="cmd fill" type="button" id="view-stale">view stale canvas</button>' +
-    '<button class="cmd" type="button" id="stale-generate" aria-haspopup="dialog">generate for current head</button></div>' +
+    (bundle.viewer ? '' : STALE_GENERATE_HTML) +
+    '</div>' +
     skillCommandHtml(bundle) +
     transfer +
     '</div></section>'
