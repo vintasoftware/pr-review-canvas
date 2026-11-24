@@ -21,6 +21,9 @@
 
 - After `Enter` on a bar link of **One point at a time**, the focus stays on the bar, so `Enter`
   again moves on. Before, it went to the top of the page.
+- A commit that only adds a `Settled-decision` line, or an amend that adds one, marks the canvas
+  outdated, so the next canvas shows the decision. Before, the diff was unchanged, the old canvas
+  was carried over, and the decision never appeared.
 
 ### Sign-off
 
