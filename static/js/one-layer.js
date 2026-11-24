@@ -450,8 +450,10 @@ export function initOneLayer(root, opts) {
     stop: () => listeners.abort(),
     setView,
     /**
-     * The rail's switch: `next` opens where the reader is, or on `place`, and the URL says so. A
-     * view of one section at a time opens at its top; all the layers at once, on that place.
+     * A switch of view, from the rail, the settings or a bar: `next` opens where the reader is, or
+     * on `place`, and the URL says so. The one-point view opens at the page top. All the layers at
+     * once, and one layer at a time for a place inside a layer such as a point's card, open on that
+     * place. Otherwise one layer at a time opens the section under its bar.
      * @param {PageView} next
      * @param {string} [place]
      */
@@ -468,12 +470,15 @@ export function initOneLayer(root, opts) {
           `${win.location.pathname}${win.location.search}${here}`
         )
       }
-      const target = view !== 'all' || here === undefined ? null : targetFor(here)
-      // One layer at a time opens the section under its bar, as a step does.
-      const section = view === 'one' ? sectionFor(shownHash) : null
-      if (target !== null) {
+      const target = view === 'points' || here === undefined ? null : targetFor(here)
+      if (view === 'one' && (target === null || isPageSection(target))) {
+        // One layer at a time opens the section under its bar, as a step does.
+        const section = sectionFor(shownHash)
+        if (section === null || !showAtTop(section)) win.scrollTo({ top: 0 })
+      } else if (target !== null) {
+        // The reader's place, such as a point's card, goes to the top of the screen.
         scrollIntoViewSafe(target, 'start')
-      } else if (section === null || !showAtTop(section)) {
+      } else {
         win.scrollTo({ top: 0 })
       }
     },
