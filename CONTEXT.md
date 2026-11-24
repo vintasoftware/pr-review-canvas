@@ -78,7 +78,7 @@ The review interface and saved review state on the reviewer's machine. GitHub op
 _Avoid_: Offline AI, code never leaves the machine
 
 **Carried-over canvas**:
-A canvas generated for an earlier commit of the pull request, shown as current because the head's diff is identical to the one the canvas was generated from.
+A canvas generated for an earlier commit of the pull request, shown as current because the head's diff is identical to the one the canvas was generated from and its commit messages settle the same decisions.
 _Avoid_: Merge-tolerant canvas, approximately matching canvas
 
 **Incremental canvas**:

@@ -1223,7 +1223,9 @@ by a base change, marks the canvas outdated as before, because the canvas's laye
 attention points describe the diff it was generated from. It needs `canvas.keepForIdenticalDiff`
 (the default) and both commits in the local clone: the canvas's own commit has to be there for its
 diff to be rebuilt, and without that diff there is nothing to compare, so the canvas reads outdated.
-Two empty change sets are not compared either. `pr-review publish` and `pr-review import` apply the
+Two empty change sets are not compared either. The commit messages count as well: a head whose
+commits carry other [`Settled-decision`](#settled-decisions) lines than the canvas's commits marks
+the canvas outdated, since the canvas does not show those decisions. `pr-review publish` and `pr-review import` apply the
 same rule, so the CLI never calls a canvas stale that the page shows as current.
 
 AI Chat also answers on an outdated canvas: it quotes the diff of the canvas's own commit, the
