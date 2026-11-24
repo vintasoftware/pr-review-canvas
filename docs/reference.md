@@ -419,7 +419,9 @@ Validation failures from `validate` use its report format instead.
 ## Project config
 
 All keys are optional. See the [example configuration](../pr-review.config.example.yml) for a
-starting file. Invalid YAML or invalid values produce a warning and fall back to the defaults.
+starting file. Invalid YAML or invalid values produce a warning and fall back to the defaults. The
+warning shows on the review page and in the server log, and the one-shot commands (`prepare`,
+`validate`, `publish`, `export`, `import`, `clean`) print it on stderr.
 Lists you supply replace their defaults.
 
 Path patterns match repository-relative paths. `**` crosses directories; `*` and `?` match

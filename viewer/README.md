@@ -39,8 +39,12 @@ the page's `/api` calls, and `viewer-api.ts` answers them in the browser:
   reviews with the server's own GitHub code (`src/github/post-comment.ts`,
   `src/github/post-review.ts`). The same checks run first: the line must be in the diff, the page
   must show the current head, an approval needs every layer reviewed, and the author cannot
-  approve their own pull request. A pending comment goes out only with a review on the diff it was
-  written on.
+  approve their own pull request. The head check reads the pull request again before the write, so
+  a page left open across a push is refused instead of posting on the old head's lines. A pending
+  comment goes out only with a review on the diff it was written on. The review body the page
+  offers ends "Reviewed with the pr-review canvas viewer."
+- Errors show GitHub's status and message, such as `HTTP 403: …`, without the local app's CLI
+  wording.
 - AI chat, generation, and import answer `NOT_IMPLEMENTED`.
 
 ## Sign in with GitHub
@@ -159,6 +163,9 @@ git tag viewer-v0.1.0 && git push origin viewer-v0.1.0
   minutes, and the page's refresh command asks again. Signed in, the limit is the reader's own.
 - Anonymous readers see resolved review threads as open: GitHub's GraphQL API, which reports
   them, needs a token.
+- On an outdated canvas, posting is off until the author publishes a canvas of the current head:
+  line numbers of the older commit mean something else on the head. A comment on the whole pull
+  request names no lines, so the head check does not apply to it.
 - The page leaves out the local app's commands: regenerate, export zip, settings, generating a
   canvas for the head, and dropping a canvas zip. The bundle's `viewer: true` tells the shared page
   code to draw none of them. With no canvas, the page shows the author the `/pr-review-canvas`

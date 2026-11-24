@@ -20,7 +20,7 @@ deploy show. Add a section when a feature lands, and record the last run at the 
 
 ## Reading without signing in
 
-GitHub allows 60 anonymous requests an hour per address, and one page load takes about ten. Run
+GitHub allows 60 anonymous requests an hour per address, and one page load takes about six. Run
 these first, and save the signed-out half of "Reading a private repository" step 3 for when the
 limit has room; the page says when it runs out.
 
