@@ -180,6 +180,18 @@ test.describe('the bar of one layer at a time', () => {
     await expect.poll(() => barAtTop(page)).toBe(true)
   })
 
+  test('Enter on a rail link moves the keyboard into the layer: Tab goes on inside it', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl + '#overview')
+    await page.locator('nav.rail a[href="#layer-run-path"]').focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#layer-run-path')).toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(page.locator('#layer-run-path :focus')).toHaveCount(1)
+  })
+
   test('keeps the keyboard on the bar: Enter again moves on', async ({ page, reviewUrl }) => {
     await page.goto(reviewUrl + '#overview')
     const on = page.locator('#stop-nav a[data-way="on"]')
