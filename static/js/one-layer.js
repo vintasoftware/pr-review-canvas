@@ -399,8 +399,15 @@ export function initOneLayer(root, opts) {
         return
       }
       const href = link.getAttribute('href') ?? ''
-      if (openAtTop(targetFor(href))) {
+      const fromBar = link.closest('nav.step-nav') !== null
+      const target = targetFor(href)
+      if (openAtTop(target)) {
         event.preventDefault()
+        // The browser moves the focus into a section it scrolls to. A bar link gives it to the new bar.
+        if (!fromBar && target instanceof HTMLElement) {
+          target.tabIndex = -1
+          target.focus({ preventScroll: true })
+        }
       } else if (view !== 'points') {
         revealFragment(href)
       } else if (followInPoints(href)) {
