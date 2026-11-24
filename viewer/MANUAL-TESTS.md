@@ -11,8 +11,9 @@ deploy show. Add a section when a feature lands, and record the last run at the 
 - `viewer/.env.local` filled from `viewer/.env.example`, with the app's Client ID (it starts with
   `Iv`), its client secret, and its slug. The slug is optional for the viewer, but without it
   "Reading a private repository" step 2 shows no install link.
-- The GitHub App has Contents read-only and Pull requests read and write, and is installed on the
-  test repository.
+- The GitHub App has Contents read-only and Pull requests read and write, can be installed on any
+  account (a private app signs in only its owner, so the second account below gets a 404), and is
+  installed on the test repository.
 - `pnpm viewer:dev`, then http://127.0.0.1:4174 (not `localhost`: the callback URL names
   `127.0.0.1`).
 - A private test repository with a pull request that has a canvas comment, generated with the

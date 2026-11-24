@@ -80,6 +80,9 @@ In GitHub, open Settings, then Developer settings, then GitHub Apps, then New Gi
   on an app that is already installed, each installation's owner has to accept the change before
   it applies there.
 - Generate a client secret.
+- "Where can this GitHub App be installed?": Any account. An app kept to "Only on this account"
+  signs in only its owner; for anyone else GitHub's authorize page answers 404. The app's
+  settings page can change this later, under Advanced.
 
 Install the app on each account or organization whose private pull requests should open.
 
