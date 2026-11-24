@@ -633,6 +633,35 @@ describe('transfer routes', () => {
       })
     })
 
+    it('loads, exports, and imports over a canvas an earlier version stored with any manifest date', async () => {
+      t = await contextFor()
+      // An earlier version stored a shared manifest's `generatedAt` as it was, checked or not.
+      await t.ctx.canvases.write(HEAD_SHA, artifactFor(HEAD_SHA), { ...manifest(HEAD_SHA), generatedAt: '~' })
+      const app = createApp(t.ctx)
+      const bundle = await json<PrBundle>(await app.request('/api/prs/42', { headers: LOCAL }))
+      expect([bundle.status, bundle.artifact?.summary]).toEqual(['ready', artifactFor(HEAD_SHA).summary])
+      const exported = await app.request('/api/prs/42/export', { headers: LOCAL })
+      expect(exported.headers.get('content-disposition')).toContain(
+        `pr-42-20260910T110000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`
+      )
+      const zip = readCanvasZip(new Uint8Array(await exported.arrayBuffer()))
+      expect(zip.manifest.generatedAt).toBe(artifactFor(HEAD_SHA).generatedAt)
+      const form = new FormData()
+      form.append(
+        'file',
+        new File(
+          [buildCanvasZip(manifest(HEAD_SHA), artifactFor(HEAD_SHA)).slice().buffer as ArrayBuffer],
+          'canvas.zip'
+        )
+      )
+      const imported = await app.request('/api/prs/42/import', {
+        method: 'POST',
+        headers: SAME_ORIGIN,
+        body: form,
+      })
+      expect((await json<ImportResult>(imported)).status).toBe('exists')
+    })
+
     it('does not scan when a canvas for the head is already stored', async () => {
       const fetches = alwaysFetch(() => new Response('', { status: 404 }))
       t = await contextFor(`canvas: ${FILE_URL}`, fetches.impl)

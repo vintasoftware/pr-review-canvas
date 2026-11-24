@@ -10,7 +10,11 @@ export const CanvasManifestSchema = z.object({
   mergeBaseSha: z.string().regex(/^[0-9a-f]{40}$/),
   baseRef: z.string(),
   headRef: z.string(),
-  generatedAt: CanvasTimeSchema,
+  /**
+   * A copy of the canvas's own `generatedAt`, as publish writes it. Only the canvas's times are
+   * judged (see `revisionTime`); an earlier version stored whatever a shared manifest said here.
+   */
+  generatedAt: z.string(),
   generator: GeneratorSchema,
 })
 export type CanvasManifest = z.infer<typeof CanvasManifestSchema>

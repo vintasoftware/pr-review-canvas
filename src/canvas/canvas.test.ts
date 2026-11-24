@@ -457,11 +457,9 @@ describe('importCanvas', () => {
           currentHead: AT_HEAD,
         })
       )
+      // The manifest's `generatedAt` is a copy of the canvas's: only the canvas's is judged.
       expect(err.code).toBe('CANVAS_INVALID')
-      expect(err.issues).toEqual([
-        'manifest.json: generatedAt Invalid ISO datetime',
-        'review.json: generatedAt Invalid ISO datetime',
-      ])
+      expect(err.issues).toEqual(['review.json: generatedAt Invalid ISO datetime'])
     }
   })
 
