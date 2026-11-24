@@ -411,8 +411,11 @@ export const ReviewArtifactSchema = z.object({
   points: z.array(PointSchema).max(ARTIFACT_MAX_POINTS),
   /** Topics a newcomer may need to read the change. None on a canvas written before it existed. */
   background: z.array(BackgroundTopicSchema).max(LIMITS.maxBackgroundTopics).default([]),
-  /** An ISO time in UTC, as `toISOString` writes it: the newest copy of a canvas is found by it. */
-  generatedAt: z.iso.datetime(),
+  /**
+   * An ISO time in UTC to the millisecond, the only shape `toISOString` writes, so these times sort
+   * as text in the order they happened.
+   */
+  generatedAt: z.iso.datetime({ precision: 3 }),
   generator: GeneratorSchema,
   source: z.enum(['local', 'import']),
   importedAt: z.string().optional(),
@@ -436,7 +439,7 @@ export const ReviewArtifactSchema = z.object({
    * When the author last changed the canvas after it was generated. An import keeps whichever copy
    * of a commit's canvas is newest by this time, or by `generatedAt` when it was never revised.
    */
-  revisedAt: z.iso.datetime().optional(),
+  revisedAt: z.iso.datetime({ precision: 3 }).optional(),
 })
 export type ReviewArtifact = z.infer<typeof ReviewArtifactSchema>
 

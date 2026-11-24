@@ -1,7 +1,7 @@
 // One import path for the three ways a canvas arrives: the drop zone, `pr-review import`, and a
 // zip discovered on the pull request. Everything is checked here, so no caller can skip a step.
 import type { ImportResult } from '../contract/api.js'
-import { canvasRevision } from '../contract/canvas-manifest.js'
+import { revisionTime } from '../contract/canvas-manifest.js'
 import { type DiffedCommit, staleRelation, standsForHead } from '../review/carry-over.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
@@ -19,9 +19,6 @@ export interface ImportOptions {
   /** Accepts a canvas exported from another repository. */
   force?: boolean | undefined
 }
-
-/** How far ahead of this machine's clock a canvas may be dated: clocks differ, by far less. */
-const CLOCK_ALLOWANCE_MS = 24 * 60 * 60 * 1000
 
 function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
   return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
@@ -81,10 +78,8 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
     throw err instanceof CanvasZipError ? toAppErrorFromZip(err) : err
   }
   const { manifest, artifact, prNumber: canvasPr } = contents
-  // The newest copy of a commit's canvas wins, by the times the canvas itself states. One dated
-  // after now would outrank every canvas made later, so it is not taken.
-  const latest = Math.max(Date.parse(artifact.generatedAt), Date.parse(canvasRevision(artifact)))
-  if (latest > ctx.now().getTime() + CLOCK_ALLOWANCE_MS) {
+  const incoming = revisionTime(artifact, ctx.now())
+  if (incoming === null) {
     throw new AppError(
       'CANVAS_INVALID',
       'this canvas is dated in the future',
@@ -124,8 +119,10 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
   const index = await ctx.canvases.readIndex()
   const stored = index.canvases[headSha]
   // The author revises a shared canvas by settling points, which keeps its generation time, so a
-  // copy is newer when it was generated or revised later.
-  const keepStored = stored !== undefined && canvasRevision(stored) >= canvasRevision(artifact)
+  // copy is newer when it was generated or revised later. A stored copy with no time to trust, as
+  // an earlier version could store, is never newer.
+  const storedTime = stored === undefined ? null : revisionTime(stored, ctx.now())
+  const keepStored = storedTime !== null && storedTime >= incoming
   if (!keepStored) {
     const importedAt = ctx.now().toISOString()
     await ctx.canvases.write(headSha, { ...artifact, source: 'import', importedAt }, manifest, opts.prNumber)

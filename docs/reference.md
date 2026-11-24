@@ -281,8 +281,10 @@ pr-review import <zip> [--pr <n>] [--force]
   PR. A canvas generated before the PR existed names none and joins the pull request it is
   imported for.
 - Import refuses, with `CANVAS_INVALID`, a canvas dated more than a day ahead of this machine's
-  clock, and one whose dates are not ISO times in UTC. The newest copy of a commit's canvas wins by
-  the dates the canvas itself states, so one dated ahead would never be replaced.
+  clock, and one whose dates are not ISO times in UTC to the millisecond, as pr-review writes them.
+  The newest copy of a commit's canvas wins by the dates the canvas itself states, so one dated
+  ahead would never be replaced. A stored canvas dated that way, which an earlier version could
+  import, is replaced by the next canvas imported for its commit.
 - Import returns `ready`, `stale`, or `exists`, plus commit information and warnings. `exists`
   keeps a stored canvas generated at the same time or later. `derivable: false` means the canvas
   was accepted but its source diffs could not be rebuilt from Git.
@@ -1336,9 +1338,15 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
 
 The agent runs in the folder that holds the checkout (`<key>.cwd`), not in the checkout. acpx and
 the agents read their own configuration from the folder they start in, such as `.acpxrc.json`,
-`.claude/settings.json`, or `.mcp.json`. A pull request can add or change those files, and the
-agent of whoever reviews it must not be configured by them. A checkout an earlier version kept at
-`checkouts/<key>` is removed the next time that review is chatted about or generated.
+`.claude/settings.json`, or `.mcp.json`, and some of it, such as Codex's `AGENTS.md`, from every
+folder up to the root of the repository that folder is in. A pull request can add or change those
+files, and the agent of whoever reviews it must not be configured by them. So `<key>.cwd` is a git
+repository of its own, with no commits: the search for a repository's root stops there, and does
+not reach your own checkout, which holds the data directory by default. The agent is told that
+instruction files in the checkout, such as `AGENTS.md`, belong to the code under review and are not
+instructions to it. A checkout an earlier
+version kept at `checkouts/<key>` is listed where it is, and removed the next time that review is
+chatted about or generated, or by the next sweep.
 
 - A pull request and the branch review each get one. The branch review reads the branch's last
   commit, without your uncommitted edits.

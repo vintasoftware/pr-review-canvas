@@ -34,8 +34,11 @@
   checkout inside it as `code`, and no longer in the checkout itself. acpx and the agents read
   their own configuration from the folder they start in, such as `.acpxrc.json` or
   `.claude/settings.json`, and a pull request must not be able to configure its reviewer's agent
-  with files of its own. A checkout an earlier version made is removed the next time its review is
-  chatted about or generated, and the review's threads start a new agent session.
+  with files of its own. The folder is a git repository of its own, so an agent that reads
+  instructions up to a repository's root, as Codex does `AGENTS.md`, stops there and does not
+  reach your own checkout. A checkout an earlier version made is removed the next time its review
+  is chatted about or generated, or by the next sweep, and the review's threads start a new agent
+  session.
 - A symbolic link in a review checkout is written as a small file that holds the link's target, so
   reading it never opens a file outside the checkout.
 
@@ -43,10 +46,13 @@
 
 - The server refuses reads of its API from other sites, as it already refused writes. Loading a
   pull request fetches its commits and imports the canvas shared on it, and a page on another site
-  could ask for that.
+  could ask for that without you seeing it. A link from another site still opens a review page,
+  which loads its pull request as it does when you open it yourself.
 - Import refuses a canvas dated more than a day in the future, and one whose dates are not ISO
-  times. The newest copy of a commit's canvas wins by the dates the canvas states, so a canvas
-  dated ahead was never replaced.
+  times to the millisecond, as pr-review writes them. The newest copy of a commit's canvas wins by
+  the dates the canvas states, so a canvas dated ahead was never replaced. One stored that way by
+  an earlier version is replaced by the next canvas imported for its commit, and one whose dates
+  are not such times no longer loads: generate it again.
 - A token kept in the origin remote's URL is no longer printed by `pr-review doctor`, by the
   "origin is not a GitHub or GitLab URL" error, or with a logged git error.
 - Values in forge API queries are sent as plain text. A value that starts with `@`, as a branch

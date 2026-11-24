@@ -10,7 +10,7 @@ export const CanvasManifestSchema = z.object({
   mergeBaseSha: z.string().regex(/^[0-9a-f]{40}$/),
   baseRef: z.string(),
   headRef: z.string(),
-  generatedAt: z.iso.datetime(),
+  generatedAt: z.iso.datetime({ precision: 3 }),
   generator: GeneratorSchema,
 })
 export type CanvasManifest = z.infer<typeof CanvasManifestSchema>
@@ -42,7 +42,21 @@ export const CanvasIndexSchema = z.object({
 })
 export type CanvasIndex = z.infer<typeof CanvasIndexSchema>
 
-/** How new a copy of a commit's canvas is: the author's last revision, or its generation. */
-export function canvasRevision(entry: { generatedAt: string; revisedAt?: string | undefined }): string {
-  return entry.revisedAt ?? entry.generatedAt
+/** How far ahead of this machine's clock a canvas may be dated: clocks differ, by far less. */
+const CLOCK_ALLOWANCE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * How new a copy of a commit's canvas is: the time of the author's last revision, or of its
+ * generation. Null when the copy states a time that is no time or is more than a day ahead of
+ * `now`. The newest copy wins, so a copy dated ahead would win over every copy made later: it is
+ * never imported, and one stored before this rule loses to any copy that is.
+ */
+export function revisionTime(
+  entry: { generatedAt: string; revisedAt?: string | undefined },
+  now: Date
+): number | null {
+  const trusted = (time: number) => !Number.isNaN(time) && time <= now.getTime() + CLOCK_ALLOWANCE_MS
+  const generated = Date.parse(entry.generatedAt)
+  const revised = Date.parse(entry.revisedAt ?? entry.generatedAt)
+  return trusted(generated) && trusted(revised) ? revised : null
 }

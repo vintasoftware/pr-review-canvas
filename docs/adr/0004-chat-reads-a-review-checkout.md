@@ -5,8 +5,8 @@ pull request did not change came from whatever branch the reader had checked out
 reads from a **review checkout**: a detached `git worktree` under `.pr-review/`, next to the
 repository's canvases at `checkouts/<key>.cwd/code`, created on the first chat turn for that review
 and moved with `git checkout --detach <headSha>` before each turn, so it always shows the commit
-being chatted about. The agent's working directory is `checkouts/<key>.cwd`, the folder that holds
-the checkout, and never the checkout itself. A pull request's key is its number; the
+being chatted about. The agent's working directory is `checkouts/<key>.cwd`, a repository of the
+tool's own that holds the checkout, and never the checkout itself. A pull request's key is its number; the
 `branch` review checks out the branch's HEAD commit, leaving uncommitted edits out as that review
 does. The `uncommitted` review has no checkout and keeps reading the reader's own checkout, because
 the live working tree is the work under review.
@@ -35,7 +35,18 @@ At first the checkout was the agent's working directory. acpx and the agents rea
 configuration from the folder they start in (`.acpxrc.json`, `.claude/settings.json`, `.mcp.json`),
 and a checkout holds the files of the commit under review, so a pull request could configure the
 agent of whoever reviewed it. The agent now starts in a folder the tool owns, which holds the
-checkout as `code` and nothing else. Two other ways to do it were tried or weighed:
+checkout as `code` and nothing else.
+
+That folder is a git repository of its own, with no commits. Some agents read configuration from
+every folder up to the root of the repository they start in, as Codex does `AGENTS.md`, and look
+there for the repository's state. The data directory is inside the reader's checkout by default,
+so a plain folder would have handed the agent the reader's own instructions and branch as the
+review's. The checkout under `code` has a `.git` file of its own, so git run there still describes
+the reviewed commit. The agent is told that instruction files in the checkout, such as `AGENTS.md`,
+are part of the code under review: an agent that looks for them where it works, as Codex does, may
+still read them.
+
+Two other ways to do it were tried or weighed:
 
 - **An empty folder beside the checkout.** The agent's shell search of a folder outside its
   working directory needs a permission, and acpx denies every permission but reads, so the agent
@@ -50,6 +61,9 @@ the checkout leads outside it.
 
 - A thread from before the agent's folder moved out of the checkout starts a new acpx session on
   its next turn and is sent the seed again, because its session was scoped to the old folder.
+- Git in the checkout runs as `git -C code` or after `cd code`. Claude Code asks a permission for
+  both, which acpx denies, so Claude reads the reviewed commit's files but not its history; Codex
+  runs git in `code` as before.
 - Threads created before this change lose their acpx session (it was scoped to the reader's
   checkout); their next turn starts a new session and sends the seed again.
 - The worktree holds tracked files only. The seed points the agent at the reader's checkout for

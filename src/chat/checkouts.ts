@@ -1,6 +1,6 @@
 // Review checkouts: one detached git worktree per review, at the commit the chat talks about, so
 // the agent reads the reviewed version of every file without touching the reader's checkout. The
-// agent runs in a folder of the tool's own that holds the checkout as `code`, never in the
+// agent runs in a repository of the tool's own that holds the checkout as `code`, never in the
 // checkout itself. See docs/adr/0004-chat-reads-a-review-checkout.md.
 import { lstat, mkdir, open, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -81,7 +81,10 @@ export async function* readCodeAt(input: {
 
 /** The git commands a checkout needs. The real one runs git; tests pass a fake. */
 export interface CheckoutGit {
-  /** `git worktree add --detach --force <dir> <sha>`, run in the reader's repository. */
+  /**
+   * `git worktree add --detach --force <dir> <sha>`, run in the reader's repository, into a folder
+   * that `git init` first made a repository of its own (see `CheckoutLease.cwd`).
+   */
   add(dir: string, sha: string): Promise<void>
   /** `git checkout --detach --force <sha>`, run in the checkout. */
   move(dir: string, sha: string): Promise<void>
@@ -106,8 +109,11 @@ export function createCheckoutGit(repoRoot: string, exec: GitExec = execGit): Ch
     }
   }
   return {
-    // `--force` also takes over a registration whose folder was removed by hand.
-    add: (dir, sha) => must(repoRoot, ['worktree', 'add', '--detach', '--force', dir, sha]),
+    add: async (dir, sha) => {
+      await must(repoRoot, ['init', '--quiet', path.dirname(dir)])
+      // `--force` also takes over a registration whose folder was removed by hand.
+      await must(repoRoot, ['worktree', 'add', '--detach', '--force', dir, sha])
+    },
     move: (dir, sha) => must(dir, ['checkout', '--detach', '--force', '--quiet', sha]),
     head: async dir => {
       if (!(await exists(path.join(dir, '.git')))) {
@@ -126,10 +132,12 @@ export function createCheckoutGit(repoRoot: string, exec: GitExec = execGit): Ch
 export interface CheckoutLease {
   dir: string
   /**
-   * The folder an agent runs in while it reads this checkout, which holds the checkout as `code`
-   * and nothing else. acpx and the agents read their own configuration from the folder they start
-   * in, and a checkout holds the files of the commit under review, whose author must not be able
-   * to configure the reader's agent with them.
+   * The folder an agent runs in while it reads this checkout: a git repository of its own, with no
+   * commits, holding the checkout as `code`. acpx and the agents read their own configuration from
+   * the folder they start in, and some of it from the repository that folder is in, up to its root.
+   * A checkout holds the files of the commit under review, whose author must not configure the
+   * reader's agent with them; and the data directory is inside the reader's checkout by default,
+   * whose instructions and state are not the review's.
    */
   cwd: string
   /** The commit the checkout is on now, or null when it does not exist yet. */
@@ -330,7 +338,9 @@ export function createReviewCheckouts(opts: {
       if (review === null || meta === null) {
         continue
       }
-      out.push({ ...review, folder, dir: dirOf(folder), ...meta, locked: await isLocked(folder) })
+      // A checkout an earlier version made stays where it was until its next lease or sweep.
+      const dir = (await exists(formerDirOf(folder))) ? formerDirOf(folder) : dirOf(folder)
+      out.push({ ...review, folder, dir, ...meta, locked: await isLocked(folder) })
     }
     return out.sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))
   }

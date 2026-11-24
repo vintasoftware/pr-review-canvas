@@ -185,6 +185,14 @@ describe('createHubApp', () => {
       expect(await json(health)).toEqual({
         error: { code: 'NOT_FOUND', message: 'no route for GET /api/nope' },
       })
+      // A project's API under the prefix is its API: another site does not get to read it either.
+      const crossSite = await app.request('/r/acme/widgets/api/nope', {
+        headers: { ...LOCAL, 'sec-fetch-site': 'cross-site' },
+      })
+      expect(crossSite.status).toBe(403)
+      expect(await json(crossSite)).toEqual({
+        error: { code: 'CROSS_ORIGIN', message: 'cross-site request rejected' },
+      })
     })
 
     it("keeps the project page's own policy, whose nonce is the one on the page", async () => {

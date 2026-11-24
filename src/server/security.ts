@@ -36,8 +36,9 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
  * resolves to 127.0.0.1 sends its own hostname. The same-origin check on state-changing methods
  * stops cross-site requests, because this server can post to GitHub as the user. A read of the
  * API is refused from another site too: loading a pull request fetches its commits into the clone
- * and imports the canvas shared on it, which no other page gets to ask for. Pages are opened from
- * links on other sites, so they are not.
+ * and imports the canvas shared on it, which a page on another site could ask for unseen. Pages
+ * are opened from links on other sites, so they are not refused; a review page opened that way
+ * loads its pull request as it does from anywhere, in a tab the reader sees.
  */
 export const securityMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   const host = c.req.header('host')
