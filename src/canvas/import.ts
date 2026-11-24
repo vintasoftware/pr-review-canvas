@@ -1,7 +1,7 @@
 // One import path for the three ways a canvas arrives: the drop zone, `pr-review import`, and a
 // zip discovered on the pull request. Everything is checked here, so no caller can skip a step.
 import type { ImportResult } from '../contract/api.js'
-import { canvasRevision } from '../contract/canvas-manifest.js'
+import { revisionTime } from '../contract/canvas-manifest.js'
 import { type DiffedCommit, staleRelation, standsForHead } from '../review/carry-over.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
@@ -91,6 +91,15 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
     throw err instanceof CanvasZipError ? toAppErrorFromZip(err) : err
   }
   const { manifest, artifact, prNumber: canvasPr } = contents
+  const incoming = revisionTime(artifact, ctx.now())
+  if (incoming === null) {
+    throw new AppError(
+      'CANVAS_INVALID',
+      'this canvas is dated in the future',
+      400,
+      'check the clock of the machine that generated it, then generate or export it again'
+    )
+  }
   const warnings: string[] = []
   if (!sameRepo(manifest.repo, ctx.config.repo)) {
     const from = `${manifest.repo.owner}/${manifest.repo.name}`
@@ -145,9 +154,11 @@ export async function importCanvas(ctx: AppContext, opts: ImportOptions): Promis
     )
   }
   // The author revises a shared canvas by settling points, which keeps its generation time, so a
-  // copy is newer when it was generated or revised later.
+  // copy is newer when it was generated or revised later. A stored copy with no time to trust, as
+  // an earlier version could store, is never newer.
+  const storedTime = stored === undefined ? null : revisionTime(stored, ctx.now())
   const keepStored =
-    stored !== undefined && (others || (readable && canvasRevision(stored) >= canvasRevision(artifact)))
+    stored !== undefined && (others || (readable && storedTime !== null && storedTime >= incoming))
   if (!keepStored) {
     const importedAt = ctx.now().toISOString()
     await ctx.canvases.write(headSha, { ...artifact, source: 'import', importedAt }, manifest, opts.prNumber)

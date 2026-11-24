@@ -141,6 +141,8 @@ it('settle and reopen changes survive export and refresh import at the same comm
   await reader.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), manifest, 42)
   let time = Date.parse('2026-09-20T12:00:00Z')
   author.ctx.now = () => new Date(time++)
+  // Both machines' clocks agree: a canvas dated after the reader's now would be refused.
+  reader.ctx.now = author.ctx.now
   for (const settled of [true, false]) {
     const response = await createApp(author.ctx).request('/api/prs/42/points/fp-2/settled', {
       method: 'PUT',
@@ -156,6 +158,8 @@ it('settle and reopen changes survive export and refresh import at the same comm
 
 it('concurrent canvas revisions cannot let an older import overwrite a settlement', async () => {
   const t = await context()
+  // After every revision below was made.
+  t.ctx.now = () => new Date('2026-09-21T12:00:00.000Z')
   const otherSha = 'c'.repeat(40)
   const artifact = syntheticArtifact()
   const other = { ...artifact, pr: { ...artifact.pr, headSha: otherSha, number: 43 } }

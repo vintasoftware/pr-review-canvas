@@ -130,7 +130,7 @@ export function createHubApp(opts: HubAppOptions): Hono<AppEnv> {
   app.all(`${PROJECTS_PREFIX}*`, async c => {
     // A rebinding domain that resolves to this machine never gets a project built for it. A page
     // on another site can still make a plain GET here, which at most builds a saved project from
-    // its own checkout; the project app refuses its writes.
+    // its own checkout; the project app refuses its writes and the reads of its API.
     if (!isAllowedHost(c.req.header('host'))) {
       throw new AppError('FORBIDDEN_HOST', 'this server only answers to localhost', 403)
     }

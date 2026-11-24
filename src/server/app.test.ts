@@ -106,6 +106,29 @@ describe('createApp', () => {
       expect(none.status).toBe(400)
     })
 
+    it('refuses a read of the API from another site, and still opens a page linked from one', async () => {
+      const app = createApp(t.ctx)
+      for (const site of ['cross-site', 'same-site']) {
+        const res = await app.request('/api/prs/42?refresh=1', {
+          headers: { ...LOCAL, 'sec-fetch-site': site },
+        })
+        expect(res.status).toBe(403)
+        expect(await json(res)).toEqual({
+          error: { code: 'CROSS_ORIGIN', message: 'cross-site request rejected' },
+        })
+      }
+      const page = await app.request('/', { headers: { ...LOCAL, 'sec-fetch-site': 'cross-site' } })
+      expect(page.status).toBe(200)
+      // The page's own reads, a typed address, and a command line that sends no such header.
+      for (const headers of [
+        { ...LOCAL, 'sec-fetch-site': 'same-origin' },
+        { ...LOCAL, 'sec-fetch-site': 'none' },
+        LOCAL,
+      ]) {
+        expect((await app.request('/api/health', { headers })).status).toBe(200)
+      }
+    })
+
     it('answers unknown routes with the envelope under /api and a page elsewhere', async () => {
       const app = createApp(t.ctx)
       const api = await app.request('/api/nope', { headers: LOCAL })

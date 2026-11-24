@@ -281,6 +281,11 @@ pr-review import <zip> [--pr <n>] [--force]
   PR. A canvas generated before the PR existed names none and joins the pull request it is
   imported for. A stored canvas that was imported for another pull request with the same commit
   is replaced, since this pull request's page cannot read it.
+- Import refuses, with `CANVAS_INVALID`, a canvas dated more than a day ahead of this machine's
+  clock, and one whose dates are not ISO times in UTC to the millisecond, as pr-review writes them.
+  The newest copy of a commit's canvas wins by the dates the canvas itself states, so one dated
+  ahead would never be replaced. A stored canvas dated that way, which an earlier version could
+  import, is replaced by the next canvas imported for its commit.
 - Import returns `ready`, `stale`, or `exists`, plus commit information and warnings. `exists`
   keeps a stored canvas generated at the same time or later. `derivable: false` means the canvas
   was accepted but its source diffs could not be rebuilt from Git.
@@ -1365,6 +1370,9 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
   review.
 - A review checkout holds tracked files only, and no submodules. The agent reads installed
   dependencies from your checkout and is told they may not match a pull request that changes them.
+- A symbolic link in the reviewed commit is written as a small file that holds the link's target,
+  so reading it never opens a file outside the checkout. A checkout an earlier version made, with
+  its links as links, is made again on its next chat turn or generation.
 - In a repository that uses Git LFS, creating or moving a review checkout downloads its LFS files,
   like any checkout does. On a large LFS repository the first chat turn of a review can take a
   while and use network and disk; the chat pane shows the checkout while it runs.
@@ -1505,7 +1513,8 @@ the model on every repair attempt, with the problems of the last attempt on stde
 
 ## Network access and permissions
 
-The server binds to `127.0.0.1` and rejects browser writes from other origins. It is intended for
+The server binds to `127.0.0.1`, rejects browser writes from other origins, and rejects reads of
+its API from other sites. It is intended for
 local use with your GitHub or GitLab login. One server serves every project you open with
 `pr-review open`, so any page it serves can read the review data of each of them. Projects are
 added only by a command that can read `~/.pr-review/server.json`, which is readable by its owner

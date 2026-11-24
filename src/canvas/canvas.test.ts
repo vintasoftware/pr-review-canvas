@@ -429,6 +429,84 @@ describe('importCanvas', () => {
     expect((await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]?.prNumber).toBe(42)
   })
 
+  it('refuses a canvas dated in the future, or with a date that is not an ISO time', async () => {
+    t = await contextWithCommits()
+    // The test clock reads 2026-09-10T12:00Z. A day ahead is another machine's clock; more is not.
+    for (const over of [
+      { generatedAt: '2099-01-01T00:00:00.000Z' },
+      { revisedAt: '2026-09-12T00:00:00.000Z' },
+    ]) {
+      const err = await catchApp(() =>
+        importCanvas(t.ctx, { bytes: buildCanvasZip(manifest(), artifact(over)), currentHead: AT_HEAD })
+      )
+      expect([err.code, err.message]).toEqual(['CANVAS_INVALID', 'this canvas is dated in the future'])
+    }
+    expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+    const ahead = artifact({ revisedAt: '2026-09-11T11:00:00.000Z' })
+    const taken = await importCanvas(t.ctx, {
+      bytes: buildCanvasZip(manifest(), ahead),
+      currentHead: AT_HEAD,
+    })
+    expect(taken.status).toBe('ready')
+    // A date that sorts after every real one as text, one no date at all, and a real time in a
+    // shape `toISOString` never writes, which would sort out of order against one it does.
+    for (const generatedAt of ['~', 'tomorrow', '2026-09-10T11:00:00Z']) {
+      const err = await catchApp(() =>
+        importCanvas(t.ctx, {
+          bytes: buildCanvasZip(manifest({ generatedAt }), artifact({ generatedAt })),
+          currentHead: AT_HEAD,
+        })
+      )
+      // The manifest's `generatedAt` is a copy of the canvas's: only the canvas's is judged.
+      expect(err.code).toBe('CANVAS_INVALID')
+      expect(err.issues).toEqual(['review.json: generatedAt Invalid ISO datetime'])
+    }
+  })
+
+  it.each([
+    ['dated a century ahead', { revisedAt: '2099-01-01T00:00:00.000Z' }],
+    ['dated with no time at all', { generatedAt: '~' }],
+    // A real time in a shape pr-review never wrote, which its manifest would now be refused for.
+    ['dated without milliseconds', { generatedAt: '2026-09-10T11:00:00Z' }],
+  ] as Array<[string, Pick<ReviewArtifact, 'generatedAt'> | Pick<ReviewArtifact, 'revisedAt'>]>)(
+    'replaces a canvas an earlier version stored %s, then compares as usual',
+    async (_case, dates) => {
+      t = await contextWithCommits()
+      // What an earlier version's import stored, before it checked the dates a canvas states.
+      const stored = { ...manifest(), ...('generatedAt' in dates ? dates : {}) }
+      await t.ctx.canvases.write(HEAD_SHA, { ...artifact(), ...dates }, stored, 42)
+      const first = await importCanvas(t.ctx, {
+        bytes: buildCanvasZip(manifest(), artifact({ summary: 'first' })),
+        prNumber: 42,
+        currentHead: AT_HEAD,
+      })
+      expect(first.status).toBe('ready')
+      expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.summary).toBe('first')
+      // The stored copy now has a time to trust: an older copy is kept out, a newer one taken.
+      const older = artifact({ summary: 'older', generatedAt: '2026-09-09T11:00:00.000Z' })
+      expect(
+        (
+          await importCanvas(t.ctx, {
+            bytes: buildCanvasZip(manifest(), older),
+            prNumber: 42,
+            currentHead: AT_HEAD,
+          })
+        ).status
+      ).toBe('exists')
+      const newer = artifact({ summary: 'newer', revisedAt: '2026-09-10T11:30:00.000Z' })
+      expect(
+        (
+          await importCanvas(t.ctx, {
+            bytes: buildCanvasZip(manifest(), newer),
+            prNumber: 42,
+            currentHead: AT_HEAD,
+          })
+        ).status
+      ).toBe('ready')
+      expect((await t.ctx.canvases.readArtifact(HEAD_SHA))?.summary).toBe('newer')
+    }
+  )
+
   it('refuses a canvas from another repository unless force is passed', async () => {
     t = await contextWithCommits()
     const foreign = buildCanvasZip(manifest({ repo: { owner: 'other', name: 'repo' } }), artifact())

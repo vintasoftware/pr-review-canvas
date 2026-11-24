@@ -191,10 +191,12 @@ export function createHostClient(spec: HostCliSpec, exec: CliExec = execCli): Ho
   }
   return {
     api: async (path, params = {}) => {
-      // `api` switches to POST as soon as a field is given; these are reads, so pin GET.
+      // `api` switches to POST as soon as a field is given; these are reads, so pin GET. `-f`
+      // sends the value as it is: `-F` would read one that starts with `@` as a file to send, and
+      // a branch name may start with one.
       const args = ['api', '--method', 'GET', path]
       for (const [k, v] of Object.entries(params)) {
-        args.push('-F', `${k}=${v}`)
+        args.push('-f', `${k}=${v}`)
       }
       return JSON.parse((await run(path, args)).stdout) as unknown
     },

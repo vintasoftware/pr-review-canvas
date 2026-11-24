@@ -112,8 +112,13 @@ export const STDERR_MESSAGE_MAX = 300
  * URLs (`https://user:token@host`) are replaced by `***`, and the text is cut at STDERR_MESSAGE_MAX.
  */
 export function redactStderr(stderr: string): string {
-  const redacted = stderr.trim().replace(/(\w+:\/\/)[^/\s@]+@/g, '$1***@')
+  const redacted = redactCredentials(stderr.trim())
   return redacted.length > STDERR_MESSAGE_MAX ? `${redacted.slice(0, STDERR_MESSAGE_MAX)}…` : redacted
+}
+
+/** The text with the credentials of every URL in it (`https://user:token@host`) replaced by `***`. */
+export function redactCredentials(text: string): string {
+  return text.replace(/(\w+:\/\/)[^/\s@]+@/g, '$1***@')
 }
 
 export class GitError extends Error {
@@ -125,7 +130,8 @@ export class GitError extends Error {
     super(`git ${args.join(' ')} failed (${exitCode}): ${redactStderr(stderr)}`)
     this.name = 'GitError'
     this.args = args
-    this.stderr = stderr
+    // Logged whole with the error, so a token in a remote's URL does not stay in it.
+    this.stderr = redactCredentials(stderr)
     this.exitCode = exitCode
   }
 }

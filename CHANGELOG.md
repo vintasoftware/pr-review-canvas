@@ -59,6 +59,28 @@
 - When you mark a file reviewed, the focus moves to the next file that is not reviewed. That file
   now stays closed when the **Hide code** level hides it whole.
 
+### AI Chat
+
+- A symbolic link in a review checkout is written as a small file that holds the link's target, so
+  reading it never opens a file outside the checkout. A checkout an earlier version made is made
+  again the next time its review is chatted about or generated.
+
+### Server and CLI
+
+- The server refuses reads of its API from other sites, as it already refused writes. Loading a
+  pull request fetches its commits and imports the canvas shared on it, and a page on another site
+  could ask for that without you seeing it. A link from another site still opens a review page,
+  which loads its pull request as it does when you open it yourself.
+- Import refuses a canvas dated more than a day in the future, and one whose dates are not ISO
+  times to the millisecond, as pr-review writes them. The newest copy of a commit's canvas wins by
+  the dates the canvas states, so a canvas dated ahead was never replaced. One stored that way by
+  an earlier version is replaced by the next canvas imported for the pull request it belongs to,
+  and one whose dates are not such times no longer loads: generate it again.
+- A token kept in the origin remote's URL is no longer printed by `pr-review doctor`, by the
+  "origin is not a GitHub or GitLab URL" error, or with a logged git error.
+- Values in forge API queries are sent as plain text. A value that starts with `@`, as a branch
+  name may, was read as a file to send.
+
 ## 0.11.1
 
 Changes since 0.11.0.

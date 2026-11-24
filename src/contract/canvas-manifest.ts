@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { GeneratorSchema, RepoSchema } from './review-artifact.js'
+import { CanvasTimeSchema, GeneratorSchema, RepoSchema } from './review-artifact.js'
 
 export const CanvasManifestSchema = z.object({
   formatVersion: z.literal(1),
@@ -10,6 +10,10 @@ export const CanvasManifestSchema = z.object({
   mergeBaseSha: z.string().regex(/^[0-9a-f]{40}$/),
   baseRef: z.string(),
   headRef: z.string(),
+  /**
+   * A copy of the canvas's own `generatedAt`, as publish writes it. Only the canvas's times are
+   * judged (see `revisionTime`); an earlier version stored whatever a shared manifest said here.
+   */
   generatedAt: z.string(),
   generator: GeneratorSchema,
 })
@@ -42,7 +46,22 @@ export const CanvasIndexSchema = z.object({
 })
 export type CanvasIndex = z.infer<typeof CanvasIndexSchema>
 
-/** How new a copy of a commit's canvas is: the author's last revision, or its generation. */
-export function canvasRevision(entry: { generatedAt: string; revisedAt?: string | undefined }): string {
-  return entry.revisedAt ?? entry.generatedAt
+/** How far ahead of this machine's clock a canvas may be dated: clocks differ, by far less. */
+const CLOCK_ALLOWANCE_MS = 24 * 60 * 60 * 1000
+
+/**
+ * How new a copy of a commit's canvas is: the time of the author's last revision, or of its
+ * generation. Null when the copy states a time the canvas schema would refuse, or one more than a
+ * day ahead of `now`. The newest copy wins, so a copy dated ahead would win over every copy made
+ * later: it is never imported, and one an earlier version stored loses to any copy that is, and
+ * is replaced without being read.
+ */
+export function revisionTime(
+  entry: { generatedAt: string; revisedAt?: string | undefined },
+  now: Date
+): number | null {
+  const revised = entry.revisedAt ?? entry.generatedAt
+  const trusted = (time: string) =>
+    CanvasTimeSchema.safeParse(time).success && Date.parse(time) <= now.getTime() + CLOCK_ALLOWANCE_MS
+  return trusted(entry.generatedAt) && trusted(revised) ? Date.parse(revised) : null
 }

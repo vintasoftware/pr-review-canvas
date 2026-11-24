@@ -451,14 +451,15 @@ describe('createGit (real adapter)', () => {
     }
   })
 
-  it('keeps URL credentials and long stderr out of the GitError message', () => {
+  it('keeps URL credentials out of a GitError, and long stderr out of its message', () => {
     const leaky = 'fatal: unable to access https://user:ghp_secret@github.com/acme/widgets.git/: 403\n'
     const err = new GitError(['fetch', 'origin'], leaky, 128)
     expect(err.message).toBe(
       'git fetch origin failed (128): fatal: unable to access https://***@github.com/acme/widgets.git/: 403'
     )
     expect(err.message).not.toContain('ghp_secret')
-    expect(err.stderr).toBe(leaky)
+    // The error is logged whole, so the stderr it keeps is redacted too, and cut nowhere.
+    expect(err.stderr).toBe('fatal: unable to access https://***@github.com/acme/widgets.git/: 403\n')
     const long = new GitError(['diff'], 'x'.repeat(STDERR_MESSAGE_MAX + 50), 1)
     expect(long.message).toBe(`git diff failed (1): ${'x'.repeat(STDERR_MESSAGE_MAX)}…`)
     expect(redactStderr('ssh://git@host/repo and http://a:b@h/x')).toBe(

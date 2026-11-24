@@ -100,7 +100,7 @@ describe.each<{ spec: HostCliSpec; env: Record<string, string> }>([
     const client = createHostClient(spec, exec)
     expect(await client.api('repos/acme/widgets/pulls/1/comments', { per_page: '100' })).toEqual([{ id: 1 }])
     expect(calls).toEqual([
-      ['api', '--method', 'GET', 'repos/acme/widgets/pulls/1/comments', '-F', 'per_page=100'],
+      ['api', '--method', 'GET', 'repos/acme/widgets/pulls/1/comments', '-f', 'per_page=100'],
     ])
     expect(options).toEqual([{ binary: cli, env }])
   })

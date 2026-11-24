@@ -475,7 +475,9 @@ describe('transfer routes', () => {
     describe('two pull requests with one head commit', () => {
       // #99 is a stranger's pull request with #42's head commit, and their own canvas for it.
       const own = artifactFor(HEAD_SHA)
-      const FUTURE = '2099-01-01T00:00:00.000Z'
+      // After #42's own canvas, so that only the ownership rule keeps it out; an import dated after
+      // the clock (2026-09-10T12:00Z) would be refused for that alone.
+      const LATER = '2026-09-10T11:30:00.000Z'
       const theirs = (generatedAt: string): ReviewArtifact => ({
         ...own,
         pr: { ...own.pr, number: 99 },
@@ -543,7 +545,7 @@ describe('transfer routes', () => {
       const stored = async () => (await t.ctx.canvases.readIndex()).canvases[HEAD_SHA]
 
       it('leaves a pull request the canvas it imported when the other shares one for the commit', async () => {
-        const { bundle } = await twoPrs(theirs(FUTURE), own)
+        const { bundle } = await twoPrs(theirs(LATER), own)
         expect((await bundle(42)).artifact?.summary).toBe(own.summary)
         const other = await bundle(99)
         expect([other.status, other.artifact, other.sharedCanvas?.reason]).toEqual([
@@ -559,7 +561,7 @@ describe('transfer routes', () => {
       })
 
       it('shows a pull request no canvas imported for the other, until the reader hands it its own', async () => {
-        const { app, bundle } = await twoPrs(theirs(FUTURE), own)
+        const { app, bundle } = await twoPrs(theirs(LATER), own)
         expect((await bundle(99)).artifact?.summary).toBe('Safe to merge')
         // The commit is #42's head too. The canvas stored for it is not #42's to read, and the
         // one its author shared does not replace what was imported for #99.
@@ -589,12 +591,12 @@ describe('transfer routes', () => {
       })
 
       it.each([
-        ['replaces it with a later one', { ...own, generatedAt: FUTURE, summary: 'Revised' }, 'Revised'],
+        ['replaces it with a later one', { ...own, generatedAt: LATER, summary: 'Revised' }, 'Revised'],
         ['keeps it over one that is not later', own, own.summary],
       ])(
         'takes an imported canvas that names no pull request as the author’s own: %s',
         async (_case, shared, summary) => {
-          const { bundle } = await twoPrs(theirs(FUTURE), shared)
+          const { bundle } = await twoPrs(theirs(LATER), shared)
           // The reader imported the author's export from before the pull request existed.
           const { prNumber: _none, ...beforeThePr } = manifest(HEAD_SHA)
           const exported = { ...own, pr: { ...own.pr, number: null } }
@@ -606,13 +608,13 @@ describe('transfer routes', () => {
       )
 
       it.each([
-        ['numbered for the other pull request, against a later canvas', manifest(HEAD_SHA), FUTURE],
+        ['numbered for the other pull request, against a later canvas', manifest(HEAD_SHA), LATER],
         [
           'numbered for the other pull request, against an earlier canvas',
           manifest(HEAD_SHA),
           '2020-01-01T00:00:00.000Z',
         ],
-        ['with no number, against a later canvas', { ...manifest(HEAD_SHA), prNumber: undefined }, FUTURE],
+        ['with no number, against a later canvas', { ...manifest(HEAD_SHA), prNumber: undefined }, LATER],
         [
           'with no number, against an earlier canvas',
           { ...manifest(HEAD_SHA), prNumber: undefined },
@@ -629,6 +631,35 @@ describe('transfer routes', () => {
         expect(await stored()).toEqual(before)
         expect((await bundle(42)).artifact?.summary).toBe(own.summary)
       })
+    })
+
+    it('loads, exports, and imports over a canvas an earlier version stored with any manifest date', async () => {
+      t = await contextFor()
+      // An earlier version stored a shared manifest's `generatedAt` as it was, checked or not.
+      await t.ctx.canvases.write(HEAD_SHA, artifactFor(HEAD_SHA), { ...manifest(HEAD_SHA), generatedAt: '~' })
+      const app = createApp(t.ctx)
+      const bundle = await json<PrBundle>(await app.request('/api/prs/42', { headers: LOCAL }))
+      expect([bundle.status, bundle.artifact?.summary]).toEqual(['ready', artifactFor(HEAD_SHA).summary])
+      const exported = await app.request('/api/prs/42/export', { headers: LOCAL })
+      expect(exported.headers.get('content-disposition')).toContain(
+        `pr-42-20260910T110000Z-${HEAD_SHA.slice(0, 8)}-acme-widgets-canvas.zip`
+      )
+      const zip = readCanvasZip(new Uint8Array(await exported.arrayBuffer()))
+      expect(zip.manifest.generatedAt).toBe(artifactFor(HEAD_SHA).generatedAt)
+      const form = new FormData()
+      form.append(
+        'file',
+        new File(
+          [buildCanvasZip(manifest(HEAD_SHA), artifactFor(HEAD_SHA)).slice().buffer as ArrayBuffer],
+          'canvas.zip'
+        )
+      )
+      const imported = await app.request('/api/prs/42/import', {
+        method: 'POST',
+        headers: SAME_ORIGIN,
+        body: form,
+      })
+      expect((await json<ImportResult>(imported)).status).toBe('exists')
     })
 
     it('does not scan when a canvas for the head is already stored', async () => {

@@ -45,13 +45,15 @@ export async function zipStoredCanvas(
     )
   }
   const number = prNumber ?? stored.prNumber
-  const manifest: CanvasManifest = number === undefined ? stored : { ...stored, prNumber: number }
+  // The canvas's own time, which its schema checked, names the zip; the manifest carries a copy.
+  const timed = { ...stored, generatedAt: artifact.generatedAt }
+  const manifest: CanvasManifest = number === undefined ? timed : { ...timed, prNumber: number }
   const zip: CanvasZip = {
     name: buildCanvasZipName({
       repo: manifest.repo,
       headSha,
       prNumber: number,
-      generatedAt: manifest.generatedAt,
+      generatedAt: artifact.generatedAt,
     }),
     bytes: buildCanvasZip(manifest, artifact),
     headSha,
