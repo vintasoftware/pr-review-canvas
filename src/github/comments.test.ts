@@ -94,6 +94,15 @@ describe('mapIssueComment', () => {
     const editedReview = { ...GH_REVIEW_COMMENTS[0], updated_at: '2026-09-10T09:00:00Z' }
     expect(mapReviewComment(editedReview, new Set()).updatedAt).toBe('2026-09-10T09:00:00Z')
   })
+
+  it("keeps the author's role on the repository when GitHub reports one", () => {
+    expect(mapIssueComment({ ...GH_ISSUE_COMMENTS[0], author_association: 'MEMBER' }).authorAssociation).toBe(
+      'MEMBER'
+    )
+    expect(mapIssueComment(GH_ISSUE_COMMENTS[0])).not.toHaveProperty('authorAssociation')
+    const review = mapReviewComment({ ...GH_REVIEW_COMMENTS[0], author_association: 'OWNER' }, new Set())
+    expect(review.authorAssociation).toBe('OWNER')
+  })
 })
 
 describe('fetchResolvedCommentIds', () => {

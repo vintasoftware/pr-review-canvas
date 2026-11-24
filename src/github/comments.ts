@@ -20,6 +20,7 @@ const GhReviewCommentSchema = z.object({
   created_at: z.string(),
   updated_at: z.string().optional(),
   html_url: z.string(),
+  author_association: z.string().optional(),
 })
 
 const GhIssueCommentSchema = z.object({
@@ -29,6 +30,7 @@ const GhIssueCommentSchema = z.object({
   created_at: z.string(),
   updated_at: z.string().optional(),
   html_url: z.string(),
+  author_association: z.string().optional(),
 })
 
 export function mapReviewComment(raw: unknown, resolvedIds: ReadonlySet<number>): ReviewComment {
@@ -52,6 +54,7 @@ export function mapReviewComment(raw: unknown, resolvedIds: ReadonlySet<number>)
     updatedAt: c.updated_at ?? c.created_at,
     url: c.html_url,
     resolved: resolvedIds.has(c.id),
+    ...(c.author_association ? { authorAssociation: c.author_association } : {}),
   }
   if (typeof c.start_line === 'number') {
     out.startLine = c.start_line
@@ -72,6 +75,7 @@ export function mapIssueComment(raw: unknown): IssueComment {
     createdAt: c.created_at,
     updatedAt: c.updated_at ?? c.created_at,
     url: c.html_url,
+    ...(c.author_association ? { authorAssociation: c.author_association } : {}),
   }
 }
 

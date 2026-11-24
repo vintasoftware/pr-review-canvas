@@ -59,10 +59,26 @@ export function canvasBelongsTo(entry: CanvasEntry, key: ReviewKey, worktree: st
   return entry.worktree !== true && (entry.prNumber === undefined || entry.prNumber === key)
 }
 
+/**
+ * Whether a target reads the canvas stored for a commit, given whether it owns it (`canvasBelongsTo`)
+ * and whether the commit is its head. Its own it reads wherever they sit. For its head commit it
+ * also reads one generated on this machine for another target, which describes the same commit. One
+ * imported for another pull request it never reads: whoever shared that canvas was taken at their
+ * word for that pull request alone.
+ */
+export function readsCanvas(entry: CanvasEntry, owned: boolean, atHead: boolean): boolean {
+  return owned || (atHead && entry.source === 'local')
+}
+
 export interface CanvasStore {
   readonly root: string
   /** `canvasBelongsTo` for this store's checkout. */
   belongsTo(entry: CanvasEntry, key: ReviewKey): boolean
+  /**
+   * The index entry of the canvas `key` reads for `sha` (`readsCanvas`), or undefined when none is
+   * stored or the one stored is not its to read. `headSha` is the target's head commit.
+   */
+  entryFor(key: ReviewKey, sha: string, headSha: string): Promise<CanvasEntry | undefined>
   canvasDir(headSha: string): string
   readIndex(): Promise<CanvasIndex>
   /** True when a review.json exists for the sha, whatever its format. */
@@ -78,8 +94,9 @@ export interface CanvasStore {
     flags?: { worktree?: boolean }
   ): Promise<void>
   /**
-   * The best canvas for this PR: the one written for its current head, else the newest one the
-   * head was built on top of, else one from a branch the head no longer contains.
+   * The best canvas for this PR: the one written for its current head, unless it was imported for
+   * another pull request, else the newest one the head was built on top of, else one from a branch
+   * the head no longer contains.
    */
   findForPr(prNumber: number, currentHeadSha: string): Promise<CanvasLookup>
   /**
@@ -92,7 +109,7 @@ export interface CanvasStore {
    * revision time in the index. The manifest and every other index field stay as they are.
    */
   revise(headSha: string, artifact: ReviewArtifact & { revisedAt: string }): Promise<void>
-  /** Records the PR number on a canvas that was exported before the pull request existed. */
+  /** Records the PR number on a canvas that has none: one exported before the pull request existed. */
   attachPrNumber(headSha: string, prNumber: number): Promise<void>
 }
 
@@ -138,7 +155,8 @@ export function createCanvasStore(repoRoot: string, git: Git, worktree: string |
     accept: (entry: CanvasEntry) => boolean
   ): Promise<CanvasLookup> => {
     const index = await readIndex()
-    if (index.canvases[currentHeadSha] !== undefined) {
+    const own = index.canvases[currentHeadSha]
+    if (own !== undefined && readsCanvas(own, accept(own), true)) {
       return { status: 'ready', headSha: currentHeadSha }
     }
     const candidates = Object.entries(index.canvases).filter(
@@ -201,6 +219,12 @@ export function createCanvasStore(repoRoot: string, git: Git, worktree: string |
         index.canvases[headSha] = entry
       }),
     belongsTo: (entry, key) => canvasBelongsTo(entry, key, worktree),
+    entryFor: async (key, sha, headSha) => {
+      const entry = (await readIndex()).canvases[sha]
+      return entry !== undefined && readsCanvas(entry, canvasBelongsTo(entry, key, worktree), sha === headSha)
+        ? entry
+        : undefined
+    },
     findForPr: (prNumber, currentHeadSha) =>
       rank(currentHeadSha, entry => canvasBelongsTo(entry, prNumber, worktree)),
     findForLocal: (key, currentHeadSha) =>
@@ -217,7 +241,7 @@ export function createCanvasStore(repoRoot: string, git: Git, worktree: string |
     attachPrNumber: (headSha, prNumber) =>
       updateIndex(async index => {
         const entry = index.canvases[headSha]
-        if (entry === undefined || entry.prNumber === prNumber) {
+        if (entry === undefined || entry.prNumber !== undefined) {
           return
         }
         index.canvases[headSha] = { ...entry, prNumber }

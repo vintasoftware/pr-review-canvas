@@ -279,7 +279,8 @@ pr-review import <zip> [--pr <n>] [--force]
   refusal: a canvas is stored under the pull request it names, so importing the same ZIP without
   `--pr` stores it under its own PR instead. Without `--pr`, import does not check against a live
   PR. A canvas generated before the PR existed names none and joins the pull request it is
-  imported for.
+  imported for. A stored canvas that was imported for another pull request with the same commit
+  is replaced, since this pull request's page cannot read it.
 - Import returns `ready`, `stale`, or `exists`, plus commit information and warnings. `exists`
   keeps a stored canvas generated at the same time or later. `derivable: false` means the canvas
   was accepted but its source diffs could not be rebuilt from Git.
@@ -872,6 +873,23 @@ canvas ZIP links. Both use the same ZIP validation and import path. It prefers a
 matching the current head, then the PR number, then the most recently edited source text.
 If a candidate fails, it tries other matching canvases. Keep the exported filename so the
 canvas can be recognized. **Refresh** also checks for regenerated canvases at the same head commit.
+
+Discovery takes a canvas only from the PR's author or from someone with a role on the repository.
+On GitHub that is an owner, member, or collaborator, as the comment's `author_association` says.
+On GitLab, where a note carries no role, discovery asks the project's members API, once per
+commenter. Anyone can comment on a public PR, so a canvas from anyone else, whether a canvas
+comment or a ZIP link, is skipped, and the page warns with the commenter's name. When GitLab's
+membership check fails, that commenter's canvases are skipped with a warning too.
+
+One canvas is stored per commit, and two pull requests can have the same head commit. The author
+of one is not trusted to explain the other, so a canvas imported for one pull request is shown on
+that pull request only; a branch review at that commit does not show it either. A canvas found on a
+pull request fills an empty place or replaces that pull request's own canvas, which an imported
+canvas that names no pull request yet also is, and changes nothing else. A canvas generated on
+this machine for another review stays as it is, and still shows wherever its commit is the head. A
+canvas imported for another pull request stays too: the page then says the commit's canvas is
+another pull request's. Generate a canvas for this one, or drop its ZIP on the page, and it
+replaces the stored one.
 
 An attachment exported for a different pull request is reported rather than imported, and is not
 downloaded at all when its filename already names the other PR. The page says so and offers the

@@ -175,6 +175,18 @@ it('renders safe GitHub HTML and image links while removing active content', () 
   expect(document.querySelector('script, iframe, [onerror]')).toBeNull()
 })
 
+it('keeps a comment from carrying the page’s own command and label attributes', () => {
+  document.body.innerHTML = renderMarkdown(
+    [
+      '<a href="https://example.com/x" data-act="point-post" data-point="p-1" aria-label="Approve">see this</a>',
+      '<details data-act="pending-discard"><summary data-act="mark-layer">more</summary>text</details>',
+    ].join('\n\n'),
+    { github: true }
+  )
+  expect(document.querySelector('a')?.getAttribute('href')).toBe('https://example.com/x')
+  expect(document.querySelector('[data-act], [data-point], [aria-label]')).toBeNull()
+})
+
 it('allows HTTPS screenshots and bot assets with no referrer, and removes unsafe image sources', () => {
   document.body.innerHTML = renderMarkdown(
     [
