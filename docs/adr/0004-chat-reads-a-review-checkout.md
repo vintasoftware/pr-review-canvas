@@ -33,7 +33,9 @@ checkout being removed and created again. The cost is an extra entry in `git wor
 - Threads created before this change lose their acpx session (it was scoped to the reader's
   checkout); their next turn starts a new session and sends the seed again.
 - A symbolic link in the commit is written as a plain file that holds its target
-  (`core.symlinks=false`), so no path in the checkout leads outside it.
+  (`core.symlinks=false`), so no path in the checkout leads outside it. A move rewrites only what
+  the two commits change, so a checkout made before this rule, whose metadata does not say
+  `links: files`, is made again on its next lease.
 - The worktree holds tracked files only. The seed points the agent at the reader's checkout for
   installed dependencies, and warns that they follow the reader's lockfile, which may differ from
   the reviewed commit when it changes dependencies.

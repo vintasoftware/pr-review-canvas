@@ -124,7 +124,7 @@ export function createCheckoutGit(repoRoot: string, exec: GitExec = execGit): Ch
 /** One checkout held by a chat turn. Nothing else moves or removes it until `release`. */
 export interface CheckoutLease {
   dir: string
-  /** The commit the checkout is on now, or null when it does not exist yet. */
+  /** The commit the checkout is on now, or null when it does not exist yet or is made again. */
   head: string | null
   /** Creates the checkout or moves it to `sha`, and records the turn as its last use. */
   moveTo(sha: string): Promise<void>
@@ -200,6 +200,12 @@ export function checkoutsFor(store: CheckoutStore, worktree: string | null): Rev
 interface CheckoutMeta {
   sha: string
   lastUsedAt: string
+  /**
+   * `files` on a checkout made with symbolic links written as plain files. A move rewrites only
+   * what the two commits change, so a checkout an earlier version made, which has no such mark,
+   * is made again on its next lease rather than moved.
+   */
+  links?: 'files'
 }
 
 async function exists(file: string): Promise<boolean> {
@@ -359,7 +365,7 @@ export function createReviewCheckouts(opts: {
       }
       let head: string | null
       try {
-        head = await git.head(dir)
+        head = (await readMeta(folder))?.links === 'files' ? await git.head(dir) : null
       } catch (err) {
         await release()
         throw err
@@ -369,14 +375,16 @@ export function createReviewCheckouts(opts: {
         head,
         async moveTo(sha) {
           if (head === null) {
-            // A folder that is not a checkout (a half-finished add) is cleared first.
+            // A folder that is not a checkout (a half-finished add), or a checkout an earlier
+            // version made, is cleared first.
             await rm(dir, { recursive: true, force: true })
             await git.add(dir, sha)
           } else if (head !== sha) {
             await git.move(dir, sha)
           }
           head = sha
-          await writeFile(metaOf(folder), JSON.stringify({ sha, lastUsedAt: now().toISOString() }))
+          const meta: CheckoutMeta = { sha, lastUsedAt: now().toISOString(), links: 'files' }
+          await writeFile(metaOf(folder), JSON.stringify(meta))
         },
         release,
       }

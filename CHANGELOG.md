@@ -31,7 +31,8 @@
 ### AI Chat
 
 - A symbolic link in a review checkout is written as a small file that holds the link's target, so
-  reading it never opens a file outside the checkout.
+  reading it never opens a file outside the checkout. A checkout an earlier version made is made
+  again the next time its review is chatted about or generated.
 
 ### Server and CLI
 

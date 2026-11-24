@@ -1343,7 +1343,8 @@ chat pane shows **Creating the review checkout** or **Checking out** while that 
 - A review checkout holds tracked files only, and no submodules. The agent reads installed
   dependencies from your checkout and is told they may not match a pull request that changes them.
 - A symbolic link in the reviewed commit is written as a small file that holds the link's target,
-  so reading it never opens a file outside the checkout.
+  so reading it never opens a file outside the checkout. A checkout an earlier version made, with
+  its links as links, is made again on its next chat turn or generation.
 - In a repository that uses Git LFS, creating or moving a review checkout downloads its LFS files,
   like any checkout does. On a large LFS repository the first chat turn of a review can take a
   while and use network and disk; the chat pane shows the checkout while it runs.
