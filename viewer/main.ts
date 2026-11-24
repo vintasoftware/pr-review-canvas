@@ -2,6 +2,8 @@
 // /api calls in the browser (viewer-api.ts) and boots the same app module the local server
 // serves; without one it shows a form that asks for a pull request. When the build names a GitHub
 // App, the reader can sign in (auth.ts) to read the private repositories it is installed on.
+// oxlint-disable-next-line import/no-unassigned-import -- must run before any module builds a zod schema.
+import './zod-config.js'
 import { version } from '../package.json'
 import type { ReviewBootstrap } from '../src/contract/api.js'
 import { type Appearance, DEFAULT_SETTINGS } from '../src/contract/settings.js'
