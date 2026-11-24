@@ -42,7 +42,9 @@ the page's `/api` calls, and `viewer-api.ts` answers them in the browser:
   must show the current head, an approval needs every layer reviewed, and the author cannot
   approve their own pull request. The head check reads the pull request again before the write, so
   a page left open across a push is refused instead of posting on the old head's lines. A pending
-  comment goes out only with a review on the diff it was written on. The review body the page
+  comment goes out only with a review on the diff it was written on, even when a newer diff is
+  identical, which the local app allows: the viewer keeps no older diff to compare. The review tab
+  says so, and a refused write shows the hint that says what to do. The review body the page
   offers ends "Reviewed with the pr-review canvas viewer."
 - Errors show GitHub's status and message, such as `HTTP 403: …`, without the local app's CLI
   wording.

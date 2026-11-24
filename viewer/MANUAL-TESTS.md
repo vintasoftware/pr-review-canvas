@@ -98,9 +98,17 @@ Check each one on GitHub after posting.
 3. With the canvas current, leave a tab open and push a commit that leaves the diff the same, such
    as an empty one. From the open tab, post an attention point. It is refused: the pull request has
    a new head. (A comment on the whole pull request names no lines, so it still goes through.)
-4. With a draft written before that push, submit a review. It is refused until the draft is
-   copied or deleted. While the canvas is outdated, posting is off altogether and "finish your
-   review" says so; this step needs a canvas published for the new head.
+4. With a draft written before that push, submit a review. It is refused, and the refusal says to
+   copy or delete the draft; the review tab says the viewer cannot submit it. Delete it, and the
+   review goes through. This needs a current canvas: one carried over from step 1 or 3 is enough.
+   While the canvas is outdated, posting is off altogether and "finish your review" says so.
+
+## Forks and long threads
+
+1. Open a pull request from a fork, such as `?pr=vintasoftware/pr-review-canvas/107`. The author's
+   canvas opens (outdated there), and "view stale canvas" draws its diffs.
+2. Open a pull request with more than 100 comments, such as `?pr=jig-harness/jig/1889` (177
+   comments, 322 review comments). Every comment loads: compare the counts with GitHub's.
 
 ## Large pull requests
 
@@ -146,8 +154,7 @@ no-referrer`, and the other headers in `viewer/headers.ts`.
 
 - A pull request large enough for GitHub to refuse its diff (see "Large pull requests"); the
   rebuild is covered by unit tests and was checked against TypeScript#65291's real file list.
-- A pull request from a fork.
-- A pull request with more than 100 comments.
+- A canvas comment past a pull request's first 100 comments.
 - The hosted site on Cloudflare: nothing is deployed yet.
 
 ## Runs
