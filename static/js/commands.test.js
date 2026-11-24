@@ -3,9 +3,11 @@
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { PACKAGE_ROOT } from '../../src/server/context.js'
+import { ApiError } from './api.js'
 import {
   COPY_RESULT_MS,
   clearCommandError,
+  errorText,
   runCommand,
   runControl,
   showCommandError,
@@ -56,6 +58,22 @@ describe('runCommand', () => {
     expect(el.textContent).toBe('export zip')
     await runCommand(el, async () => 'ok')
     expect(document.querySelector('.cmd-err')).toBeNull()
+  })
+
+  it("follows the message with the server's hint, which says what to do", async () => {
+    document.body.innerHTML = '<button class="cmd">comment</button>'
+    const el = document.querySelector('button')
+    if (!(el instanceof HTMLElement)) {
+      throw new Error('no button')
+    }
+    await runCommand(el, async () => {
+      throw new ApiError(
+        { code: 'CANVAS_STALE', message: 'written on another diff', hint: 'delete the draft' },
+        409
+      )
+    })
+    expect(document.querySelector('.cmd-err')?.textContent).toBe('written on another diff — delete the draft')
+    expect(errorText(new ApiError({ code: 'INTERNAL', message: 'boom' }, 500))).toBe('boom')
   })
 
   it('handles non-Error throws and non-button elements', async () => {

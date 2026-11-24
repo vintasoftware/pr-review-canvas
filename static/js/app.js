@@ -435,6 +435,7 @@ export class PrAppElement extends HTMLElement {
         setLayerView: (view, place) => this.switchLayerView(view, place),
         stepStop: (direction, fits, here) => this.layerView?.step(direction, fits, here),
         openAtTop: el => this.layerView?.openAtTop(el) ?? false,
+        viewer: bundle.viewer === true,
       })
       this.interactions = interactions
       if (chatEnabled) {

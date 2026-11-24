@@ -47,7 +47,8 @@ function draftOrigin(p, points) {
 /**
  * Everything the review tab holds, drawn from the state.
  * @param {PrState | null | undefined} state
- * @param {{ on?: import('./pending.js').DiffOnScreen | undefined, points: ReadonlyArray<Point>, now: Date }} ctx
+ * @param {{ on?: import('./pending.js').DiffOnScreen | undefined, points: ReadonlyArray<Point>, now: Date, viewer?: boolean }} ctx
+ *   `viewer` on the hosted viewer, which keeps no earlier diff to compare a draft's with
  */
 export function reviewPanelHtml(state, ctx) {
   const all = pendingComments(state)
@@ -84,7 +85,9 @@ export function reviewPanelHtml(state, ctx) {
     earlier.length === 0
       ? ''
       : '<h3 class="lbl review-path">Written on an earlier diff</h3>' +
-        '<p class="muted small">These can be submitted only if the diff is unchanged. Otherwise copy the text, delete the draft, and comment on the current code.</p>' +
+        (ctx.viewer === true
+          ? '<p class="muted small">The hosted viewer cannot submit these. Copy the text, delete the draft, and comment on the current code.</p>'
+          : '<p class="muted small">These can be submitted only if the diff is unchanged. Otherwise copy the text, delete the draft, and comment on the current code.</p>') +
         '<ol class="review-drafts">' +
         earlier
           .map(
@@ -114,7 +117,7 @@ export function reviewPanelHtml(state, ctx) {
  * survives a change to any other draft.
  * @param {ParentNode} root
  * @param {PrState} state
- * @param {{ on: import('./pending.js').DiffOnScreen, points: ReadonlyArray<Point> }} ctx
+ * @param {{ on: import('./pending.js').DiffOnScreen, points: ReadonlyArray<Point>, viewer?: boolean }} ctx
  */
 export function refreshReviewPanel(root, state, ctx) {
   const drafts = pendingComments(state)

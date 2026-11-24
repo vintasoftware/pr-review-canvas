@@ -22,7 +22,7 @@ export async function runCommand(el, fn, opts = {}) {
   try {
     return await fn()
   } catch (err) {
-    showCommandError(el, err instanceof Error ? err.message : String(err))
+    showCommandError(el, errorText(err))
     return undefined
   } finally {
     el.textContent = original
@@ -55,12 +55,22 @@ export async function runControl(el, fn) {
   try {
     return await fn()
   } catch (err) {
-    showCommandError(el, err instanceof Error ? err.message : String(err))
+    showCommandError(el, errorText(err))
     return undefined
   } finally {
     el.removeAttribute('aria-busy')
     setDisabled(false)
   }
+}
+
+/**
+ * What a failed command says: the message, then the server's hint, which says what to do about it.
+ * @param {unknown} err
+ */
+export function errorText(err) {
+  if (!(err instanceof Error)) return String(err)
+  const hint = 'hint' in err && typeof err.hint === 'string' && err.hint !== '' ? err.hint : null
+  return hint === null ? err.message : `${err.message} — ${hint}`
 }
 
 /**
