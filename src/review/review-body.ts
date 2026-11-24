@@ -9,6 +9,8 @@ import type { DiffedCommit } from '../store/derived-store.js'
 import { marksOn } from '../../static/js/diff-identity.js'
 
 export const REVIEW_BODY_FOOTER = 'Reviewed with the pr-review canvas (localhost).'
+/** The hosted viewer's footer: the review came from the browser, with no local app behind it. */
+export const VIEWER_REVIEW_BODY_FOOTER = 'Reviewed with the pr-review canvas viewer.'
 
 // A code span: a run of backticks, then its text, then a run of the same length. A backtick with no
 // closing run ends nothing, as in `settled-decisions.ts`.
@@ -73,6 +75,8 @@ export interface ReviewBodyInput {
   headSha: string
   /** False leaves the body empty, for projects whose PRs must not name the tool: the reviewer writes it. */
   mentionCanvas: boolean
+  /** The last line; the local app's by default. */
+  footer?: string
 }
 
 /**
@@ -81,7 +85,7 @@ export interface ReviewBodyInput {
  * `mentionCanvas` is off, since every line of it describes the canvas.
  */
 export function buildReviewBody(input: ReviewBodyInput): string {
-  const { artifact, state, comments, headSha, mentionCanvas } = input
+  const { artifact, state, comments, headSha, mentionCanvas, footer = REVIEW_BODY_FOOTER } = input
   if (!mentionCanvas) {
     return ''
   }
@@ -105,6 +109,6 @@ export function buildReviewBody(input: ReviewBodyInput): string {
       dismissed.map(p => inlineText(p.title))
     ) +
     section('Comments posted from the canvas', posted) +
-    `\n\n${REVIEW_BODY_FOOTER}\n`
+    `\n\n${footer}\n`
   )
 }

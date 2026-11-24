@@ -2,6 +2,7 @@ import { buildCanvasComment } from '../src/canvas/comment.js'
 import { buildCanvasZip } from '../src/canvas/zip.js'
 import type { PrBundle, StateResponse } from '../src/contract/api.js'
 import type { CanvasManifest } from '../src/contract/canvas-manifest.js'
+import { VIEWER_REVIEW_BODY_FOOTER } from '../src/review/review-body.js'
 import { tallyCanvas } from '../src/review/self-review.js'
 import {
   BASE_SHA,
@@ -106,7 +107,7 @@ function fakeGithub(opts: {
     },
     refresh: () => calls.push('refresh'),
   }
-  return { gh, calls, posts }
+  return { gh, calls, posts, routes }
 }
 
 function viewer(opts: Parameters<typeof fakeGithub>[0] = {}) {
@@ -421,6 +422,29 @@ it('refuses a comment on a line the diff does not show, or from a page drawn on 
   expect(posts).toEqual([])
 })
 
+it('reads the pull request again before a write, and refuses one drawn before a push', async () => {
+  const { call, posts, routes, calls } = signedInViewer({
+    'repos/acme/widgets/pulls/42/comments': GH_POSTED_INLINE,
+  })
+  expect((await call('GET', '/api/prs/42')).status).toBe(200)
+  // A commit lands after the page was drawn.
+  const pushed = 'f'.repeat(40)
+  routes['repos/acme/widgets/pulls/42'] = { ...GH_PULL, head: { ...GH_PULL.head, sha: pushed } }
+  routes[`repos/acme/widgets/compare/main...${pushed}`] = { merge_base_commit: { sha: BASE_SHA } }
+  const stale = await call('POST', '/api/prs/42/comments', {
+    kind: 'inline',
+    path: 'src/app.ts',
+    line: 2,
+    side: 'new',
+    body: 'Why b?',
+    headSha: HEAD_SHA,
+    mergeBaseSha: BASE_SHA,
+  })
+  expect(stale).toMatchObject({ status: 409, body: { error: { code: 'CANVAS_STALE' } } })
+  expect(calls).toContain('refresh')
+  expect(posts).toEqual([])
+})
+
 it('names the app permission when GitHub refuses the post', async () => {
   const { call } = signedInViewer({
     'repos/acme/widgets/issues/42/comments': new Error('HTTP 403: Resource not accessible by integration'),
@@ -465,9 +489,13 @@ it('keeps the pending review in the browser and submits it with the review', asy
   expect((await call('PATCH', '/api/prs/42/pending/nope', { body: 'x' })).status).toBe(404)
 
   const summary = (await call('GET', '/api/prs/42/review/body')).body as {
+    body: string
     pending: number
     unreviewed: string[]
   }
+  // Signed as the viewer's: no local app wrote it.
+  expect(summary.body.trimEnd().endsWith(VIEWER_REVIEW_BODY_FOOTER)).toBe(true)
+  expect(summary.body).not.toContain('localhost')
   expect(summary.pending).toBe(1)
   expect(summary.unreviewed.length).toBeGreaterThan(0)
 

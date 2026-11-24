@@ -407,7 +407,8 @@ export class PrAppElement extends HTMLElement {
               canComment: /** @type {const} */ (false),
               tokenKind: bundle.capabilities.tokenKind,
               login: bundle.capabilities.login,
-              reason: `this canvas is for ${bundle.stale?.relation === 'other-base' ? 'an older diff of this commit' : 'an older commit'}; generate one for the current head to post`,
+              // The viewer generates nothing: there, the author publishes the next canvas.
+              reason: `this canvas is for ${bundle.stale?.relation === 'other-base' ? 'an older diff of this commit' : 'an older commit'}; ${bundle.viewer ? 'posting waits for a canvas of the current head' : 'generate one for the current head to post'}`,
             }
           : bundle.capabilities
       const canvasManifest = bundle.canvas?.manifest ?? null

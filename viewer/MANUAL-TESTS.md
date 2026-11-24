@@ -20,6 +20,10 @@ deploy show. Add a section when a feature lands, and record the last run at the 
 
 ## Reading without signing in
 
+GitHub allows 60 anonymous requests an hour per address, and one page load takes about ten. Run
+these first, and save the signed-out half of "Reading a private repository" step 3 for when the
+limit has room; the page says when it runs out.
+
 1. Open a public pull request whose canvas matches its head, such as
    `?pr=vintasoftware/pr-review-canvas/110`. The canvas opens ready, with layers, diffs, and points.
 2. Open one whose canvas is older, such as `/123`. The page says the canvas is outdated, and
@@ -91,9 +95,12 @@ Check each one on GitHub after posting.
 1. Push a commit that leaves the diff the same, such as merging the base in. The canvas stays
    current, marked as carried over.
 2. Push a commit that changes code. The canvas shows as outdated.
-3. Post from a tab left open on the old head. It is refused: the pull request has a new head.
+3. With the canvas current, leave a tab open and push a commit that leaves the diff the same, such
+   as an empty one. From the open tab, post an attention point. It is refused: the pull request has
+   a new head. (A comment on the whole pull request names no lines, so it still goes through.)
 4. With a draft written before that push, submit a review. It is refused until the draft is
-   copied or deleted.
+   copied or deleted. While the canvas is outdated, posting is off altogether and "finish your
+   review" says so; this step needs a canvas published for the new head.
 
 ## Large pull requests
 

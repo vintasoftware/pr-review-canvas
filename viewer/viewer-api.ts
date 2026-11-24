@@ -20,7 +20,12 @@ import { checkInlineTarget } from '../src/git/patch-lines.js'
 import { postComment } from '../src/github/post-comment.js'
 import { postReview } from '../src/github/post-review.js'
 import { postedFromPending } from '../src/review/posted-comments.js'
-import { buildReviewBody, unreviewedLayers } from '../src/review/review-body.js'
+import {
+  buildReviewBody,
+  type ReviewBodyInput,
+  unreviewedLayers,
+  VIEWER_REVIEW_BODY_FOOTER,
+} from '../src/review/review-body.js'
 import { authorSignOffReason } from '../src/review/self-review.js'
 import { buildSkillCommand } from '../src/review/skill-command.js'
 import { draftDiff, sameDiff } from '../static/js/diff-identity.js'
@@ -31,6 +36,7 @@ import type { PrState } from '../src/contract/state.js'
 import { readCanvasZip } from '../src/canvas/zip.js'
 import { fetchComments } from '../src/github/comments.js'
 import { mapPull } from '../src/github/pr.js'
+import { HostCliError } from '../src/host/client.js'
 import { toPr } from '../src/host/pr.js'
 import {
   COMPARE_FILES_MAX,
@@ -158,6 +164,15 @@ function parseBody<T>(schema: z.ZodType<T>, body: unknown, expected: string): T 
   return parsed.data
 }
 
+/**
+ * What GitHub said, for the reader. The client words its failures like the local app's CLI errors
+ * (`gh api <path> failed (1): HTTP 403: …`) so the shared code can read the status; the page names
+ * no CLI, so it shows the status and GitHub's message only.
+ */
+function githubMessage(err: unknown): string {
+  return err instanceof HostCliError ? err.stderr.trim() : err instanceof Error ? err.message : String(err)
+}
+
 /** GitHub's refusal of a write, as the page's error envelope. */
 function writeError(err: unknown): ViewerError {
   if (err instanceof ViewerError) return err
@@ -166,12 +181,22 @@ function writeError(err: unknown): ViewerError {
     return new ViewerError(401, 'GH_UNAUTHENTICATED', 'sign in with GitHub to post', 'sign in again')
   }
   if (/HTTP 40[34]/.test(message)) {
-    return new ViewerError(403, 'COMMENT_FORBIDDEN', `GitHub refused the post: ${message}`, APP_WRITE_HINT)
+    return new ViewerError(
+      403,
+      'COMMENT_FORBIDDEN',
+      `GitHub refused the post: ${githubMessage(err)}`,
+      APP_WRITE_HINT
+    )
   }
-  return new ViewerError(502, 'GITHUB_API_ERROR', message)
+  return new ViewerError(502, 'GITHUB_API_ERROR', githubMessage(err))
 }
 
 type Diff = LoadedDiff
+
+/** The review body the local app writes, signed as the viewer's: no local app wrote it. */
+function viewerReviewBody(input: Omit<ReviewBodyInput, 'mentionCanvas' | 'footer'>): string {
+  return buildReviewBody({ ...input, mentionCanvas: true, footer: VIEWER_REVIEW_BODY_FOOTER })
+}
 
 interface SharedCanvas {
   manifest: CanvasManifest
@@ -285,9 +310,7 @@ export function createViewerApi(
         }
         return { manifest: contents.manifest, artifact: contents.artifact, commentUrl: comment.url }
       } catch (err) {
-        warnings.push(
-          `the canvas comment at ${comment.url} could not be read: ${err instanceof Error ? err.message : String(err)}`
-        )
+        warnings.push(`the canvas comment at ${comment.url} could not be read: ${githubMessage(err)}`)
       }
     }
     return null
@@ -458,9 +481,13 @@ export function createViewerApi(
 
   const stateBody = (s: PrState): StateResponse => ({ prNumber: target.number, state: s })
 
-  /** The pull request as loaded, refusing a write made from a page drawn on another diff. */
+  /**
+   * The pull request as GitHub has it now, refusing a write made from a page drawn on another diff.
+   * A page that names its diff gets it checked against a fresh read: the copy loaded with the page
+   * would still hold the head the page was drawn on, however many commits were pushed since.
+   */
   async function currentPr(page: { headSha?: string | undefined; mergeBaseSha?: string | undefined }) {
-    const { pr } = await loaded(false)
+    const { pr } = await loaded(page.headSha !== undefined || page.mergeBaseSha !== undefined)
     const moved = (seen: string | undefined, current: string) => seen !== undefined && seen !== current
     if (moved(page.headSha, pr.headSha) || moved(page.mergeBaseSha, pr.mergeBaseSha)) {
       throw new ViewerError(
@@ -540,7 +567,7 @@ export function createViewerApi(
     const { artifact, state: marks, comments, pr } = await signOffCanvas()
     return {
       headSha: pr.headSha,
-      body: buildReviewBody({ artifact, state: marks, comments, headSha: pr.headSha, mentionCanvas: true }),
+      body: viewerReviewBody({ artifact, state: marks, comments, headSha: pr.headSha }),
       unreviewed: unreviewedLayers(artifact, marks).map(l => l.title),
       pending: marks.pending.length,
     }
@@ -571,9 +598,7 @@ export function createViewerApi(
         )
       }
     }
-    const text =
-      input.body ??
-      buildReviewBody({ artifact, state: marks, comments, headSha: pr.headSha, mentionCanvas: true })
+    const text = input.body ?? viewerReviewBody({ artifact, state: marks, comments, headSha: pr.headSha })
     const pending = input.includePending ? state.read().pending : []
     // The viewer keeps no older diffs to compare, so a draft goes out only on the diff it was written on.
     if (pending.some(p => !sameDiff(draftDiff(p, pr), pr))) {
@@ -691,7 +716,7 @@ export function createViewerApi(
       }
       const message = err instanceof Error ? err.message : String(err)
       if (!/HTTP 404/.test(message)) {
-        return { status: 502, body: { error: { code: 'GITHUB_API_ERROR', message } } }
+        return { status: 502, body: { error: { code: 'GITHUB_API_ERROR', message: githubMessage(err) } } }
       }
       const name = `${target.owner}/${target.repo}#${target.number}`
       const signedIn = (await gh.authStatus()).authenticated

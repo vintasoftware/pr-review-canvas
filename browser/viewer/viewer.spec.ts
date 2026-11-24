@@ -120,6 +120,8 @@ test("says when GitHub's anonymous rate limit is used up", async ({ page, open, 
   await expect(
     page.getByText(/anonymous rate limit of 60 requests an hour is used up; sign in, or wait until/)
   ).toBeVisible()
+  // GitHub's words only: the page runs no CLI to name.
+  await expect(page.locator('section.error-card')).not.toContainText('gh api')
 })
 
 test('keeps review marks in this browser across a reload', async ({ page, open, github }) => {
