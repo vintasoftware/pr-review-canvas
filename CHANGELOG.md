@@ -10,6 +10,17 @@
   **Settings → Reading → Background** can open it on other authors’ PRs or on every review. The
   generator writes it for every new canvas; `generation.caps` takes `backgroundTopic` and
   `backgroundExplanation`.
+- **One layer at a time** has the bar of **One point at a time** over and under the layer: back and
+  on, by title. The last layer leads to the first other layer you have not marked reviewed. The
+  rail, the bar, `j`, `k`, `g o`, back and forward, and every switch to one layer at a time put the
+  bar at the top of the screen, with the layer right under it. A switch from a point's stop opens
+  on that point.
+- Both bars show their ways back and on as buttons, or as bracketed commands in the terminal skin.
+
+### Fixes
+
+- After `Enter` on a bar link of **One point at a time**, the focus stays on the bar, so `Enter`
+  again moves on. Before, it went to the top of the page.
 
 ### Sign-off
 
@@ -42,6 +53,11 @@
 
 - A PR description or comment can no longer carry the attributes the page's own commands and
   labels use (`data-*`, `aria-*`), so a click inside someone's comment cannot run a command.
+
+### Fixes
+
+- When you mark a file reviewed, the focus moves to the next file that is not reviewed. That file
+  now stays closed when the **Hide code** level hides it whole.
 
 ## 0.11.1
 

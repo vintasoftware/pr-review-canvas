@@ -40,13 +40,14 @@ import { pointAnchorId, reviewedId } from './keys.js'
 import {
   canvasHiddenLines,
   cardOf,
-  drawCardsOnScreen,
   getFoldLevel,
   getRenderContext,
   getStartCollapsed,
+  hiddenByLevel,
   pathSet,
   refreshCardDecorations,
   refreshFolds,
+  scrollToDrawn,
   setCardCollapsed,
   setCardRenderedHook,
   redrawDiffs,
@@ -101,8 +102,6 @@ const NO_CHAT_NOTE = 'the AI Chat pane is off; press ? for the key map'
 
 /** Pixels left above a card the keys scroll to, so its focus ring shows. */
 const FOCUS_GAP = 8
-/** How many times a key's scroll repeats while it brings undrawn cards on screen. */
-const MAX_DRAW_ROUNDS = 10
 /** The card kind and direction each step key moves by. */
 /** @type {Record<'next-layer' | 'prev-layer' | 'next-file' | 'prev-file', ['layer' | 'file', 1 | -1]>} */
 const STEPS = {
@@ -271,6 +270,7 @@ export function padUnderStickyBar(doc, bar) {
  *   openSettings?: (el: HTMLElement) => void,
  *   setLayerView?: (view: string, place?: string) => void,
  *   stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined,
+ *   openAtTop?: (el: Element | null) => boolean,
  *   openReview?: () => void,
  *   uncover?: () => void,
  * }} [opts]
@@ -442,8 +442,9 @@ export function wireReview(root, session, opts = {}) {
    * @param {Element | null} el
    * @param {ScrollLogicalPosition | null} [block] `start` for a card, `center` for a point, and
    *   null for what a stop of the one-point view shows, which the stop already put on screen
+   * @param {{ openTarget?: boolean }} [reveal] `openTarget: false` keeps a closed card closed
    */
-  const focusItem = (el, block = 'start') => {
+  const focusItem = (el, block = 'start', reveal = {}) => {
     for (const marked of Array.from(root.querySelectorAll('.is-focused'))) {
       marked.classList.remove('is-focused')
     }
@@ -454,14 +455,9 @@ export function wireReview(root, session, opts = {}) {
       // The page's scroll padding already clears the outdated bar; this is the gap under it.
       el.style.scrollMarginTop = `${FOCUS_GAP}px`
       if (block !== null) {
-        // Scrolls first, which opens a collapsed card, closed details, or a hidden layer around
-        // the element: a hidden element cannot take the focus.
-        scrollIntoViewSafe(el, block)
-        // A card this scroll brought on screen draws its diff and grows, which would push the
-        // element away again: the cards draw now and the scroll repeats until none is left.
-        for (let i = 0; i < MAX_DRAW_ROUNDS && drawCardsOnScreen(root) > 0; i++) {
-          el.scrollIntoView({ block })
-        }
+        // Scrolls first, which opens what hides the element: a hidden element cannot take the
+        // focus. `reveal` can keep the card itself closed.
+        scrollToDrawn(root, el, block, reveal)
       }
       // The ring follows the keyboard, so the focus does too: a screen reader reads the card
       // the reader moved to instead of the command they pressed the key on.
@@ -753,7 +749,8 @@ export function wireReview(root, session, opts = {}) {
         if (reviewed) {
           const next = nextUnreviewedTarget(root, session, parts.card.id, kind)
           if (next instanceof HTMLElement) {
-            focusItem(next)
+            // The next card opens, but not a file that the reading level hides whole.
+            focusItem(next, 'start', { openTarget: !hiddenByLevel(next) })
           }
         }
       }
@@ -1505,8 +1502,11 @@ export function wireReview(root, session, opts = {}) {
         }
         const item = step(order, itemAround(order, here(order)), kind, direction, isCardShown)
         if (item !== null) {
-          if (kind === 'layer') window.history.pushState(null, '', `#${item.id}`)
-          focusItem(byId(item.id))
+          const el = byId(item.id)
+          // openAtTop writes the history entry itself.
+          const opened = kind === 'layer' && opts.openAtTop?.(el) === true
+          if (kind === 'layer' && !opened) window.history.pushState(null, '', `#${item.id}`)
+          focusItem(el, opened ? null : 'start')
         }
         break
       }
@@ -1605,9 +1605,11 @@ export function wireReview(root, session, opts = {}) {
       case 'diff-layout':
         toggleDiffLayout()
         break
-      case 'overview':
-        focusItem(byId('overview'))
+      case 'overview': {
+        const el = byId('overview')
+        focusItem(el, opts.openAtTop?.(el) === true ? null : 'start')
         break
+      }
       case 'help':
         openHelpDialog(root)
         break

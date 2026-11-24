@@ -17,7 +17,7 @@ export const KEY_HELP = [
     keys: 'o',
     what: "open or collapse the card in focus, the point's file card, or a point drawn as one line",
   },
-  { keys: 'r', what: 'mark the file in focus reviewed' },
+  { keys: 'r', what: 'mark the file in focus reviewed and move on to the next file' },
   { keys: 'R', what: 'mark the layer in focus reviewed and move on to the next open layer on screen' },
   { keys: 'c', what: 'comment on the line in focus or on the selection' },
   { keys: 'd', what: 'dismiss the attention point in focus' },

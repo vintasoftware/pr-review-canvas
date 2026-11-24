@@ -77,7 +77,7 @@ test('starts in the github skin, cycles through olive to terminal, and remembers
   expect(await readLook(page)).toMatchObject({
     cardRadius: '0px',
     stripeHeight: '6px',
-    commandBracket: '" ]"',
+    commandBracket: '"\u00a0]"',
   })
 
   // The choice is saved in .pr-review/settings.yml, and the server renders it onto <html>.
@@ -203,7 +203,7 @@ for (const want of COMBINATIONS) {
       addedLineBg: want.addedLineBg,
       cardRadius: want.cardRadius,
       stripeHeight: want.skin === 'terminal' ? '6px' : '1px',
-      commandBracket: want.skin === 'terminal' ? '" ]"' : 'none',
+      commandBracket: want.skin === 'terminal' ? '"\u00a0]"' : 'none',
     })
   })
 }

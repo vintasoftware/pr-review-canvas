@@ -10,10 +10,16 @@ import {
   syntheticArtifact,
   withMarkdownTitles,
 } from '../../src/testing/synthetic.js'
-import { defineLayerElements, hunkIdForPoint, renderLayers, setRenderContext } from './layers.js'
+import {
+  defineLayerElements,
+  getRenderContext,
+  hunkIdForPoint,
+  renderLayers,
+  setRenderContext,
+} from './layers.js'
 import { initOneLayer } from './one-layer.js'
 import { stopsOf } from './point-steps.js'
-import { stopNavHtml } from './point-view.js'
+import { layerNavHtml, stopNavHtml } from './point-view.js'
 import { renderRail } from './rail.js'
 import { markRailCurrent } from './scroll-spy.js'
 
@@ -62,10 +68,10 @@ describe('stopNavHtml', () => {
     ])
 
   it('leads from the overview to the first stop, and from a layer’s stop to its points', () => {
-    expect(links(-1)).toEqual([['#layer-run-path', 'start with Layer 1: Run path →']])
+    expect(links(-1)).toEqual([['#layer-run-path', 'start with Layer 1: Run path\u00a0→']])
     expect(links(0)).toEqual([
-      ['#overview', '← overview'],
-      ['#point-p-1', 'go to its 1 attention point →'],
+      ['#overview', '←\u00a0overview'],
+      ['#point-p-1', 'go to its 1 attention point\u00a0→'],
     ])
   })
 
@@ -73,10 +79,10 @@ describe('stopNavHtml', () => {
     draw(stopNavHtml(stops, 1, artifact))
     expect(document.querySelector('.step-n')?.textContent).toBe('Point 1 of 3')
     expect(links(1)).toEqual([
-      ['#layer-run-path', '← Run path'],
-      ['#layer-other', 'next layer: Other changes →'],
+      ['#layer-run-path', '←\u00a0Run path'],
+      ['#layer-other', 'next layer: Other changes\u00a0→'],
     ])
-    expect(links(4)).toEqual([['#point-p-2', '← previous point'], expect.anything()])
+    expect(links(4)).toEqual([['#point-p-2', '←\u00a0previous point'], expect.anything()])
   })
 
   it('names a way back to another layer’s opening as the previous layer, and to its own by its title', () => {
@@ -84,8 +90,8 @@ describe('stopNavHtml', () => {
     const ids = stopsOf(otherOnly)
     const back = (/** @type {number} */ index) =>
       draw(stopNavHtml(ids, index, otherOnly)).querySelector('a')?.textContent
-    expect(back(1)).toBe('← previous layer: Run path')
-    expect(back(2)).toBe('← Other changes')
+    expect(back(1)).toBe('←\u00a0previous layer: Run path')
+    expect(back(2)).toBe('←\u00a0Other changes')
   })
 
   it('renders the Markdown of the layer titles it names', () => {
@@ -94,13 +100,13 @@ describe('stopNavHtml', () => {
       Array.from(draw(stopNavHtml(stopsOf(canvas), index, canvas)).querySelectorAll('a')).map(
         a => a.innerHTML
       )
-    expect(html(titled, -1)).toEqual(['start with Layer 1: Run <code>path</code> →'])
+    expect(html(titled, -1)).toEqual(['start with Layer 1: Run <code>path</code>&nbsp;→'])
     expect(html(titled, 1)).toEqual([
-      '← Run <code>path</code>',
-      'next layer: Other <strong>changes</strong> →',
+      '←&nbsp;Run <code>path</code>',
+      'next layer: Other <strong>changes</strong>&nbsp;→',
     ])
     const otherOnly = { ...titled, points: titled.points.filter(p => p.layerId === 'other') }
-    expect(html(otherOnly, 1)[0]).toBe('← previous layer: Run <code>path</code>')
+    expect(html(otherOnly, 1)[0]).toBe('←&nbsp;previous layer: Run <code>path</code>')
   })
 
   it('leads from the last stop to the layers, as the rail’s switch does', () => {
@@ -108,6 +114,54 @@ describe('stopNavHtml', () => {
     const on = document.querySelector('a[data-act="layer-view"]')
     expect(on?.getAttribute('data-view')).toBe('layers')
     expect(on?.getAttribute('href')).toBe('#layer-run-path')
+  })
+})
+
+describe('layerNavHtml', () => {
+  const none = () => false
+  /**
+   * @param {import('./contract-types.js').ReviewArtifact} canvas
+   * @param {number} index
+   * @param {(layer: import('./point-steps.js').Layer) => boolean} [reviewed]
+   */
+  const links = (canvas, index, reviewed = none) =>
+    Array.from(draw(layerNavHtml(canvas, index, reviewed)).querySelectorAll('a')).map(a => [
+      a.getAttribute('href'),
+      a.textContent,
+      a.getAttribute('data-way'),
+    ])
+
+  it('leads from the overview to the first layer, by its number and title', () => {
+    expect(links(artifact, -1)).toEqual([['#layer-run-path', 'start with Layer 1: Run path\u00a0→', 'on']])
+  })
+
+  it('leads back to the overview from the first layer, as k does, and on to the next layer', () => {
+    expect(links(artifact, 0)).toEqual([
+      ['#overview', '←\u00a0overview', 'back'],
+      ['#layer-other', 'next layer: Other changes\u00a0→', 'on'],
+    ])
+  })
+
+  it('leads from the last layer back to the one before and on to the first open layer, by its number', () => {
+    expect(links(artifact, 1)).toEqual([
+      ['#layer-run-path', '←\u00a0previous layer: Run path', 'back'],
+      ['#layer-run-path', 'next open layer, Layer 1: Run path\u00a0→', 'on'],
+    ])
+  })
+
+  it('says so when all other layers are reviewed', () => {
+    expect(links(artifact, 1, () => true)).toEqual([
+      ['#layer-run-path', '←\u00a0previous layer: Run path', 'back'],
+    ])
+    expect(document.querySelector('.step-done')?.textContent).toBe('all other layers are reviewed')
+  })
+
+  it('names Other by its title alone, and renders the Markdown of the titles it names', () => {
+    const otherOnly = { ...artifact, layers: artifact.layers.filter(l => l.kind === 'other') }
+    expect(links(otherOnly, -1).map(([, text]) => text)).toEqual(['start with Other changes\u00a0→'])
+    expect(
+      draw(layerNavHtml(withMarkdownTitles(artifact), 0, none)).querySelector('[data-way="on"]')?.innerHTML
+    ).toBe('next layer: Other <strong>changes</strong>&nbsp;→')
   })
 })
 
@@ -181,6 +235,48 @@ describe('the one-point view on a rendered page', () => {
     expect(document.querySelector('nav.rail a[aria-current]')?.getAttribute('href')).toBe('#point-p-1')
   })
 
+  it('keeps the focus on the bar after a step from it: the same way, else the way the new bar has', () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    /** @param {string} selector */
+    const press = selector => {
+      const link = document.querySelector(selector)
+      if (!(link instanceof HTMLElement)) throw new Error(`no ${selector}`)
+      link.focus()
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    }
+    // The bar under the stop gives the focus to the bar over the next one, which is on screen.
+    press('nav.step-nav:not(#stop-nav) a[data-way="on"]')
+    expect(window.location.hash).toBe('#point-p-1')
+    expect(document.activeElement?.closest('nav')?.id).toBe('stop-nav')
+    expect(document.activeElement?.getAttribute('href')).toBe('#layer-other')
+    press('#stop-nav a[data-way="back"]')
+    expect(document.activeElement?.getAttribute('href')).toBe('#overview')
+    // The overview's bar has no way back, so the focus goes to its way on.
+    press('#stop-nav a[data-way="back"]')
+    expect(window.location.hash).toBe('#overview')
+    expect(document.activeElement?.textContent).toBe('start with Layer 1: Run path\u00a0→')
+  })
+
+  it('keeps the focus on the bar from the last stop into the layers, one at a time', () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    view?.step(1, stop => stop.id === 'point-p-3')
+    const rest = document.querySelector('#stop-nav a[data-act="layer-view"]')
+    if (!(rest instanceof HTMLElement)) throw new Error('no way to the layers')
+    rest.focus()
+    // The layer-view command passes the link's href as the place to open.
+    view?.switchView('one', rest.getAttribute('href') ?? undefined)
+    expect(document.querySelector('#stop-nav')?.getAttribute('aria-label')).toBe('Previous and next layer')
+    expect(document.activeElement).toBe(document.querySelector('#stop-nav a[data-way="on"]'))
+  })
+
+  it('leaves the focus where it is after a step that no bar made', () => {
+    const rail = document.querySelector('nav.rail a[href="#point-p-1"]')
+    if (!(rail instanceof HTMLElement)) throw new Error('no rail link')
+    rail.focus()
+    view?.step(1, () => true)
+    expect(document.activeElement).toBe(rail)
+  })
+
   it('shows the stop of a point of the Other layer, which has its row in the diff only', () => {
     window.location.hash = '#point-p-2'
     window.dispatchEvent(new Event('hashchange'))
@@ -203,7 +299,8 @@ describe('the one-point view on a rendered page', () => {
     )
     expect(document.querySelector('.toast')?.getAttribute('data-tone')).toBe('note')
     expect(lensed()).toBeNull()
-    expect(document.querySelector('nav.step-nav')).toBeNull()
+    // The stops' bar goes; one layer at a time puts its own around the layer.
+    expect(document.querySelector('#stop-nav')?.getAttribute('aria-label')).toBe('Previous and next layer')
     expect(shown()).toEqual(['layer-run-path'])
   })
 
@@ -361,5 +458,110 @@ describe('a missing behavior’s row in the one-point view', () => {
       view.stop()
       setRenderContext(null)
     }
+  })
+})
+
+describe('the one-layer view on a rendered page', () => {
+  /** @type {ReturnType<typeof initOneLayer> | null} */
+  let view = null
+
+  beforeEach(() => {
+    setRenderContext({
+      artifact,
+      headSha: artifact.pr.headSha,
+      mergeBaseSha: artifact.pr.mergeBaseSha,
+      files: artifact.files,
+      patches: toPatchMap(SYNTHETIC_FILES),
+      comments: [],
+      state,
+      now: new Date('2026-10-21T10:00:00.000Z'),
+    })
+    defineLayerElements()
+    window.history.replaceState(null, '', '/review/7#layer-run-path')
+    draw(
+      `${renderRail(artifact, state, {})}<main><section class="panel" id="overview"></section>${renderLayers(artifact, artifact.files, state, [])}</main>`
+    )
+    view = initOneLayer(document.body, { view: 'one' })
+  })
+
+  afterEach(() => {
+    view?.stop()
+    setRenderContext(null)
+    vi.restoreAllMocks()
+  })
+
+  const bars = () => Array.from(document.querySelectorAll('nav.step-nav'))
+  /** @param {string} selector */
+  const press = selector => {
+    const link = document.querySelector(selector)
+    if (!(link instanceof HTMLElement)) throw new Error(`no ${selector}`)
+    link.focus()
+    link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  }
+
+  it('puts the same bar over the layer on screen and under it', () => {
+    const [top, end] = bars()
+    expect(bars()).toHaveLength(2)
+    expect(top?.id).toBe('stop-nav')
+    expect(top?.getAttribute('aria-label')).toBe('Previous and next layer')
+    expect(end?.getAttribute('aria-label')).toBe('Previous and next layer, at the end')
+    expect(top?.nextElementSibling?.querySelector('section')?.id).toBe('layer-run-path')
+    expect(end?.previousElementSibling?.querySelector('section')?.id).toBe('layer-run-path')
+    expect(end?.innerHTML).toBe(top?.innerHTML)
+  })
+
+  it('steps from the bar to a layer under its bar, with the URL, history and focus a rail link gives', () => {
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
+    const pushState = vi.spyOn(window.history, 'pushState')
+    press('nav.step-nav:not(#stop-nav) a[data-way="on"]')
+    expect(window.location.hash).toBe('#layer-other')
+    expect(pushState).toHaveBeenCalledWith({ stop: true }, '', '#layer-other')
+    // The new bar goes to the top of the screen, so the layer starts right under it.
+    expect(scrolled.mock.contexts).toEqual([document.querySelector('#stop-nav')])
+    expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
+    expect(document.querySelector('#layer-other')?.hasAttribute('hidden')).toBe(false)
+    expect(document.querySelector('#layer-run-path')?.hasAttribute('hidden')).toBe(true)
+    // The last layer leads to the first open one, so the focus keeps its way.
+    expect(document.activeElement?.closest('nav')?.id).toBe('stop-nav')
+    expect(document.activeElement?.textContent).toBe('next open layer, Layer 1: Run path\u00a0→')
+    press('#stop-nav a[data-way="back"]')
+    press('#stop-nav a[data-way="back"]')
+    expect(window.location.hash).toBe('#overview')
+    // The overview's bar has no way back, so the focus goes to its way on.
+    expect(document.activeElement?.textContent).toBe('start with Layer 1: Run path\u00a0→')
+  })
+
+  it('reads the reviewed mark off the page when it draws the bar of the last layer', () => {
+    document.querySelector('#layer-run-path')?.classList.add('is-reviewed')
+    press('nav.rail a[href="#layer-other"]')
+    expect(document.querySelector('#stop-nav [data-way="on"]')).toBeNull()
+    expect(document.querySelector('#stop-nav .step-done')?.textContent).toBe('all other layers are reviewed')
+  })
+
+  it('opens a section at the top for the keys only in this view, and takes the bar off in the others', () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+    const pushState = vi.spyOn(window.history, 'pushState')
+    const other = document.querySelector('#layer-other')
+    expect(view?.openAtTop(other)).toBe(true)
+    expect(other?.hasAttribute('hidden')).toBe(false)
+    // A key writes the history entry a link to the section writes.
+    expect(pushState).toHaveBeenCalledWith({ stop: true }, '', '#layer-other')
+    // A step to the section the URL names writes no second entry, as the browser writes none.
+    expect(view?.openAtTop(other)).toBe(true)
+    expect(view?.openAtTop(document.querySelector('#layer-other article.file'))).toBe(false)
+    expect(pushState).toHaveBeenCalledTimes(1)
+    expect(view?.openAtTop(null)).toBe(false)
+    view?.switchView('all')
+    expect(bars()).toHaveLength(0)
+    expect(view?.openAtTop(other)).toBe(false)
+  })
+
+  it('takes the bar off for the attention points of a canvas with none, which show no bar', () => {
+    const ctx = getRenderContext()
+    if (ctx === null) throw new Error('no render context')
+    setRenderContext({ ...ctx, artifact: { ...artifact, points: [] } })
+    expect(bars()).toHaveLength(2)
+    view?.switchView('points')
+    expect(bars()).toHaveLength(0)
   })
 })

@@ -689,9 +689,11 @@ the reading level hides whole. With `startCollapsed: true` in `settings.yml` (**
 in the settings dialog), it opens with the first layer open and the others closed, and every file
 closed under its name, its counts, and its **reviewed** box: click the name or the chevron, or
 press `o` on it, to read its diff. The rail, the keys that step through layers and files (`j`,
-`k`, `n`, `p`), and any link into a layer or a file open what they land on. A click that opens or
-closes a file or a point keeps its title where you clicked it, so the file reads from its start;
-only closing one at the very end of the page moves it, as the page gets shorter than the scroll.
+`k`, `n`, `p`), and any link into a layer or a file open what they land on. When you mark a file
+reviewed, the focus moves to the next file that is not reviewed. That file opens too, unless the
+reading level hides it whole. A click that opens or closes a file or a point keeps its title where
+you clicked it, so the file reads from its start; only closing one at the very end of the page
+moves it, as the page gets shorter than the scroll.
 
 Import-only changes, whitespace changes, moved code, and ranges selected by the generator may
 start collapsed. Click the summary to expand them. Moves are detected within a file; moves
@@ -800,6 +802,15 @@ returns to Overview. Landing on Other or a reviewed layer opens its body.
 Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
 
+A bar over and under the layer leads back and on, as in [One point at a time](#one-point-at-a-time):
+back to the previous layer by its title, or to the overview from the first layer, and on to the
+next layer by its title. On the overview it leads to the first layer. After the last layer, where
+`j` stops, it leads to the first other layer you have not marked reviewed, by its number and title,
+or says that all other layers are reviewed. A rail link, a bar link, `j`, `k` and `g o`, back and
+forward, and every switch to one layer at a time, from **Attention points** or from the settings, put
+the bar at the top of the screen, with the layer or the overview right under it. A switch from a
+point's stop puts that point at the top of the screen instead, as with all the layers at once.
+
 ### One point at a time
 
 With **Read by attention points** turned on in the settings dialog (`readByPoints`, off by default),
@@ -819,7 +830,8 @@ through a lens, always open, with no chevron to fold it:
 - A bar over and under each stop leads back and on: to the previous point, to the opening of the
   stop's own layer by its title, or to the previous layer, and on in the same words. After the last
   point, **the rest of the diff, by layer** switches to **Layers**, on the first layer. On the
-  overview it leads to the first stop.
+  overview it leads to the first stop. After a step from the bar, the keyboard focus is on the same
+  way in the new bar over the stop, so `Enter` again moves on.
 - The step keys walk the stops: `j` and `k` the layers' opening stops, `n` and `p` every stop, and
   `]` and `[` the stops of the open points. On a point you reached by the rail or a link, the first
   `]` puts the focus on it, so `c`, `d` and `o` act on it.
