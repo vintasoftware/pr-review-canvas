@@ -6,6 +6,7 @@ import type { AppContext } from '../server/context.js'
 import { type CanvasLookup, relateToHead } from '../store/canvas-store.js'
 import { sameDiff } from '../../static/js/diff-identity.js'
 import type { Derived, DiffedCommit } from '../store/derived-store.js'
+import { SETTLED_DECISION_KEY } from './settled-decisions.js'
 
 export type { DiffedCommit } from '../store/derived-store.js'
 
@@ -16,6 +17,8 @@ export type { DiffedCommit } from '../store/derived-store.js'
  * the one the canvas was generated from, and identity is what guarantees that; a base merge that
  * only moves a hunk down already breaks it. How the head reached that diff does not matter. A diff
  * missing on this machine, and a change set that is empty on both sides, keep the strict reading.
+ * The commit messages must carry the same `Settled-decision` lines too: publish writes each one
+ * into the canvas as a resolved point, so a commit that only adds one changes the canvas.
  * Off when the project marks the canvas outdated on any commit.
  */
 export async function standsForHead(
@@ -36,7 +39,23 @@ export async function standsForHead(
   // Two empty diffs are equal by having nothing to compare, which is no evidence that the canvas
   // explains the head. An empty change set has nothing to review either way, so the strict
   // reading costs the reviewer nothing here.
-  return Object.keys(head.patches).length > 0 && samePatches(older, head)
+  if (Object.keys(head.patches).length === 0 || !samePatches(older, head)) {
+    return false
+  }
+  const [was, now] = await Promise.all([decisionLines(ctx, commit), decisionLines(ctx, pr)])
+  return was !== null && was === now
+}
+
+/**
+ * Every `Settled-decision` line of the commits under review, whoever wrote them, so each machine
+ * gives the same answer. A rebase that keeps the messages keeps the lines. Null when the clone
+ * lacks the commits.
+ */
+async function decisionLines(ctx: AppContext, diff: DiffedCommit): Promise<string | null> {
+  return ctx.git.commitKeyedLines(diff.mergeBaseSha, diff.headSha, SETTLED_DECISION_KEY).then(
+    commits => commits.flatMap(c => c.values).join('\n'),
+    () => null
+  )
 }
 
 /**

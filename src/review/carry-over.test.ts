@@ -136,6 +136,21 @@ describe('standsForHead and lookupCanvas', () => {
     expect(await standsForHead(t.ctx, PR, { headSha: FORCE_PUSHED, mergeBaseSha: BASE_SHA })).toBe(false)
   })
 
+  it('does not carry a canvas over to a head whose commit messages settle other decisions', async () => {
+    const decided = (sha: string, value: string) => ({
+      [`${BASE_SHA}..${sha}`]: [{ sha, authorEmail: 'a@example.com', date: '2026-11-24', values: [value] }],
+    })
+    // A commit that changed no code added the line: the canvas does not show the decision yet.
+    await context({ ...history(SYNTHETIC_DIFF), keyedLines: decided(HEAD_SHA, 'src/a.ts:1 Keep it.') })
+    expect(await standsForHead(t.ctx, PR, CANVAS)).toBe(false)
+    // A rebase that kept the message kept the line, under another commit.
+    Object.assign(git.options.keyedLines ?? {}, decided(OLD, 'src/a.ts:1 Keep it.'))
+    expect(await standsForHead(t.ctx, PR, CANVAS)).toBe(true)
+    // The diffs were built earlier, and the clone has since lost the commits to read messages from.
+    git.commitKeyedLines = async () => Promise.reject(new Error('fatal: bad revision'))
+    expect(await standsForHead(t.ctx, PR, CANVAS)).toBe(false)
+  })
+
   it('builds the head diff against its current merge base, so a base that advanced is seen', async () => {
     await context(history(SYNTHETIC_DIFF))
     // The clone still holds the head diff built against BASE_SHA, identical to the canvas's.

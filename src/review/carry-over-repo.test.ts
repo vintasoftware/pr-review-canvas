@@ -125,6 +125,24 @@ describe('the identical-diff rule against a real repository', () => {
     expect(await standsForHead(t.ctx, repo.merged, repo.canvas)).toBe(true)
   })
 
+  it('does not carry it over to a head whose only new commit settles a decision in its message', async () => {
+    await g(repo.dir, 'checkout', '-q', '-b', 'decided', repo.canvas.headSha)
+    await g(
+      repo.dir,
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'decide\n\nSettled-decision: src/app.ts:2 Keep 2.'
+    )
+    const decided = {
+      headSha: await g(repo.dir, 'rev-parse', 'HEAD'),
+      mergeBaseSha: repo.canvas.mergeBaseSha,
+    }
+    expect(await patchesOf(decided)).toEqual(await patchesOf(repo.canvas))
+    expect(await standsForHead(t.ctx, decided, repo.canvas)).toBe(false)
+  })
+
   it('does not carry it over to a head that merged a side branch adding a file', async () => {
     expect(await standsForHead(t.ctx, repo.withSideFile, repo.canvas)).toBe(false)
     // The answer comes from comparing two diffs git built, not from a diff that was missing.
