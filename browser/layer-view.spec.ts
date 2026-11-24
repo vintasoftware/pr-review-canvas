@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test'
 import { publishedSyntheticArtifact, syntheticArtifact } from '../src/testing/synthetic.js'
 import { expect, test } from './fixtures.js'
 
@@ -90,6 +91,173 @@ test('shows one layer at a time once the setting is saved, on this page and afte
   await expect(overview).toBeVisible()
   await expect(layer).toBeVisible()
   await expect(other).toBeVisible()
+})
+
+test.describe('the bar of one layer at a time', () => {
+  test.use({ settings: { layerView: 'one' } })
+
+  /**
+   * Whether the bar over the section is at the top of the screen, or as near it as a page too short
+   * to scroll that far allows. A layout can leave half a pixel.
+   */
+  const barAtTop = (page: Page) =>
+    page.locator('#stop-nav').evaluate(bar => {
+      const pageEnd = document.documentElement.scrollHeight - window.innerHeight
+      return Math.abs(bar.getBoundingClientRect().top) < 1 || window.scrollY > pageEnd - 1
+    })
+
+  test('leads back and on from a layer, with its bar at the top of the screen, and back and forward', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl + '#overview')
+    const nav = page.locator('#stop-nav')
+    const run = page.locator('#layer-run-path')
+    const other = page.locator('#layer-other')
+    await expect(nav.locator('a')).toHaveText(['start with Layer 1: Run path →'])
+
+    // The rail opens a layer with its bar at the top of the screen, so the layer starts under it.
+    await page.locator('nav.rail a[href="#layer-run-path"]').click()
+    await expect(run).toBeVisible()
+    await expect(nav.locator('a')).toHaveText(['← overview', 'next layer: Other changes →'])
+    await expect.poll(() => barAtTop(page)).toBe(true)
+
+    // The bar under the layer leads on from its end, and the new layer opens under its bar.
+    await page
+      .locator('nav.step-nav[aria-label="Previous and next layer, at the end"] a', { hasText: 'next layer' })
+      .click()
+    await expect(page).toHaveURL(/#layer-other$/)
+    await expect(other).toBeVisible()
+    await expect(run).toBeHidden()
+    await expect.poll(() => barAtTop(page)).toBe(true)
+    await expect(nav.locator('a')).toHaveText([
+      '← previous layer: Run path',
+      'next open layer, Layer 1: Run path →',
+    ])
+
+    // Back and forward move between the layers the bar opened, each under its bar.
+    await page.goBack()
+    await expect(run).toBeVisible()
+    await expect(page).toHaveURL(/#layer-run-path$/)
+    await expect.poll(() => barAtTop(page)).toBe(true)
+    await page.goForward()
+    await expect(other).toBeVisible()
+
+    // Once the other layers are reviewed, the last one says so in place of a way on.
+    await nav.locator('a', { hasText: 'previous layer' }).click()
+    await run.locator('[data-act="mark-layer"]').click()
+    await expect(run).toHaveClass(/is-reviewed/)
+    await page.keyboard.press('j')
+    await expect(other).toBeVisible()
+    await expect.poll(() => barAtTop(page)).toBe(true)
+    await expect(nav.locator('.step-done')).toHaveText('all other layers are reviewed')
+    await expect(nav.locator('a[data-way="on"]')).toHaveCount(0)
+  })
+
+  test('puts the bar at the top on a first visit to a layer shorter than the screen until its files draw', async ({
+    page,
+    reviewUrl,
+  }) => {
+    // Until its files draw, Run path ends above the bottom of this screen, so the first scroll
+    // stops short of the bar.
+    await page.setViewportSize({ width: 800, height: 1400 })
+    await page.goto(reviewUrl + '#overview')
+    await page.locator('#stop-nav a[data-way="on"]').click()
+    await expect(page.locator('#layer-run-path')).toBeVisible()
+    await expect.poll(() => barAtTop(page)).toBe(true)
+  })
+
+  test('g o opens the overview under its bar', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl + '#layer-other')
+    await expect(page.locator('#layer-other')).toBeVisible()
+    await page.mouse.wheel(0, 400)
+    // mouse.wheel returns before the page scrolls. Wait for the scroll, so g o comes after it.
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+    await page.keyboard.press('g')
+    await page.keyboard.press('o')
+    await expect(page.locator('#overview')).toBeVisible()
+    await expect(page).toHaveURL(/#overview$/)
+    await expect.poll(() => barAtTop(page)).toBe(true)
+  })
+
+  test('Enter on a rail link moves the keyboard into the layer: Tab goes on inside it', async ({
+    page,
+    reviewUrl,
+  }) => {
+    await page.goto(reviewUrl + '#overview')
+    await page.locator('nav.rail a[href="#layer-run-path"]').focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#layer-run-path')).toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(page.locator('#layer-run-path :focus')).toHaveCount(1)
+  })
+
+  test('keeps the keyboard on the bar: Enter again moves on', async ({ page, reviewUrl }) => {
+    await page.goto(reviewUrl + '#overview')
+    const on = page.locator('#stop-nav a[data-way="on"]')
+    await on.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#layer-run-path')).toBeVisible()
+    await expect(on).toBeFocused()
+    await expect(on).toHaveText('next layer: Other changes →')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('#layer-other')).toBeVisible()
+    await expect(on).toBeFocused()
+  })
+
+  test.describe('from all the layers at once', () => {
+    test.use({ settings: { layerView: 'all' } })
+
+    test('the settings switch to one at a time opens the section under its bar', async ({
+      page,
+      reviewUrl,
+    }) => {
+      await page.goto(reviewUrl)
+      await page.locator('#settings').click()
+      await page.locator('#set-layer-view').selectOption('one')
+      await page.locator('[data-act="settings-save"]').click()
+      await expect(page.locator('#overview')).toBeVisible()
+      await expect(page.locator('#layer-run-path')).toBeHidden()
+      await expect.poll(() => barAtTop(page)).toBe(true)
+    })
+  })
+
+  test.describe('out of the attention points', () => {
+    test.use({ settings: { layerView: 'one', readByPoints: true } })
+
+    test('the bar and the rail’s switch open the layer under its bar, as a step does', async ({
+      page,
+      reviewUrl,
+    }) => {
+      const nav = page.locator('#stop-nav')
+      await page.goto(reviewUrl + '#point-p-3')
+      await page.locator('#stop-nav a[data-act="layer-view"]').click()
+      await expect(nav).toHaveAttribute('aria-label', 'Previous and next layer')
+      await expect.poll(() => barAtTop(page)).toBe(true)
+
+      await page.locator('nav.rail [data-act="layer-view"][data-view="points"]').click()
+      await expect(nav).toHaveAttribute('aria-label', 'Attention points')
+      await page.locator('nav.rail [data-act="layer-view"][data-view="layers"]').click()
+      await expect(nav).toHaveAttribute('aria-label', 'Previous and next layer')
+      await expect.poll(() => barAtTop(page)).toBe(true)
+    })
+
+    test('the rail’s switch from a point’s stop opens the layer on that point', async ({
+      page,
+      reviewUrl,
+    }) => {
+      await page.goto(reviewUrl + '#point-p-1')
+      await expect(page.locator('#stop-nav')).toHaveAttribute('aria-label', 'Attention points')
+      await page.locator('nav.rail [data-act="layer-view"][data-view="layers"]').click()
+      await expect(page.locator('#stop-nav')).toHaveAttribute('aria-label', 'Previous and next layer')
+      await expect(page).toHaveURL(/#point-p-1$/)
+      await expect
+        .poll(() =>
+          page.locator('#point-p-1').evaluate(card => Math.abs(card.getBoundingClientRect().top) < 1)
+        )
+        .toBe(true)
+    })
+  })
 })
 
 test.describe('compact attention points saved in the settings', () => {

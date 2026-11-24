@@ -422,6 +422,7 @@ export class PrAppElement extends HTMLElement {
           void openSettingsDialog(this, el, { onSaved: data => this.settingsSaved(data, bundle) }),
         setLayerView: (view, place) => this.switchLayerView(view, place),
         stepStop: (direction, fits, here) => this.layerView?.step(direction, fits, here),
+        openAtTop: el => this.layerView?.openAtTop(el) ?? false,
       })
       this.interactions = interactions
       if (chatEnabled) {

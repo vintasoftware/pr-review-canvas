@@ -4,8 +4,10 @@
 // point's stop shows the layer's heading, the point's card, and only the chunk of its file that
 // holds the point. Every card stays where the layers drew it, so links, keys and commands work on
 // it as they do in the layers. A bar over the stop leads back and on; after the last stop, to the
-// layers. `one-layer.js` decides which stop is on screen.
+// layers. One layer at a time puts the same bar around its layer. `one-layer.js` decides which
+// stop or layer is on screen.
 /** @typedef {import('./contract-types.js').FileEntry} FileEntry */
+/** @typedef {import('./point-steps.js').Layer} Layer */
 /** @typedef {import('./contract-types.js').ReviewArtifact} ReviewArtifact */
 /** @typedef {import('./point-steps.js').Stop} Stop */
 import { cssEscape, drawCardOf } from './anchors.js'
@@ -13,6 +15,7 @@ import { esc } from './dom.js'
 import { titleHtml } from './markdown.js'
 import { layerAnchorId } from './keys.js'
 import { hunkIdForPoint } from './layers.js'
+import { layerStop } from './point-steps.js'
 import { expandOpenPoint } from './points.js'
 
 const LENS_ID = 'stop-lens'
@@ -91,24 +94,15 @@ export function stopTarget(root, stop) {
 export function showStop(root, section, stops, stop, files, artifact) {
   clearStop(root)
   const doc = root.ownerDocument
-  const html = stopNavHtml(
-    stops,
-    stops.findIndex(s => s.id === stop?.id),
-    artifact
+  placeStepBars(
+    section,
+    stopNavHtml(
+      stops,
+      stops.findIndex(s => s.id === stop?.id),
+      artifact
+    ),
+    'Attention points'
   )
-  // The same bar over the stop and under it, so a reader at either end moves on without a scroll.
-  const bar = (/** @type {string} */ label) => {
-    const nav = doc.createElement('nav')
-    nav.className = 'step-nav'
-    nav.setAttribute('aria-label', label)
-    nav.innerHTML = html
-    return nav
-  }
-  const top = bar('Attention points')
-  top.id = NAV_ID
-  const box = section.closest('pr-layer') ?? section
-  box.before(top)
-  box.after(bar('Attention points, at the end'))
   if (stop === undefined) {
     return
   }
@@ -143,12 +137,56 @@ export function showStop(root, section, stops, stop, files, artifact) {
   if (card !== null) expandOpenPoint(card)
 }
 
-/** Takes the lens and the bar off the page. @param {ParentNode} root */
-export function clearStop(root) {
-  root.querySelector(`#${LENS_ID}`)?.remove()
+/**
+ * Puts the same bar over the box of `section` and under it, in place of the bars on the page, so a
+ * reader at either end moves on without a scroll. The bar over it is `#stop-nav`.
+ *
+ * When the focus was on a bar link, the same way in the new bar over the box takes it, so Enter
+ * again moves on. A bar without that way gives the focus to the way it has. Only this function
+ * removes a bar that a new one replaces, so no step can lose the focus before the new bar is there.
+ * @param {HTMLElement} section
+ * @param {string} html what the bar says, from `stopNavHtml` or `layerNavHtml`
+ * @param {string} label what the bar is called, for a screen reader
+ */
+export function placeStepBars(section, html, label) {
+  const doc = section.ownerDocument
+  const focused = doc.activeElement
+  const way = focused?.closest('nav.step-nav') ? focused.getAttribute('data-way') : null
+  removeStepBars(doc)
+  const bar = (/** @type {string} */ name) => {
+    const nav = doc.createElement('nav')
+    nav.className = 'step-nav'
+    nav.setAttribute('aria-label', name)
+    nav.innerHTML = html
+    return nav
+  }
+  const top = bar(label)
+  top.id = NAV_ID
+  const box = section.closest('pr-layer') ?? section
+  box.before(top)
+  box.after(bar(`${label}, at the end`))
+  if (way !== null) {
+    const link = top.querySelector(`a[data-way="${way}"]`) ?? top.querySelector('a')
+    if (link instanceof HTMLElement) link.focus({ preventScroll: true })
+  }
+}
+
+/**
+ * Takes the bars off the page, for a view that shows none.
+ * @param {ParentNode} root
+ */
+export function removeStepBars(root) {
   for (const nav of root.querySelectorAll('nav.step-nav')) {
     nav.remove()
   }
+}
+
+/**
+ * Takes a stop's lens off the page and closes the tests it opened.
+ * @param {ParentNode} root
+ */
+export function clearStop(root) {
+  root.querySelector(`#${LENS_ID}`)?.remove()
   for (const el of root.querySelectorAll('[data-lens]')) {
     el.removeAttribute('data-lens')
   }
@@ -156,6 +194,26 @@ export function clearStop(root) {
     if (tests instanceof HTMLDetailsElement) tests.open = false
     tests.removeAttribute(OPENED_ATTR)
   }
+}
+
+/**
+ * A bar's way back, to `href`, that says where it goes as HTML. Both ways are commands, so they
+ * read as a pair. A no-break space keeps each arrow with the title when the title wraps.
+ * @param {string} href
+ * @param {string} html
+ */
+function backLink(href, html) {
+  return `<a class="cmd" href="${esc(href)}" data-way="back">&larr;&nbsp;${html}</a>`
+}
+
+/**
+ * A bar's way on, to `href`, that says where it goes as HTML.
+ * @param {string} href
+ * @param {string} html
+ * @param {string} [attrs] more attributes, each with a space before it
+ */
+function onLink(href, html, attrs = '') {
+  return `<a class="cmd" href="${esc(href)}" data-way="on"${attrs}>${html}&nbsp;&rarr;</a>`
 }
 
 /**
@@ -174,58 +232,98 @@ function backHtml(stop, previous) {
 }
 
 /**
+ * The way on from the last stop. It switches to the layers, as the rail's switch does.
+ * @param {ReviewArtifact} artifact
+ */
+function restOfDiffHtml(artifact) {
+  const first = artifact.layers[0]
+  return first === undefined
+    ? ''
+    : onLink(
+        `#${layerAnchorId(first.key)}`,
+        'the rest of the diff, by layer',
+        ' data-act="layer-view" data-view="layers"'
+      )
+}
+
+/**
  * The bar's ways back and on from stop `index`, -1 for the overview, each saying where it goes.
- * After the last stop come the layers, for the rest of the diff: that way switches to them, as the
- * rail's switch does, on the first layer.
+ * After the last stop comes `end`: by default the way to the layers, for the rest of the diff.
  * @param {ReadonlyArray<Stop>} stops
  * @param {number} index
  * @param {ReviewArtifact} artifact
+ * @param {string} [end] what the bar of the last stop says in place of a way on, as HTML
  */
-export function stopNavHtml(stops, index, artifact) {
+export function stopNavHtml(stops, index, artifact, end = restOfDiffHtml(artifact)) {
   const stop = stops[index]
   const previous = stops[index - 1]
   const next = stops[index + 1]
-  const link = (/** @type {string} */ href, /** @type {string} */ text, attrs = '') =>
-    `<a href="${esc(href)}"${attrs}>${text}</a>`
   const back =
     stop === undefined
       ? ''
       : previous === undefined
-        ? link('#overview', '&larr; overview')
-        : link(`#${previous.id}`, `&larr; ${backHtml(stop, previous)}`)
+        ? backLink('#overview', 'overview')
+        : backLink(`#${previous.id}`, backHtml(stop, previous))
   const here =
     stop?.kind === 'point'
       ? `<span class="step-n">Point ${stop.number} of ${stops.filter(s => s.kind === 'point').length}</span>`
       : ''
-  const firstLayer = artifact.layers[0]
   /** @type {string} */
   let on = ''
   if (next === undefined) {
-    on =
-      stop === undefined || firstLayer === undefined
-        ? ''
-        : link(
-            `#${layerAnchorId(firstLayer.key)}`,
-            'the rest of the diff, by layer &rarr;',
-            ' data-act="layer-view" data-view="layers"'
-          )
+    on = stop === undefined ? '' : end
   } else if (stop === undefined) {
     // The first stop is a layer's opening: every point's layer has one.
-    const n = artifact.layers.filter(l => l.kind !== 'other').indexOf(next.layer) + 1
-    const title = titleHtml(next.layer.title)
-    const name = next.layer.kind === 'other' ? title : `Layer ${n}: ${title}`
-    on = link(`#${next.id}`, `start with ${name} &rarr;`, ' class="step-on"')
+    on = onLink(`#${next.id}`, `start with ${layerNameHtml(artifact.layers, next.layer)}`)
   } else if (stop.kind === 'layer' && next.kind === 'point') {
-    on = link(
-      `#${next.id}`,
-      `go to its ${stop.points} attention point${stop.points === 1 ? '' : 's'} &rarr;`,
-      ' class="step-on"'
-    )
+    on = onLink(`#${next.id}`, `go to its ${stop.points} attention point${stop.points === 1 ? '' : 's'}`)
   } else {
-    on = link(
+    on = onLink(
       `#${next.id}`,
-      `${next.kind === 'layer' ? `next layer: ${titleHtml(next.layer.title)}` : 'next point'} &rarr;`
+      next.kind === 'layer' ? `next layer: ${titleHtml(next.layer.title)}` : 'next point'
     )
   }
   return `${back}${here}${on}`
+}
+
+/**
+ * A layer's name as the ways on from the overview and from the last layer say it, as HTML:
+ * `Layer 2: title`, or the title alone for Other, which has no number.
+ * @param {ReadonlyArray<Layer>} layers every layer, in page order
+ * @param {Layer} layer
+ */
+function layerNameHtml(layers, layer) {
+  const title = titleHtml(layer.title)
+  if (layer.kind === 'other') {
+    return title
+  }
+  return `Layer ${layers.filter(l => l.kind !== 'other').indexOf(layer) + 1}: ${title}`
+}
+
+/**
+ * The one-layer view's bar for layer `index`, -1 for the overview. It is the stops' bar, built from
+ * every layer's opening stop, so both bars use the same words.
+ *
+ * After the last layer, where `j` stops, it leads to the first layer not marked reviewed, or says
+ * there is none. It names that layer's number, since the step goes back up the page. Validation
+ * keeps Other last, so Other is the layer on screen there and never the target.
+ * @param {ReviewArtifact} artifact
+ * @param {number} index
+ * @param {(layer: Layer) => boolean} reviewed whether the reader marked a layer reviewed
+ */
+export function layerNavHtml(artifact, index, reviewed) {
+  const { layers, points } = artifact
+  const stops = layers.map(layer =>
+    layerStop(
+      layer,
+      points.filter(p => p.layerId === layer.id)
+    )
+  )
+  const layer = layers[index]
+  const open = layers.find(l => l !== layer && !reviewed(l))
+  const end =
+    open === undefined
+      ? '<span class="step-done">all other layers are reviewed</span>'
+      : onLink(`#${layerAnchorId(open.key)}`, `next open layer, ${layerNameHtml(layers, open)}`)
+  return stopNavHtml(stops, index, artifact, end)
 }
