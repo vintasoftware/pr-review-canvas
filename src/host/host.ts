@@ -26,6 +26,7 @@ import { postGitlabComment } from '../gitlab/post-comment.js'
 import { postGitlabReview } from '../gitlab/post-review.js'
 import type { Derived } from '../store/derived-store.js'
 import type { AttachmentLink } from './attachments.js'
+import { type CanvasAuthor, hasGithubRole, hasGitlabRole } from './canvas-author.js'
 import { GH_CLI, glabCli, type HostClient, type HostCliSpec } from './client.js'
 
 export type HostKind = PublicHost['kind']
@@ -100,6 +101,11 @@ export interface Host {
   canvasCommentLimit: number
   shareCanvas(client: HostClient, repo: Repo, number: number, body: string): Promise<IssueComment>
   attachments: HostAttachments
+  /**
+   * Whether `author` has a role on the repository. Besides the review's own author, only such a
+   * person may supply its canvas.
+   */
+  hasRepositoryRole(client: HostClient, repo: Repo, author: CanvasAuthor): boolean | Promise<boolean>
 }
 
 export const GITHUB_HOST: Host = {
@@ -121,6 +127,7 @@ export const GITHUB_HOST: Host = {
   canvasCommentLimit: 65_536,
   shareCanvas: shareGithubCanvas,
   attachments: GITHUB_ATTACHMENTS,
+  hasRepositoryRole: (_client, _repo, author) => hasGithubRole(author),
 }
 
 /** A GitLab instance. `hostname` is gitlab.com or the self-hosted instance the origin names. */
@@ -150,6 +157,7 @@ export function gitlabHost(hostname: string): Host {
     canvasCommentLimit: 1_000_000,
     shareCanvas: (client, repo, number, body) => shareGitlabCanvas(client, repo, number, body, webBase),
     attachments: gitlabAttachments(hostname, webBase),
+    hasRepositoryRole: hasGitlabRole,
   }
 }
 

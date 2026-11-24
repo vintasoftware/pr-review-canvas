@@ -279,7 +279,8 @@ pr-review import <zip> [--pr <n>] [--force]
   refusal: a canvas is stored under the pull request it names, so importing the same ZIP without
   `--pr` stores it under its own PR instead. Without `--pr`, import does not check against a live
   PR. A canvas generated before the PR existed names none and joins the pull request it is
-  imported for.
+  imported for. A stored canvas that was imported for another pull request with the same commit
+  is replaced, since this pull request's page cannot read it.
 - Import refuses, with `CANVAS_INVALID`, a canvas dated more than a day ahead of this machine's
   clock, and one whose dates are not ISO times in UTC to the millisecond, as pr-review writes them.
   The newest copy of a commit's canvas wins by the dates the canvas itself states, so one dated
@@ -806,6 +807,15 @@ returns to Overview. Landing on Other or a reviewed layer opens its body.
 Marking the last open file of a layer reviewed keeps you on that layer. The choice is saved as `layerView` in `settings.yml`, applies to the open page at once, and
 holds for every review until changed.
 
+A bar over and under the layer leads back and on, as in [One point at a time](#one-point-at-a-time):
+back to the previous layer by its title, or to the overview from the first layer, and on to the
+next layer by its title. On the overview it leads to the first layer. After the last layer, where
+`j` stops, it leads to the first other layer you have not marked reviewed, by its number and title,
+or says that all other layers are reviewed. A rail link, a bar link, `j`, `k` and `g o`, back and
+forward, and every switch to one layer at a time, from **Attention points** or from the settings, put
+the bar at the top of the screen, with the layer or the overview right under it. A switch from a
+point's stop puts that point at the top of the screen instead, as with all the layers at once.
+
 ### One point at a time
 
 With **Read by attention points** turned on in the settings dialog (`readByPoints`, off by default),
@@ -825,7 +835,8 @@ through a lens, always open, with no chevron to fold it:
 - A bar over and under each stop leads back and on: to the previous point, to the opening of the
   stop's own layer by its title, or to the previous layer, and on in the same words. After the last
   point, **the rest of the diff, by layer** switches to **Layers**, on the first layer. On the
-  overview it leads to the first stop.
+  overview it leads to the first stop. After a step from the bar, the keyboard focus is on the same
+  way in the new bar over the stop, so `Enter` again moves on.
 - The step keys walk the stops: `j` and `k` the layers' opening stops, `n` and `p` every stop, and
   `]` and `[` the stops of the open points. On a point you reached by the rail or a link, the first
   `]` puts the focus on it, so `c`, `d` and `o` act on it.
@@ -867,6 +878,23 @@ canvas ZIP links. Both use the same ZIP validation and import path. It prefers a
 matching the current head, then the PR number, then the most recently edited source text.
 If a candidate fails, it tries other matching canvases. Keep the exported filename so the
 canvas can be recognized. **Refresh** also checks for regenerated canvases at the same head commit.
+
+Discovery takes a canvas only from the PR's author or from someone with a role on the repository.
+On GitHub that is an owner, member, or collaborator, as the comment's `author_association` says.
+On GitLab, where a note carries no role, discovery asks the project's members API, once per
+commenter. Anyone can comment on a public PR, so a canvas from anyone else, whether a canvas
+comment or a ZIP link, is skipped, and the page warns with the commenter's name. When GitLab's
+membership check fails, that commenter's canvases are skipped with a warning too.
+
+One canvas is stored per commit, and two pull requests can have the same head commit. The author
+of one is not trusted to explain the other, so a canvas imported for one pull request is shown on
+that pull request only; a branch review at that commit does not show it either. A canvas found on a
+pull request fills an empty place or replaces that pull request's own canvas, which an imported
+canvas that names no pull request yet also is, and changes nothing else. A canvas generated on
+this machine for another review stays as it is, and still shows wherever its commit is the head. A
+canvas imported for another pull request stays too: the page then says the commit's canvas is
+another pull request's. Generate a canvas for this one, or drop its ZIP on the page, and it
+replaces the stored one.
 
 An attachment exported for a different pull request is reported rather than imported, and is not
 downloaded at all when its filename already names the other PR. The page says so and offers the

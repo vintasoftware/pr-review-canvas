@@ -8,12 +8,13 @@ import type {
   BasisSplitLayer,
   BasisSplitPoint,
   FileDelta,
+  PrepareTarget,
 } from '../contract/generation-context.js'
 import { extractLinks, parseLink } from '../contract/links.js'
 import { isGeneratorPoint, type Point, type ReviewArtifact } from '../contract/review-artifact.js'
 import type { ReviewKey } from '../contract/review-key.js'
 import type { Git } from '../git/git.js'
-import type { CanvasEntry, CanvasStore } from '../store/canvas-store.js'
+import { type CanvasEntry, type CanvasStore, readsCanvas } from '../store/canvas-store.js'
 import type { Derived } from '../store/derived-store.js'
 
 /**
@@ -134,6 +135,11 @@ export async function findBasisCanvas(
   return null
 }
 
+/** The review a generation target is, as the store owns canvases by it. A refs run is none. */
+export function reviewKeyOf(target: PrepareTarget): ReviewKey | undefined {
+  return target.kind === 'pr' ? target.number : target.kind === 'local' ? target.source : undefined
+}
+
 /**
  * The canvas a new canvas takes the author's resolutions from. Only the newest counts, because a
  * point the author reopened there, or the generator dropped, is open now whatever an older canvas
@@ -141,7 +147,8 @@ export async function findBasisCanvas(
  * rebase, and a later branch review of the same work, which carries no number and none of them,
  * cannot replace them. Otherwise it is the newest canvas of this review (by the store's
  * `belongsTo`; a refs run owns the canvases with no number) on a commit the head was built on, or
- * the head's own canvas whoever owned it, since this run replaces it.
+ * the head's own canvas whoever owned it, since this run replaces it, unless it was imported for
+ * another pull request.
  */
 export async function findResolutionSource(
   canvases: CanvasStore,
@@ -158,7 +165,7 @@ export async function findResolutionSource(
   }
   for (const [sha, entry] of entries) {
     const owned = key === undefined ? entry.prNumber === undefined : canvases.belongsTo(entry, key)
-    if (sha === headSha || (owned && (await git.isAncestor(sha, headSha)))) {
+    if (sha === headSha ? readsCanvas(entry, owned, true) : owned && (await git.isAncestor(sha, headSha))) {
       return sha
     }
   }

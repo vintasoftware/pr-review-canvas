@@ -95,7 +95,7 @@ function bundleFor(state, canvas = artifact) {
 
 /**
  * The whole review screen, hydrated and wired, with a fake API in place of the server.
- * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined }} [opts]
+ * @param {{ selfReview?: boolean, state?: import('./contract-types.js').PrState, api?: Partial<import('./review-session.js').SessionApi>, capabilities?: import('./contract-types.js').Capabilities, comments?: ReadonlyArray<import('./contract-types.js').ReviewComment>, fetchReviewBody?: (n: import('./contract-types.js').ReviewKey) => Promise<import('./contract-types.js').ReviewBodyResponse>, chat?: () => ReturnType<typeof import('./chat.js').wireChat>, openSettings?: (el: HTMLElement) => void, uncover?: () => void, artifact?: import('./contract-types.js').ReviewArtifact, drawn?: boolean, stepStop?: (direction: 1 | -1, fits: (stop: import('./point-steps.js').Stop) => boolean, here?: boolean) => HTMLElement | null | undefined, openAtTop?: (el: Element | null) => boolean }} [opts]
  *   `drawn: false` leaves every diff waiting to be seen, as cards below the fold do in a browser.
  */
 function setup(opts = {}) {
@@ -304,6 +304,7 @@ function setup(opts = {}) {
     ...(opts.openSettings ? { openSettings: opts.openSettings } : {}),
     ...(opts.uncover ? { uncover: opts.uncover } : {}),
     ...(opts.stepStop ? { stepStop: opts.stepStop } : {}),
+    ...(opts.openAtTop ? { openAtTop: opts.openAtTop } : {}),
   })
   wirings.push(wiring)
   return { root, session, calls, wiring }
@@ -1804,6 +1805,34 @@ describe('keyboard', () => {
     expect(scrolled).not.toHaveBeenCalled()
     expect(moved).not.toHaveBeenCalled()
     scrolled.mockRestore()
+  })
+
+  it('leaves the scroll of a layer to one layer at a time, which opens it under its bar', () => {
+    const opened = vi.fn(() => true)
+    const { root } = setup({ openAtTop: opened })
+    const layer = root.querySelector('#layer-run-path')
+    if (!(layer instanceof HTMLElement)) throw new Error('no layer')
+    const moved = vi.fn()
+    layer.scrollIntoView = moved
+    const pushed = vi.spyOn(window.history, 'pushState')
+    key('j')
+    expect(opened).toHaveBeenCalledWith(layer)
+    expect(document.activeElement).toBe(layer)
+    expect(moved).not.toHaveBeenCalled()
+    // openAtTop writes the history entry, so the key writes none.
+    expect(pushed).not.toHaveBeenCalled()
+    // n steps to a file, not a layer, so it scrolls to the file itself.
+    key('n')
+    expect(opened).toHaveBeenCalledTimes(1)
+    const overview = root.querySelector('#overview')
+    if (!(overview instanceof HTMLElement)) throw new Error('no overview')
+    overview.scrollIntoView = moved
+    key('g')
+    key('o')
+    expect(opened).toHaveBeenLastCalledWith(overview)
+    expect(document.activeElement).toBe(overview)
+    expect(moved).not.toHaveBeenCalled()
+    pushed.mockRestore()
   })
 
   it('moves the keyboard focus with the ring', () => {

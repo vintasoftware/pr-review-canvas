@@ -7,7 +7,15 @@ export const SharedCanvasInfoSchema = z.object({
   namesHead: z.boolean(),
   downloadable: z.boolean(),
   reason: z
-    .enum(['auth-required', 'not-zip', 'too-large', 'network', 'name-mismatch', 'pr-mismatch'])
+    .enum([
+      'auth-required',
+      'not-zip',
+      'too-large',
+      'network',
+      'name-mismatch',
+      'pr-mismatch',
+      'commit-taken',
+    ])
     .optional(),
 })
 

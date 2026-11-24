@@ -206,6 +206,9 @@ function renderProse(src, opts) {
       ALLOWED_TAGS,
       FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'style', 'form'],
       ALLOWED_ATTR,
+      // Forge text may hold raw HTML, and the page's commands are any element with `data-act`.
+      ALLOW_DATA_ATTR: false,
+      ALLOW_ARIA_ATTR: false,
       ALLOWED_URI_REGEXP: ALLOWED_URI,
       KEEP_CONTENT: true,
       RETURN_DOM_FRAGMENT: true,

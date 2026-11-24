@@ -198,11 +198,13 @@
 
   /* Buttons, GitHub's btn-sm. This list is the one place that decides which commands are buttons:
    the header toolbar, sign-off, a point's verbs, the ask of a layer, file, or point, the layer's last
-   step, the author's resolve, a code block's copy, and the "reviewed" toggles. */
+   step, the author's resolve, a code block's copy, the "reviewed" toggles, and the ways back and on
+   of a step bar, which are the bar's verbs though they navigate. */
   :is(
     .hdr-actions .cmd,
     .codeblock > .cmd,
     .signoff .cmd,
+    .step-nav > .cmd,
     :is(.findings, .ifind)
       .cmd:is(
         [data-copy],
@@ -251,9 +253,10 @@
       background: var(--tint-done);
       color: var(--ok);
     }
-    /* Every command button but sign-off draws the glyph its `--icon` names below. A command left
-     without one draws nothing rather than a solid square. The text stays the accessible name. */
-    &.cmd:not(.signoff .cmd)::before {
+    /* Every command button but sign-off and a step bar's ways draws the glyph its `--icon` names
+     below. A command left without one draws nothing rather than a solid square. The text stays the
+     accessible name. */
+    &.cmd:not(.signoff .cmd, .step-nav > .cmd)::before {
       content: '';
       flex: 0 0 var(--icon-size, 14px);
       width: var(--icon-size, 14px);
@@ -261,6 +264,13 @@
       background: currentcolor;
       mask: var(--icon, linear-gradient(transparent, transparent)) center / contain no-repeat;
       opacity: 0.85;
+    }
+    /* A step bar's way names a layer, so a long title wraps in the button and the button grows. */
+    &:is(.step-nav > .cmd) {
+      height: auto;
+      min-height: var(--btn-h, 26px);
+      padding-block: 4px;
+      line-height: 1.3;
     }
     /* Icon-only buttons, square: the word is hidden from sight and kept for screen readers and the
      tooltip. */

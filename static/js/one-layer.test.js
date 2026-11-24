@@ -173,13 +173,14 @@ describe('initOneLayer', () => {
     oneLayer = initOneLayer(root, { view: 'one' })
     const scrolled = vi.fn()
     section('layer-other').scrollIntoView = scrolled
+    const pushState = vi.spyOn(window.history, 'pushState')
     window.location.hash = '#layer-other'
     window.dispatchEvent(new Event('hashchange'))
     expect(shownIds()).toEqual(['layer-other'])
+    // This page has no canvas, so no bar over the layer: the layer itself goes to the top.
     expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
-    // A hash change to the section already showing does nothing more.
-    window.dispatchEvent(new Event('hashchange'))
-    expect(scrolled).toHaveBeenCalledTimes(1)
+    // Back and forward move along the history; they write no entry.
+    expect(pushState).not.toHaveBeenCalled()
     window.location.hash = ''
     window.dispatchEvent(new Event('hashchange'))
     expect(shownIds()).toEqual(['overview'])

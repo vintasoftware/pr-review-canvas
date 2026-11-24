@@ -10,6 +10,17 @@
   **Settings → Reading → Background** can open it on other authors’ PRs or on every review. The
   generator writes it for every new canvas; `generation.caps` takes `backgroundTopic` and
   `backgroundExplanation`.
+- **One layer at a time** has the bar of **One point at a time** over and under the layer: back and
+  on, by title. The last layer leads to the first other layer you have not marked reviewed. The
+  rail, the bar, `j`, `k`, `g o`, back and forward, and every switch to one layer at a time put the
+  bar at the top of the screen, with the layer right under it. A switch from a point's stop opens
+  on that point.
+- Both bars show their ways back and on as buttons, or as bracketed commands in the terminal skin.
+
+### Fixes
+
+- After `Enter` on a bar link of **One point at a time**, the focus stays on the bar, so `Enter`
+  again moves on. Before, it went to the top of the page.
 
 ### Sign-off
 
@@ -22,6 +33,26 @@
     "Unprocessable Entity (HTTP 422)", after the review was written.
   - On GitLab, the rule is new. It also applies on a project that lets authors approve their own
     merge requests.
+
+### Shared canvases
+
+- Discovery takes a canvas only from the PR's author or from someone with a role on the
+  repository: an owner, member, or collaborator on GitHub, a project member on GitLab. A canvas
+  comment or ZIP link from anyone else is skipped, with a warning naming the commenter, so a
+  stranger's comment on a public PR can no longer stand in for the author's canvas.
+- A canvas imported for one pull request is shown on that pull request only. Before, a pull
+  request opened with another one's head commit could carry a canvas for that commit, and both
+  pages showed it. A canvas found on a pull request now fills an empty place or replaces that pull
+  request's own, and leaves any other stored canvas as it is. When the commit's canvas was imported
+  for another pull request, the page says so, and generating a canvas or dropping the ZIP in
+  replaces it.
+- Canvases an earlier version imported stay stored, whoever shared them. Where a stranger may have
+  posted one on a pull request, generate that canvas again with `--force`.
+
+### Comments and descriptions
+
+- A PR description or comment can no longer carry the attributes the page's own commands and
+  labels use (`data-*`, `aria-*`), so a click inside someone's comment cannot run a command.
 
 ### Fixes
 

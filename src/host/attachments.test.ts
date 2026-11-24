@@ -138,7 +138,12 @@ describe('candidate collection and ranking', () => {
       ],
     })
     const found = collectCandidates(
-      { body: 'nothing here', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload },
+      {
+        body: 'nothing here',
+        bodyUpdatedAt: '2026-09-09T09:00:00Z',
+        bodyAuthor: 'octocat',
+        comments: payload,
+      },
       TEST_REPO,
       GITHUB_ATTACHMENTS
     )
@@ -153,6 +158,7 @@ describe('candidate collection and ranking', () => {
       {
         body: FILE_URL,
         bodyUpdatedAt: '2026-09-09T09:00:00Z',
+        bodyAuthor: 'octocat',
         comments: comments({
           issueComments: [issue(1, `https://github.com/user-attachments/files/2/${name}`)],
         }),
@@ -174,7 +180,7 @@ describe('candidate collection and ranking', () => {
     const payload = comments({ issueComments: [issue(1, url(wrongPr)), issue(2, url(ours))] })
     const ranked = rankCandidates(
       collectCandidates(
-        { body: '', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload },
+        { body: '', bodyUpdatedAt: '2026-09-09T09:00:00Z', bodyAuthor: 'octocat', comments: payload },
         TEST_REPO,
         GITHUB_ATTACHMENTS
       ),
@@ -196,7 +202,7 @@ describe('candidate collection and ranking', () => {
     })
     const ranked = rankCandidates(
       collectCandidates(
-        { body: '', bodyUpdatedAt: '2026-09-09T09:00:00Z', comments: payload },
+        { body: '', bodyUpdatedAt: '2026-09-09T09:00:00Z', bodyAuthor: 'octocat', comments: payload },
         TEST_REPO,
         GITHUB_ATTACHMENTS
       ),
@@ -224,7 +230,12 @@ describe('ranking by edit time', () => {
         issue(2, url(newer), { createdAt: '2026-09-08T10:00:00Z' }),
       ],
     })
-    const sources = { body: '', bodyUpdatedAt: '2026-09-01T00:00:00Z', comments: payload }
+    const sources = {
+      body: '',
+      bodyUpdatedAt: '2026-09-01T00:00:00Z',
+      bodyAuthor: 'octocat',
+      comments: payload,
+    }
     const ranked = rankCandidates(collectCandidates(sources, TEST_REPO, GITHUB_ATTACHMENTS), {
       headSha: HEAD_SHA,
       prNumber: 42,
@@ -247,6 +258,9 @@ describe('discoveryFingerprint', () => {
       base
     )
     expect(discoveryFingerprint('body', one, BASE_SHA)).not.toBe(base)
+    // A role gained or lost decides whether a canvas there is taken, so it counts too.
+    const promoted = comments({ issueComments: [{ ...issue(1, 'a'), authorAssociation: 'COLLABORATOR' }] })
+    expect(discoveryFingerprint('body', promoted, HEAD_SHA)).not.toBe(base)
   })
 })
 
@@ -529,6 +543,173 @@ describe('importFailureReason', () => {
     expect(importFailureReason(new AppError('CANVAS_REPO_MISMATCH', 'elsewhere', 400))).toBe('name-mismatch')
     expect(importFailureReason(new AppError('CANVAS_PR_MISMATCH', 'another PR', 400))).toBe('pr-mismatch')
     expect(importFailureReason(new AppError('CANVAS_INVALID', 'broken', 400))).toBe('not-zip')
+  })
+})
+
+describe('who may supply the canvas', () => {
+  const embedded = (): string =>
+    buildCanvasComment(
+      { name: NAME_FOR_HEAD, bytes: Uint8Array.from(canvasBytes()), headSha: HEAD_SHA, prNumber: 42 },
+      NO_POINTS,
+      65_536
+    )
+  const from = (login: string, association?: string): CommentsPayload['issueComments'][number] => ({
+    ...issue(7, embedded()),
+    author: login,
+    ...(association === undefined ? {} : { authorAssociation: association }),
+  })
+  const skipped = (login: string, noun: string) =>
+    `skipped ${NAME_FOR_HEAD}, posted by @${login}, who is neither the ${noun}'s author nor has a role on acme/widgets`
+
+  async function discover(
+    payload: CommentsPayload,
+    opts: Parameters<typeof makeTestContext>[0] = {},
+    review: Pr = pr()
+  ): Promise<{ outcome: Awaited<ReturnType<typeof discoverSharedCanvas>>; t: TestContext }> {
+    const ctx = await makeTestContext({
+      git: createFakeGit({
+        refs: { [HEAD_SHA]: HEAD_SHA, [BASE_SHA]: BASE_SHA },
+        diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF },
+      }),
+      ...opts,
+    })
+    return { outcome: await discoverSharedCanvas(ctx.ctx, review, payload), t: ctx }
+  }
+
+  it('skips a canvas from someone with no role on a GitHub repository, and says whose it was', async () => {
+    const { outcome, t } = await discover(comments({ issueComments: [from('mallory', 'CONTRIBUTOR')] }))
+    try {
+      expect(outcome.imported).toBeNull()
+      expect(outcome.sharedCanvas).toBeNull()
+      expect(outcome.warnings).toEqual([skipped('mallory', 'pull request')])
+      expect(await t.ctx.canvases.exists(HEAD_SHA)).toBe(false)
+    } finally {
+      await t.cleanup()
+    }
+  })
+
+  it('takes a canvas from a collaborator who did not open the pull request', async () => {
+    const { outcome, t } = await discover(comments({ issueComments: [from('teammate', 'COLLABORATOR')] }))
+    try {
+      expect(outcome.imported?.status).toBe('ready')
+      expect(outcome.warnings).toEqual([])
+    } finally {
+      await t.cleanup()
+    }
+  })
+
+  it('takes no canvas from a deleted account, on a pull request a deleted account opened either', async () => {
+    const { outcome, t } = await discover(
+      comments({ issueComments: [from('ghost', 'NONE')] }),
+      {},
+      pr({ author: 'ghost' })
+    )
+    try {
+      expect(outcome.imported).toBeNull()
+      expect(outcome.warnings).toEqual([skipped('ghost', 'pull request')])
+    } finally {
+      await t.cleanup()
+    }
+  })
+
+  it('skips a zip linked by a stranger in a review comment as well', async () => {
+    const review = {
+      id: 9,
+      author: 'mallory',
+      authorAssociation: 'NONE',
+      body: FILE_URL,
+      path: 'a.ts',
+      line: 1,
+      originalLine: 1,
+      side: 'new' as const,
+      outdated: false,
+      commitId: HEAD_SHA,
+      createdAt: '2026-09-10T10:00:00Z',
+      updatedAt: '2026-09-10T10:00:00Z',
+      url: 'r9',
+      resolved: false,
+    }
+    const fetches = fakeFetch([])
+    const { outcome, t } = await discover(comments({ reviewComments: [review] }), { fetch: fetches.impl })
+    try {
+      expect(fetches.calls).toEqual([])
+      expect(outcome.sharedCanvas).toBeNull()
+      expect(outcome.warnings).toEqual([
+        "skipped pr-42-20260910T110000Z-aaaaaaaa-acme-widgets-canvas.zip, posted by @mallory, who is neither the pull request's author nor has a role on acme/widgets",
+      ])
+    } finally {
+      await t.cleanup()
+    }
+  })
+
+  it('asks GitLab whether a commenter is a member of the project, once per commenter', async () => {
+    const members = 'projects/acme%2Fwidgets/members/all'
+    const gh = createFakeGh({
+      routes: {
+        [members]: {
+          kind: 'handler',
+          handler: params => (params['query'] === 'teammate' ? [{ username: 'Teammate' }] : []),
+        },
+      },
+    })
+    const host = gitlabHost('gitlab.example.com')
+    const stranger = { ...from('mallory'), id: 8, url: 'u8', updatedAt: '2026-09-11T10:00:00Z' }
+    const again = { ...from('mallory'), id: 9, url: 'u9', updatedAt: '2026-09-12T10:00:00Z' }
+    const { outcome, t } = await discover(comments({ issueComments: [from('teammate'), stranger, again] }), {
+      gh,
+      host,
+    })
+    try {
+      expect(outcome.imported?.status).toBe('ready')
+      expect(outcome.sharedCanvas).toMatchObject({ url: 'u7' })
+      expect(outcome.warnings).toEqual([
+        skipped('mallory', 'merge request'),
+        skipped('mallory', 'merge request'),
+      ])
+      expect(gh.calls.filter(c => c.path === members).map(c => c.params['query'])).toEqual([
+        'teammate',
+        'mallory',
+      ])
+    } finally {
+      await t.cleanup()
+    }
+  })
+
+  it('finds a GitLab member past the first page of names the search also matches', async () => {
+    const lookalikes = Array.from({ length: 100 }, (_, i) => ({ username: `al${i}` }))
+    const gh = createFakeGh({
+      routes: {
+        'projects/acme%2Fwidgets/members/all': {
+          kind: 'handler',
+          handler: params => (params['page'] === '1' ? lookalikes : [{ username: 'al' }]),
+        },
+      },
+    })
+    const { outcome, t } = await discover(comments({ issueComments: [from('al')] }), {
+      gh,
+      host: gitlabHost('gitlab.example.com'),
+    })
+    try {
+      expect(outcome.imported?.status).toBe('ready')
+      expect(outcome.warnings).toEqual([])
+    } finally {
+      await t.cleanup()
+    }
+  })
+
+  it('skips a GitLab canvas when membership cannot be checked', async () => {
+    const host = gitlabHost('gitlab.example.com')
+    const { outcome, t } = await discover(comments({ issueComments: [from('teammate')] }), {
+      gh: createFakeGh(),
+      host,
+    })
+    try {
+      expect(outcome.imported).toBeNull()
+      expect(outcome.warnings).toHaveLength(1)
+      expect(outcome.warnings[0]).toMatch(/^skipped .*: could not check @teammate's role on acme\/widgets: /)
+    } finally {
+      await t.cleanup()
+    }
   })
 })
 

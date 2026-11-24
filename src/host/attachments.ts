@@ -2,7 +2,7 @@
 // token. The token is read per request, sent to the forge alone, and never logged or stored.
 import { readCanvasComment } from '../canvas/comment.js'
 import { createHash } from 'node:crypto'
-import { importCanvas } from '../canvas/import.js'
+import { CanvasCommitTakenError, importCanvas } from '../canvas/import.js'
 import { type ParsedCanvasName, parseCanvasZipName } from '../canvas/name.js'
 import { CANVAS_ZIP_MAX_BYTES, hasZipMagic } from '../canvas/zip.js'
 import type { ImportResult, SharedCanvasInfo } from '../contract/api.js'
@@ -11,6 +11,7 @@ import type { Pr, Repo } from '../contract/review-artifact.js'
 import { BodyTooLargeError, readCappedBody } from '../server/capped-body.js'
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
+import { type CanvasAuthor, isReviewAuthor } from './canvas-author.js'
 import type { HostAttachments } from './host.js'
 
 export const MAX_REDIRECTS = 3
@@ -33,12 +34,16 @@ export interface AttachmentCandidate extends AttachmentLink {
   postedAt: string
   /** Position in the scan, used when two links carry the same time. */
   order: number
+  /** Who wrote the PR body or comment the link was in. */
+  author: CanvasAuthor
 }
 
 export interface DiscoverySources {
   /** The PR body and the time the pull request was last edited. */
   body: string
   bodyUpdatedAt: string
+  /** The pull request's author, who wrote its body. */
+  bodyAuthor: string
   comments: CommentsPayload
 }
 
@@ -48,18 +53,21 @@ export function collectCandidates(
   repo: Repo,
   attachments: HostAttachments
 ): AttachmentCandidate[] {
-  const texts: Array<{ text: string; postedAt: string }> = [
-    { text: sources.body, postedAt: sources.bodyUpdatedAt },
-    ...sources.comments.issueComments.map(c => ({ text: c.body, postedAt: c.updatedAt })),
-    ...sources.comments.reviewComments.map(c => ({ text: c.body, postedAt: c.updatedAt })),
+  const texts: Array<{ text: string; postedAt: string; author: CanvasAuthor }> = [
+    { text: sources.body, postedAt: sources.bodyUpdatedAt, author: { login: sources.bodyAuthor } },
+    ...[...sources.comments.issueComments, ...sources.comments.reviewComments].map(c => ({
+      text: c.body,
+      postedAt: c.updatedAt,
+      author: commentAuthor(c),
+    })),
   ]
   const candidates: AttachmentCandidate[] = []
   let order = 0
-  for (const { text, postedAt } of texts) {
+  for (const { text, postedAt, author } of texts) {
     for (const link of attachments.findLinks(text, repo)) {
       const parsed = parseCanvasZipName(link.name, repo)
       if (parsed !== null) {
-        candidates.push({ ...link, parsed, postedAt, order: order++ })
+        candidates.push({ ...link, parsed, postedAt, order: order++, author })
       }
     }
   }
@@ -68,10 +76,69 @@ export function collectCandidates(
     if (embedded === null) continue
     const parsed = parseCanvasZipName(embedded.name, repo)
     if (parsed !== null) {
-      candidates.push({ ...embedded, url: comment.url, parsed, postedAt: comment.updatedAt, order: order++ })
+      candidates.push({
+        ...embedded,
+        url: comment.url,
+        parsed,
+        postedAt: comment.updatedAt,
+        order: order++,
+        author: commentAuthor(comment),
+      })
     }
   }
   return candidates
+}
+
+function commentAuthor(c: { author: string; authorAssociation?: string | undefined }): CanvasAuthor {
+  return c.authorAssociation === undefined
+    ? { login: c.author }
+    : { login: c.author, association: c.authorAssociation }
+}
+
+/**
+ * The candidates whose author may supply the canvas, and a warning for each one skipped: the
+ * review's author, or someone with a role on the repository. The host is asked once per commenter;
+ * a failed check skips that commenter's canvases, since a canvas is only taken from someone known
+ * to have a role.
+ */
+export async function keepTrustedCandidates(
+  ctx: AppContext,
+  pr: Pr,
+  candidates: AttachmentCandidate[]
+): Promise<{ trusted: AttachmentCandidate[]; warnings: string[] }> {
+  const { host, repo } = ctx.config
+  const roles = new Map<string, boolean | Error>()
+  const trusted: AttachmentCandidate[] = []
+  const warnings: string[] = []
+  for (const candidate of candidates) {
+    const { author } = candidate
+    if (isReviewAuthor(author.login, pr.author)) {
+      trusted.push(candidate)
+      continue
+    }
+    const key = `${author.login.toLowerCase()}\u0000${author.association ?? ''}`
+    let role = roles.get(key)
+    if (role === undefined) {
+      try {
+        role = await host.hasRepositoryRole(ctx.gh, repo, author)
+      } catch (err) {
+        role = err instanceof Error ? err : new Error(String(err))
+      }
+      roles.set(key, role)
+    }
+    if (role === true) {
+      trusted.push(candidate)
+    } else if (role === false) {
+      warnings.push(
+        `skipped ${candidate.name}, posted by @${author.login}, who is neither the ${host.noun}'s author nor has a role on ${repo.owner}/${repo.name}`
+      )
+    } else {
+      warnings.push(
+        `skipped ${candidate.name}: could not check @${author.login}'s role on ${repo.owner}/${repo.name}: ${role.message}`
+      )
+    }
+  }
+  return { trusted, warnings }
 }
 
 /** True when the name names a pull request, and it is not the one being looked at. */
@@ -110,7 +177,8 @@ export function discoveryFingerprint(body: string, comments: CommentsPayload, he
   const hash = createHash('sha1')
   hash.update(`${headSha}\n${body}`)
   for (const c of [...comments.issueComments, ...comments.reviewComments]) {
-    hash.update(`\u0000${c.id}:${c.createdAt}:${c.body}`)
+    // The author's role decides whether a canvas there is taken, so a change of role counts too.
+    hash.update(`\u0000${c.id}:${c.createdAt}:${c.authorAssociation ?? ''}:${c.body}`)
   }
   return hash.digest('hex')
 }
@@ -191,6 +259,9 @@ export async function downloadAttachment(ctx: AppContext, rawUrl: string): Promi
 
 /** A downloaded zip that import refused, told in the words the callout uses. */
 export function importFailureReason(err: unknown): DownloadFailure {
+  if (err instanceof CanvasCommitTakenError) {
+    return 'commit-taken'
+  }
   if (!(err instanceof AppError)) {
     return 'not-zip'
   }
@@ -221,16 +292,19 @@ export async function discoverSharedCanvas(
   if (pr.number === null) {
     return { sharedCanvas: null, imported: null, warnings: [] }
   }
-  const sources: DiscoverySources = { body: pr.body, bodyUpdatedAt: pr.updatedAt ?? '', comments }
-  const ranked = rankCandidates(collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments), {
-    headSha: pr.headSha,
-    prNumber: pr.number,
-  })
+  const sources: DiscoverySources = {
+    body: pr.body,
+    bodyUpdatedAt: pr.updatedAt ?? '',
+    bodyAuthor: pr.author,
+    comments,
+  }
+  const found = collectCandidates(sources, ctx.config.repo, ctx.config.host.attachments)
+  const { trusted, warnings } = await keepTrustedCandidates(ctx, pr, found)
+  const ranked = rankCandidates(trusted, { headSha: pr.headSha, prNumber: pr.number })
   const best = ranked[0]
   if (best === undefined) {
-    return { sharedCanvas: null, imported: null, warnings: [] }
+    return { sharedCanvas: null, imported: null, warnings }
   }
-  const warnings: string[] = []
   const first = await tryCandidate(ctx, pr, pr.number, best)
   warnings.push(...first.warnings)
   if (first.imported !== null) {
@@ -281,7 +355,12 @@ async function tryCandidate(
     }
   }
   try {
-    const imported = await importCanvas(ctx, { bytes: download.bytes, prNumber, currentHead: pr })
+    const imported = await importCanvas(ctx, {
+      bytes: download.bytes,
+      prNumber,
+      currentHead: pr,
+      discovered: true,
+    })
     return { sharedCanvas: { ...shared, downloadable: true }, imported, warnings: imported.warnings }
   } catch (err) {
     return {

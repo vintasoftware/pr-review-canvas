@@ -122,10 +122,13 @@ export function selfReviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       throw new AppError('BAD_REQUEST', 'name the canvas on screen with ?headSha=<sha>', 400)
     }
     const { comments } = await loader.refreshComments(number)
+    const pr = await loader.currentPr(number)
     if (ctx.fixtureArtifact === null) {
-      await runDiscovery(ctx, await loader.currentPr(number), comments, { refresh: false })
+      await runDiscovery(ctx, pr, comments, { refresh: false })
     }
-    const artifact = ctx.fixtureArtifact ?? (await ctx.canvases.readArtifact(canvasSha))
+    // The canvas the page names is read only while it is this pull request's to read.
+    const readable = (await ctx.canvases.entryFor(number, canvasSha, pr.headSha)) !== undefined
+    const artifact = ctx.fixtureArtifact ?? (readable ? await ctx.canvases.readArtifact(canvasSha) : null)
     if (artifact === null) {
       throw new AppError('NOT_FOUND', `no canvas for ${canvasSha.slice(0, 7)}`, 404, 'reload the page')
     }

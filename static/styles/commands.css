@@ -15,11 +15,12 @@
   white-space: nowrap;
   line-height: inherit;
 }
+/* A no-break space keeps each bracket with the text when a command wraps. */
 .cmd::before {
-  content: '[ ';
+  content: '[\a0';
 }
 .cmd::after {
-  content: ' ]';
+  content: '\a0]';
 }
 .cmd:hover,
 .fold-toggle:hover {
