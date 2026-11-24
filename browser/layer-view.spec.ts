@@ -205,6 +205,23 @@ test.describe('the bar of one layer at a time', () => {
     await expect(on).toBeFocused()
   })
 
+  test.describe('from all the layers at once', () => {
+    test.use({ settings: { layerView: 'all' } })
+
+    test('the settings switch to one at a time opens the section under its bar', async ({
+      page,
+      reviewUrl,
+    }) => {
+      await page.goto(reviewUrl)
+      await page.locator('#settings').click()
+      await page.locator('#set-layer-view').selectOption('one')
+      await page.locator('[data-act="settings-save"]').click()
+      await expect(page.locator('#overview')).toBeVisible()
+      await expect(page.locator('#layer-run-path')).toBeHidden()
+      await expect.poll(() => barAtTop(page)).toBe(true)
+    })
+  })
+
   test.describe('out of the attention points', () => {
     test.use({ settings: { layerView: 'one', readByPoints: true } })
 
