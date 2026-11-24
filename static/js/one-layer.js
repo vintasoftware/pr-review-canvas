@@ -450,8 +450,9 @@ export function initOneLayer(root, opts) {
      * @param {string} [place]
      */
     switchView(next, place) {
+      const fromStops = view === 'points'
       // Out of the stops, the stop on screen; into them, where `setView` finds the reader.
-      const from = place ?? (view === 'points' ? shownHash : undefined)
+      const from = place ?? (fromStops ? shownHash : undefined)
       setView(next, from)
       // Out of the stops the URL keeps the stop, which the layers show as its card or layer.
       const here = view === 'points' ? shownHash : from
@@ -463,10 +464,12 @@ export function initOneLayer(root, opts) {
         )
       }
       const target = view !== 'all' || here === undefined ? null : targetFor(here)
-      if (target === null) {
-        win.scrollTo({ top: 0 })
-      } else {
+      // Out of the stops, one layer at a time opens the section under its bar, as a step does.
+      const section = fromStops && view === 'one' ? sectionFor(shownHash) : null
+      if (target !== null) {
         scrollIntoViewSafe(target, 'start')
+      } else if (section === null || !showAtTop(section)) {
+        win.scrollTo({ top: 0 })
       }
     },
     /**
