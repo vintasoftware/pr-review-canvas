@@ -1,8 +1,10 @@
 # Static viewer: manual tests
 
 The checks to run by hand before a viewer change ships. Unit tests cover the routes and the
-sign-in flow against fakes; these cover what only a real GitHub, a real GitHub App, and a real
-browser show. Add a section when a feature lands, and record the last run at the bottom.
+sign-in flow against fakes. The Playwright specs in `browser/viewer/` run the production build
+under its CSP, with GitHub, its sign-in page, and the auth Worker faked in the browser; they run in
+`pnpm verify`. These checks cover what only a real GitHub, a real GitHub App, and a real Cloudflare
+deploy show. Add a section when a feature lands, and record the last run at the bottom.
 
 ## Setup
 
