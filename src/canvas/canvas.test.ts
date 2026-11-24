@@ -468,6 +468,8 @@ describe('importCanvas', () => {
   it.each([
     ['dated a century ahead', { revisedAt: '2099-01-01T00:00:00.000Z' }],
     ['dated with no time at all', { generatedAt: '~' }],
+    // A real time in a shape pr-review never wrote, which its manifest would now be refused for.
+    ['dated without milliseconds', { generatedAt: '2026-09-10T11:00:00Z' }],
   ] as Array<[string, Pick<ReviewArtifact, 'generatedAt'> | Pick<ReviewArtifact, 'revisedAt'>]>)(
     'replaces a canvas an earlier version stored %s, then compares as usual',
     async (_case, dates) => {

@@ -1,7 +1,6 @@
 // Review checkouts: one detached git worktree per review, at the commit the chat talks about, so
-// the agent reads the reviewed version of every file without touching the reader's checkout. The
-// agent runs in a repository of the tool's own that holds the checkout as `code`, never in the
-// checkout itself. See docs/adr/0004-chat-reads-a-review-checkout.md.
+// the agent reads the reviewed version of every file without touching the reader's checkout.
+// See docs/adr/0004-chat-reads-a-review-checkout.md.
 import { lstat, mkdir, open, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { execGit, GitError, type GitExec } from '../git/git.js'
@@ -68,7 +67,7 @@ export async function* readCodeAt(input: {
   }
   try {
     await lease.moveTo(input.headSha)
-    return { kind: 'checkout', cwd: lease.cwd, dir: lease.dir, sha: input.headSha }
+    return { kind: 'checkout', cwd: lease.dir, sha: input.headSha }
   } catch (err) {
     const fallback = {
       message: err instanceof Error ? err.message : String(err),
@@ -81,10 +80,7 @@ export async function* readCodeAt(input: {
 
 /** The git commands a checkout needs. The real one runs git; tests pass a fake. */
 export interface CheckoutGit {
-  /**
-   * `git worktree add --detach --force <dir> <sha>`, run in the reader's repository, into a folder
-   * that `git init` first made a repository of its own (see `CheckoutLease.cwd`).
-   */
+  /** `git worktree add --detach --force <dir> <sha>`, run in the reader's repository. */
   add(dir: string, sha: string): Promise<void>
   /** `git checkout --detach --force <sha>`, run in the checkout. */
   move(dir: string, sha: string): Promise<void>
@@ -109,11 +105,8 @@ export function createCheckoutGit(repoRoot: string, exec: GitExec = execGit): Ch
     }
   }
   return {
-    add: async (dir, sha) => {
-      await must(repoRoot, ['init', '--quiet', path.dirname(dir)])
-      // `--force` also takes over a registration whose folder was removed by hand.
-      await must(repoRoot, ['worktree', 'add', '--detach', '--force', dir, sha])
-    },
+    // `--force` also takes over a registration whose folder was removed by hand.
+    add: (dir, sha) => must(repoRoot, ['worktree', 'add', '--detach', '--force', dir, sha]),
     move: (dir, sha) => must(dir, ['checkout', '--detach', '--force', '--quiet', sha]),
     head: async dir => {
       if (!(await exists(path.join(dir, '.git')))) {
@@ -131,15 +124,6 @@ export function createCheckoutGit(repoRoot: string, exec: GitExec = execGit): Ch
 /** One checkout held by a chat turn. Nothing else moves or removes it until `release`. */
 export interface CheckoutLease {
   dir: string
-  /**
-   * The folder an agent runs in while it reads this checkout: a git repository of its own, with no
-   * commits, holding the checkout as `code`. acpx and the agents read their own configuration from
-   * the folder they start in, and some of it from the repository that folder is in, up to its root.
-   * A checkout holds the files of the commit under review, whose author must not configure the
-   * reader's agent with them; and the data directory is inside the reader's checkout by default,
-   * whose instructions and state are not the review's.
-   */
-  cwd: string
   /** The commit the checkout is on now, or null when it does not exist yet. */
   head: string | null
   /** Creates the checkout or moves it to `sha`, and records the turn as its last use. */
@@ -243,14 +227,11 @@ export function createReviewCheckouts(opts: {
   now: () => Date
 }): CheckoutStore {
   const { root, git, now } = opts
-  const cwdOf = (folder: string): string => path.join(root, `${folder}.cwd`)
-  const dirOf = (folder: string): string => path.join(cwdOf(folder), 'code')
-  /** Where the checkout was while the agent still ran inside it. */
-  const formerDirOf = (folder: string): string => path.join(root, folder)
+  const dirOf = (folder: string): string => path.join(root, folder)
   /** Who holds each checkout leased in this process. */
   const holders = new Map<string, CheckoutHolder>()
-  const metaOf = (folder: string): string => path.join(root, `${folder}.json`)
-  const lockOf = (folder: string): string => path.join(root, `${folder}.lock`)
+  const metaOf = (folder: string): string => `${dirOf(folder)}.json`
+  const lockOf = (folder: string): string => `${dirOf(folder)}.lock`
 
   /** The metadata this module wrote, or null when the checkout has none (or it was cut short). */
   const readMeta = async (folder: string): Promise<CheckoutMeta | null> => {
@@ -300,23 +281,11 @@ export function createReviewCheckouts(opts: {
   const isLocked = async (folder: string): Promise<boolean> =>
     (await exists(lockOf(folder))) && !(await lockIsStale(lockOf(folder)))
 
-  /** Unregisters the worktree at `dir`, and removes `folder`, which is it or holds it. */
-  const removeWorktree = async (dir: string, folder: string): Promise<void> => {
+  const removeCheckout = async (folder: string): Promise<void> => {
+    const dir = dirOf(folder)
     await git.remove(dir)
     // git leaves the folder when the worktree was never registered or was half created.
-    await rm(folder, { recursive: true, force: true })
-  }
-
-  /** Removes the checkout an earlier version kept where the agent ran in it, when one is left. */
-  const removeFormer = async (folder: string): Promise<void> => {
-    if (await exists(formerDirOf(folder))) {
-      await removeWorktree(formerDirOf(folder), formerDirOf(folder))
-    }
-  }
-
-  const removeCheckout = async (folder: string): Promise<void> => {
-    await removeWorktree(dirOf(folder), cwdOf(folder))
-    await removeFormer(folder)
+    await rm(dir, { recursive: true, force: true })
     await rm(metaOf(folder), { force: true })
   }
 
@@ -338,9 +307,7 @@ export function createReviewCheckouts(opts: {
       if (review === null || meta === null) {
         continue
       }
-      // A checkout an earlier version made stays where it was until its next lease or sweep.
-      const dir = (await exists(formerDirOf(folder))) ? formerDirOf(folder) : dirOf(folder)
-      out.push({ ...review, folder, dir, ...meta, locked: await isLocked(folder) })
+      out.push({ ...review, folder, dir: dirOf(folder), ...meta, locked: await isLocked(folder) })
     }
     return out.sort((a, b) => b.lastUsedAt.localeCompare(a.lastUsedAt))
   }
@@ -392,7 +359,6 @@ export function createReviewCheckouts(opts: {
       }
       let head: string | null
       try {
-        await removeFormer(folder)
         head = await git.head(dir)
       } catch (err) {
         await release()
@@ -400,7 +366,6 @@ export function createReviewCheckouts(opts: {
       }
       return {
         dir,
-        cwd: cwdOf(folder),
         head,
         async moveTo(sha) {
           if (head === null) {

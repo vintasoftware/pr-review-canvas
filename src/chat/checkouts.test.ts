@@ -1,17 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process'
-import {
-  lstat,
-  mkdir,
-  readdir,
-  readFile,
-  realpath,
-  rename,
-  rm,
-  symlink,
-  utimes,
-  writeFile,
-} from 'node:fs/promises'
+import { lstat, mkdir, readFile, rename, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { envWithoutRepo } from '../git/environment.mjs'
@@ -52,8 +41,8 @@ afterEach(async () => {
   await rm(tmp, { recursive: true, force: true })
 })
 
-async function use(folder: string, sha: string, store: CheckoutStore = checkouts): Promise<void> {
-  const lease = await store.lease(folder, 'chat')
+async function use(folder: string, sha: string): Promise<void> {
+  const lease = await checkouts.lease(folder, 'chat')
   try {
     await lease.moveTo(sha)
   } finally {
@@ -199,14 +188,9 @@ describe('the idle sweep', () => {
         key: 'branch',
         worktree: 'fix',
         folder: 'branch~fix',
-        dir: path.join(tmp, 'checkouts', 'branch~fix.cwd', 'code'),
+        dir: path.join(tmp, 'checkouts', 'branch~fix'),
       },
-      {
-        key: 'branch',
-        worktree: null,
-        folder: 'branch',
-        dir: path.join(tmp, 'checkouts', 'branch.cwd', 'code'),
-      },
+      { key: 'branch', worktree: null, folder: 'branch', dir: path.join(tmp, 'checkouts', 'branch') },
     ])
     const result = await checkouts.sweep({ olderThanDays: 0.5 })
     expect(result.removed.map(c => c.folder)).toEqual(['branch'])
@@ -222,8 +206,8 @@ describe('checkoutsFor', () => {
     const mine = await main.lease('branch', 'chat')
     const theirs = await linked.lease('branch', 'chat')
     expect([mine.dir, theirs.dir]).toEqual([
-      path.join(tmp, 'checkouts', 'branch.cwd', 'code'),
-      path.join(tmp, 'checkouts', 'branch~fix.cwd', 'code'),
+      path.join(tmp, 'checkouts', 'branch'),
+      path.join(tmp, 'checkouts', 'branch~fix'),
     ])
     await mine.moveTo('a'.repeat(40))
     await theirs.moveTo('b'.repeat(40))
@@ -234,7 +218,7 @@ describe('checkoutsFor', () => {
     })
     await Promise.all([mine.release(), theirs.release(), pr.release()])
     expect((await linked.list()).map(c => c.folder).sort()).toEqual(['branch', 'branch~fix'])
-    expect(await linked.size(theirs.dir)).toBe(40)
+    expect(await linked.size(path.join(tmp, 'checkouts', 'branch~fix'))).toBe(40)
     const swept = await linked.sweep({ all: true })
     expect(swept.removed.map(c => c.folder).sort()).toEqual(['branch', 'branch~fix'])
   })
@@ -326,74 +310,24 @@ describe('createCheckoutGit', () => {
     await retaken.release()
   })
 
-  it('keeps the checkout in a repository of its own for the agent to run in, and writes links as plain files', async () => {
-    // The data directory is inside the reader's checkout by default, as here.
+  it('writes a symbolic link in the reviewed commit as a plain file that holds its target', async () => {
     const repo = path.join(tmp, 'repo')
     execFileSync('git', ['init', '-q', '-b', 'main', repo], { env: envWithoutRepo() })
     git(repo, 'config', 'user.email', 't@example.com')
     git(repo, 'config', 'user.name', 'T')
-    // What the commit under review may hold: files an agent or acpx would read as its own
-    // configuration from the folder it starts in, and a link that leaves the repository.
-    await mkdir(path.join(repo, '.claude'))
-    await writeFile(path.join(repo, '.claude', 'settings.json'), '{}')
-    await writeFile(path.join(repo, '.acpxrc.json'), '{}')
     await writeFile(path.join(tmp, 'secret.txt'), 'outside the repository\n')
     await symlink('../secret.txt', path.join(repo, 'notes.txt'))
     git(repo, 'add', '.')
     git(repo, 'commit', '-q', '-m', 'one')
-
-    const root = path.join(repo, '.pr-review', 'checkouts')
-    const real = createReviewCheckouts({ root, git: createCheckoutGit(repo), now: () => now })
-    const head = git(repo, 'rev-parse', 'HEAD')
-    // A checkout an earlier version made, which the agent ran in, is still on disk.
-    const former = path.join(root, '7')
-    git(repo, 'worktree', 'add', '-q', '--detach', former, head)
+    const real = createReviewCheckouts({
+      root: path.join(tmp, 'data', 'checkouts'),
+      git: createCheckoutGit(repo),
+      now: () => now,
+    })
     const lease = await real.lease('7', 'chat')
-    await lease.moveTo(head)
-    expect(git(repo, 'worktree', 'list')).not.toContain(`${former} `)
-    // Everything of the commit is under `code`. The folder the agent starts in holds nothing else,
-    // and is the root of its own repository, so nothing that looks for a repository's root goes
-    // past it to the reader's checkout.
-    expect(await readdir(lease.dir)).toContain('.acpxrc.json')
-    expect(lease.dir).toBe(path.join(lease.cwd, 'code'))
-    expect((await readdir(lease.cwd)).sort()).toEqual(['.git', 'code'])
-    expect(git(lease.cwd, 'rev-parse', '--show-toplevel')).toBe(await realpath(lease.cwd))
-    expect(git(lease.dir, 'rev-parse', 'HEAD')).toBe(head)
+    await lease.moveTo(git(repo, 'rev-parse', 'HEAD'))
     expect((await lstat(path.join(lease.dir, 'notes.txt'))).isSymbolicLink()).toBe(false)
     expect(await readFile(path.join(lease.dir, 'notes.txt'), 'utf8')).toBe('../secret.txt')
     await lease.release()
-    expect((await real.list()).map(c => c.dir)).toEqual([lease.dir])
-
-    await real.sweep({ all: true })
-    expect(await readdir(root)).toEqual([])
-  })
-
-  it('lists and sweeps a checkout an earlier version made where the agent ran in it', async () => {
-    const repo = path.join(tmp, 'repo')
-    execFileSync('git', ['init', '-q', '-b', 'main', repo], { env: envWithoutRepo() })
-    git(repo, 'config', 'user.email', 't@example.com')
-    git(repo, 'config', 'user.name', 'T')
-    await writeFile(path.join(repo, 'a.txt'), 'one\n')
-    git(repo, 'add', '.')
-    git(repo, 'commit', '-q', '-m', 'one')
-    const head = git(repo, 'rev-parse', 'HEAD')
-    const root = path.join(tmp, 'data', 'checkouts')
-    // What an earlier version left: the worktree at `checkouts/<key>`, and its metadata beside it.
-    const former = path.join(root, '7')
-    git(repo, 'worktree', 'add', '-q', '--detach', former, head)
-    await writeFile(path.join(root, '7.json'), JSON.stringify({ sha: head, lastUsedAt: now.toISOString() }))
-    const real = createReviewCheckouts({ root, git: createCheckoutGit(repo), now: () => now })
-    const [listed] = await real.list()
-    expect(listed?.dir).toBe(former)
-    expect(await real.size(former)).toBe('one\n'.length)
-    expect((await real.sweep({ all: true })).removed.map(c => c.folder)).toEqual(['7'])
-    expect(git(repo, 'worktree', 'list')).not.toContain(former)
-    expect(await readdir(root)).toEqual([])
-    // The next turn makes it again where it now belongs, and the next sweep removes that one.
-    await use('7', head, real)
-    expect((await real.list()).map(c => c.dir)).toEqual([path.join(root, '7.cwd', 'code')])
-    await real.sweep({ all: true })
-    expect(await readdir(root)).toEqual([])
-    expect(git(repo, 'worktree', 'list').split('\n')).toHaveLength(1)
   })
 })

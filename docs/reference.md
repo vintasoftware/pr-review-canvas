@@ -1331,22 +1331,10 @@ first, as it does for unsent text. A timeout or incomplete answer can be retried
 ### Review checkouts
 
 AI Chat reads code from a review checkout: a detached `git worktree` of the repository at
-the reviewed commit, kept under the data directory (`repos/<owner>__<repo>/checkouts/<key>.cwd/code`)
-and apart from your own checkout. Your branch and your uncommitted edits are never touched. The first
+the reviewed commit, kept under the data directory (`repos/<owner>__<repo>/checkouts/<key>`) and
+apart from your own checkout. Your branch and your uncommitted edits are never touched. The first
 chat turn of a review creates it, and each turn moves it to the commit the chat talks about. The
 chat pane shows **Creating the review checkout** or **Checking out** while that runs.
-
-The agent runs in the folder that holds the checkout (`<key>.cwd`), not in the checkout. acpx and
-the agents read their own configuration from the folder they start in, such as `.acpxrc.json`,
-`.claude/settings.json`, or `.mcp.json`, and some of it, such as Codex's `AGENTS.md`, from every
-folder up to the root of the repository that folder is in. A pull request can add or change those
-files, and the agent of whoever reviews it must not be configured by them. So `<key>.cwd` is a git
-repository of its own, with no commits: the search for a repository's root stops there, and does
-not reach your own checkout, which holds the data directory by default. The agent is told that
-instruction files in the checkout, such as `AGENTS.md`, belong to the code under review and are not
-instructions to it. A checkout an earlier
-version kept at `checkouts/<key>` is listed where it is, and removed the next time that review is
-chatted about or generated, or by the next sweep.
 
 - A pull request and the branch review each get one. The branch review reads the branch's last
   commit, without your uncommitted edits.
@@ -1372,7 +1360,7 @@ chatted about or generated, or by the next sweep.
   of them: while one worktree's project answers about it, a turn on the same pull request from
   another worktree, or from a second `pr-review serve`, is refused with `CHAT_BUSY`; ask again once
   the first answer is done. A linked worktree's branch review has a checkout of its own
-  (`checkouts/branch~<worktree>.cwd/code`).
+  (`checkouts/branch~<worktree>`).
 
 The server removes checkouts with no chat turn for `checkoutIdleDays`, when it first opens a
 clone and every `checkoutSweepMinutes` after. `pr-review clean` does the same on demand:
