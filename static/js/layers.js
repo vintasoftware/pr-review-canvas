@@ -913,9 +913,9 @@ export function drawCardsOnScreen(root) {
 const MAX_DRAW_ROUNDS = 10
 
 /**
- * Scrolls `el` into view, as `scrollIntoViewSafe` does, and draws the cards that brings on screen.
- * A card that draws its diff grows, which would push the element away again, or lets a short page
- * scroll further, so the scroll repeats until no card on screen is left to draw.
+ * Scrolls `el` into view, as `scrollIntoViewSafe` does, and draws the cards that come on screen. A
+ * drawn card grows, so it can move `el` or let a short page scroll further. The scroll repeats until
+ * no card on screen is left to draw.
  * @param {ParentNode} root
  * @param {Element} el
  * @param {ScrollLogicalPosition} block

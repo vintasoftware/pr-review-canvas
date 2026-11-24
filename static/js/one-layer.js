@@ -35,10 +35,9 @@ import { markRailCurrent } from './scroll-spy.js'
 const SECTION_SELECTOR = '#overview, pr-layer > section'
 
 /**
- * The state of a history entry that a stop opened at the top of the page, or a section in the
- * one-layer view under its bar. That scroll means nothing while all the layers show, so back or
- * forward to it there goes to what its fragment names. Every other entry keeps the scroll the
- * browser brings back.
+ * The state of a history entry that a stop or a one-layer step opened. Its scroll means nothing
+ * while all the layers show, so back or forward to it there goes to what its fragment names. Every
+ * other entry keeps the scroll the browser brings back.
  */
 const STOP_ENTRY = { stop: true }
 
@@ -246,10 +245,9 @@ export function initOneLayer(root, opts) {
   }
 
   /**
-   * In the one-layer view, shows the section a step leads to with the bar over it at the top of
-   * the screen, so the section starts right under the bar. A page with no canvas has no bar, and
-   * the section itself goes there. False for a target that is not a section, and in the other
-   * views.
+   * In the one-layer view, shows a section with its bar at the top of the screen. A page with no
+   * canvas has no bar, so the section goes there. False for a target that is not a section, and in
+   * the other views.
    * @param {Element} el
    */
   const showAtTop = el => {
@@ -262,9 +260,9 @@ export function initOneLayer(root, opts) {
   }
 
   /**
-   * A step to a section in the one-layer view, from a link or a key: shows it at the top of the
-   * screen and writes its history entry. A step to the section the URL names writes none, as the
-   * browser writes none for the same fragment. False, writing nothing, where `showAtTop` is false.
+   * A step to a section in the one-layer view, from a link or a key: shows it as `showAtTop` does
+   * and writes its history entry. A step to the section the URL names writes none, as the browser
+   * does. False where `showAtTop` is false.
    * @param {Element | null} el
    */
   const openAtTop = el => {
@@ -403,7 +401,8 @@ export function initOneLayer(root, opts) {
       const target = targetFor(href)
       if (openAtTop(target)) {
         event.preventDefault()
-        // The browser moves the focus into a section it scrolls to. A bar link gives it to the new bar.
+        // Move the focus into the section, as the browser does for a fragment. After a bar link,
+        // the focus stays on the new bar.
         if (!fromBar && target instanceof HTMLElement) {
           target.tabIndex = -1
           target.focus({ preventScroll: true })

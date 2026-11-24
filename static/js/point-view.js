@@ -198,8 +198,7 @@ export function clearStop(root) {
 
 /**
  * A bar's way back, to `href`, that says where it goes as HTML. Both ways are commands, so they
- * read as a pair. The space next to each arrow does not break, so a long title that wraps never
- * leaves the arrow on a line of its own.
+ * read as a pair. A no-break space keeps each arrow with the title when the title wraps.
  * @param {string} href
  * @param {string} html
  */
@@ -305,10 +304,9 @@ function layerNameHtml(layers, layer) {
  * The one-layer view's bar for layer `index`, -1 for the overview. It is the stops' bar, built from
  * every layer's opening stop, so both bars use the same words.
  *
- * After the last layer, where `j` stops, it leads to the first layer not marked reviewed, by its
- * number, since that step goes back up the page, or says there is none. Other has no reviewed
- * mark, but it never becomes that target: validation keeps Other last, so it is the layer on
- * screen.
+ * After the last layer, where `j` stops, it leads to the first layer not marked reviewed, or says
+ * there is none. It names that layer's number, since the step goes back up the page. Validation
+ * keeps Other last, so Other is the layer on screen there and never the target.
  * @param {ReviewArtifact} artifact
  * @param {number} index
  * @param {(layer: Layer) => boolean} reviewed whether the reader marked a layer reviewed

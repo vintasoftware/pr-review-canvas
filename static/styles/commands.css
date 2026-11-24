@@ -15,8 +15,7 @@
   white-space: nowrap;
   line-height: inherit;
 }
-/* The space next to each bracket does not break, so a command that wraps keeps its brackets on
-   the lines of its text. */
+/* A no-break space keeps each bracket with the text when a command wraps. */
 .cmd::before {
   content: '[\a0';
 }
