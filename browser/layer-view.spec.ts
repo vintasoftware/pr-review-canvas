@@ -466,7 +466,9 @@ test.describe('reading by attention points', () => {
     await lands('k', 'layer-run-path')
     await lands(']', 'point-p-1')
     await lands('p', 'layer-run-path')
-    // A point reached by the rail takes the focus with ] first, so the point keys act on it.
+    // A point reached by the rail takes the focus with ] first, so the point keys act on it, even
+    // when the focus was on its layer's opening.
+    await lands('j', 'layer-other')
     await page.locator('nav.rail a[href="#point-p-2"]').click()
     await lands(']', 'point-p-2')
     await expect(page.locator('tr.ifind[data-fingerprint="fp-2"]')).toHaveClass(/is-focused/)

@@ -1515,8 +1515,13 @@ export function wireReview(root, session, opts = {}) {
         const direction = decided.action === 'next-point' ? 1 : -1
         // The open points' stops, the one on screen first while nothing shown in it has the focus.
         const open = new Set(points.map(p => p.id))
+        // The section is the stop, not a place in it: a layer's opening focuses it, and a point
+        // shown after that is still the next one.
         const at = focused()
-        const onStop = at !== null && at.closest('[data-lens]') !== null && at.getClientRects().length > 0
+        const onStop =
+          at !== null &&
+          (at.parentElement?.closest('[data-lens]') ?? null) !== null &&
+          at.getClientRects().length > 0
         const stop = opts.stepStop?.(direction, s => s.kind === 'point' && open.has(s.point.id), !onStop)
         if (stop === undefined) {
           stepPoint(order, points, direction)

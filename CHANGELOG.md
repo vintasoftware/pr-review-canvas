@@ -21,6 +21,8 @@
 
 - After `Enter` on a bar link of **One point at a time**, the focus stays on the bar, so `Enter`
   again moves on. Before, it went to the top of the page.
+- In **One point at a time**, `]` after a rail click on a point in the layer whose opening had the
+  focus now focuses that point. Before, it skipped to the next one.
 
 ### Sign-off
 
