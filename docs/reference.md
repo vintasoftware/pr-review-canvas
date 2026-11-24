@@ -805,8 +805,9 @@ A bar over and under the layer leads back and on, as in [One point at a time](#o
 back to the previous layer by its title, or to the overview from the first layer, and on to the
 next layer by its title. On the overview it leads to the first layer. After the last layer, where
 `j` stops, it leads to the first other layer you have not marked reviewed, by its number and title,
-or says that all other layers are reviewed. A rail link, a bar link, `j`, `k` and `g o`, and back and
-forward put the bar at the top of the screen, with the layer or the overview right under it.
+or says that all other layers are reviewed. A rail link, a bar link, `j`, `k` and `g o`, back and
+forward, and a move from **Attention points** to **Layers** put the bar at the top of the screen, with
+the layer or the overview right under it.
 
 ### One point at a time
 
