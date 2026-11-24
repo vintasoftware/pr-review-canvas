@@ -807,7 +807,8 @@ next layer by its title. On the overview it leads to the first layer. After the 
 `j` stops, it leads to the first other layer you have not marked reviewed, by its number and title,
 or says that all other layers are reviewed. A rail link, a bar link, `j`, `k` and `g o`, back and
 forward, and every switch to one layer at a time, from **Attention points** or from the settings, put
-the bar at the top of the screen, with the layer or the overview right under it.
+the bar at the top of the screen, with the layer or the overview right under it. A switch from a
+point's stop puts that point at the top of the screen instead, as with all the layers at once.
 
 ### One point at a time
 

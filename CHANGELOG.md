@@ -13,7 +13,8 @@
 - **One layer at a time** has the bar of **One point at a time** over and under the layer: back and
   on, by title. The last layer leads to the first other layer you have not marked reviewed. The
   rail, the bar, `j`, `k`, `g o`, back and forward, and every switch to one layer at a time put the
-  bar at the top of the screen, with the layer right under it.
+  bar at the top of the screen, with the layer right under it. A switch from a point's stop opens
+  on that point.
 - Both bars show their ways back and on as buttons, or as bracketed commands in the terminal skin.
 
 ### Fixes
