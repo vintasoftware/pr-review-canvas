@@ -66,6 +66,7 @@ function bootstrapFor(target: ViewerTarget): ReviewBootstrap {
     hideInline: s.hideInline,
     hideInlineKinds: s.hideInlineKinds,
     hiddenItemClick: s.hiddenItemClick,
+    viewer: true,
   }
 }
 

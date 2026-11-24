@@ -1,7 +1,7 @@
 // @ts-check
 // @vitest-environment happy-dom
 import { ERROR_CODES } from '../../src/contract/api.js'
-import { ERROR_CARDS, errorCardFor, errorCardHtml } from './errors.js'
+import { ERROR_CARDS, errorCardFor, errorCardHtml, VIEWER_ERROR_CARDS } from './errors.js'
 
 describe('error cards', () => {
   it('renders a card per known code with title, message, hint, action, and a retry command', () => {
@@ -49,5 +49,21 @@ describe('error cards', () => {
     document.body.innerHTML = errorCardHtml({ code: unknown, message: '<b>bold</b>' })
     expect(document.querySelector('h2')?.textContent).toBe('Something went wrong SOMETHING_NEW')
     expect(document.querySelector('.body p')?.innerHTML).toBe('&lt;b&gt;bold&lt;/b&gt;')
+  })
+
+  it('words the cards for the hosted viewer, which has no clone, CLI, or server log', () => {
+    document.body.innerHTML = errorCardHtml({ code: 'PR_NOT_FOUND', message: 'm' }, { viewer: true })
+    expect(document.querySelector('.body p:nth-child(2)')?.textContent).toBe(
+      'Check the owner, the repository, and the number.'
+    )
+    expect(document.body.textContent).not.toMatch(/clone|terminal|gh auth login|server log/)
+    const unknown = /** @type {'INTERNAL'} */ ('SOMETHING_NEW')
+    expect(errorCardFor({ code: unknown, message: 'x' }, { viewer: true })).toBe(
+      VIEWER_ERROR_CARDS['INTERNAL']
+    )
+    // A code the viewer has no wording of its own for keeps the shared card.
+    expect(errorCardFor({ code: 'GITHUB_API_ERROR', message: 'x' }, { viewer: true })).toBe(
+      ERROR_CARDS['GITHUB_API_ERROR']
+    )
   })
 })

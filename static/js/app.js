@@ -94,13 +94,14 @@ function projectLinkOf(bootstrap) {
 /**
  * @param {string} version
  * @param {PrBundle} [bundle]
+ * @param {boolean} [viewer] the hosted viewer; read from the bundle when there is one
  */
-function footerHtml(version, bundle) {
+function footerHtml(version, bundle, viewer = bundle?.viewer === true) {
   const canvas = bundle?.canvas
     ? `<span>canvas <span class="mono">${esc(bundle.canvas.headSha.slice(0, 7))}</span> · ${esc(bundle.canvas.source)}</span>`
     : ''
   // The hosted viewer runs no AI and has no local app behind it: the browser talks to the forge.
-  const where = bundle?.viewer
+  const where = viewer
     ? `hosted viewer · your browser talks to ${esc(hostLabel())} directly`
     : `local review app · ${esc(hostLabel())} operations and AI requests contact their services`
   return `<footer><span>pr-review ${esc(version)}</span>${canvas}<span>${where}</span></footer>`
@@ -276,8 +277,8 @@ export class PrAppElement extends HTMLElement {
           theme: readTheme(document.documentElement),
           skin: readSkin(document.documentElement),
         }) +
-        errorCardHtml(toEnvelopeError(err)) +
-        footerHtml(this.bootstrap.version)
+        errorCardHtml(toEnvelopeError(err), { viewer: this.bootstrap.viewer === true }) +
+        footerHtml(this.bootstrap.version, undefined, this.bootstrap.viewer === true)
       qs('#retry', this)?.addEventListener('click', () => void this.boot())
       this.wireAppearance()
       return

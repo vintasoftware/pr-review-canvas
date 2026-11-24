@@ -46,6 +46,19 @@ test('shows how to make a canvas when the pull request has none', async ({ page,
   await expect(page.getByText('/pr-review-canvas 42')).toBeVisible()
 })
 
+test('words a pull request it cannot read for the viewer, with no local app to point at', async ({
+  page,
+  open,
+}) => {
+  await open('acme/private/7')
+  const card = page.locator('section.error-card')
+  await expect(card).toContainText('acme/private#7 was not found, or is not public')
+  await expect(card).toContainText('Check the owner, the repository, and the number.')
+  await expect(card).not.toContainText('clone')
+  await expect(page.locator('footer')).toContainText('hosted viewer')
+  await expect(page.locator('footer')).not.toContainText('local review app')
+})
+
 test("skips a stranger's canvas comment and names who posted it", async ({ page, open, github }) => {
   github.comment(canvasComment({ login: 'mallory', association: 'NONE' }))
   await open('acme/widgets/42')

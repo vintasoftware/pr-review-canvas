@@ -309,4 +309,9 @@ export interface ReviewBootstrap {
   hideInlineKinds: InlineKind[]
   /** What going to a hidden item does, from the settings file. */
   hiddenItemClick: HiddenItemClick
+  /**
+   * Set by the hosted static viewer, as on the bundle, so a page that failed before it read a
+   * bundle still words its error and footer for the viewer.
+   */
+  viewer?: true
 }
