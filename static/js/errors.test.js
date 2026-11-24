@@ -66,4 +66,20 @@ describe('error cards', () => {
       ERROR_CARDS['GITHUB_API_ERROR']
     )
   })
+
+  it('links the https addresses in a hint and keeps the rest as text', () => {
+    document.body.innerHTML = errorCardHtml({
+      code: 'PR_NOT_FOUND',
+      message: 'm',
+      hint: 'ask an admin of acme to install the app: https://github.com/apps/x/installations/new <b>',
+    })
+    const hint = document.querySelector('.body p.muted')
+    expect(hint?.textContent).toBe(
+      'ask an admin of acme to install the app: https://github.com/apps/x/installations/new <b>'
+    )
+    const link = hint?.querySelector('a')
+    expect(link?.getAttribute('href')).toBe('https://github.com/apps/x/installations/new')
+    expect(link?.getAttribute('rel')).toBe('noopener noreferrer')
+    expect(hint?.querySelector('b')).toBeNull()
+  })
 })

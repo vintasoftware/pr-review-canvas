@@ -9,7 +9,8 @@ deploy show. Add a section when a feature lands, and record the last run at the 
 ## Setup
 
 - `viewer/.env.local` filled from `viewer/.env.example`, with the app's Client ID (it starts with
-  `Iv`), its client secret, and its slug.
+  `Iv`), its client secret, and its slug. The slug is optional for the viewer, but without it
+  "Reading a private repository" step 2 shows no install link.
 - The GitHub App has Contents read-only and Pull requests read and write, and is installed on the
   test repository.
 - `pnpm viewer:dev`, then http://127.0.0.1:4174 (not `localhost`: the callback URL names
@@ -53,7 +54,8 @@ deploy show. Add a section when a feature lands, and record the last run at the 
 
 1. Signed in, open the private test pull request. It opens like a public one.
 2. Open a private pull request in a repository the app is not installed on. The page says it was
-   not found, or the app is not installed, and links the install page.
+   not found, or the app is not installed, and links the install page. The footer says "hosted
+   viewer", and nothing mentions a clone.
 3. Resolve a review thread on GitHub and refresh. Signed in, it shows as resolved; signed out, as
    open.
 

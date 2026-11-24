@@ -187,6 +187,22 @@ export function errorCardFor(error, opts = {}) {
 }
 
 /**
+ * A hint with its https addresses as links, such as the page where an owner installs the viewer's
+ * GitHub App. Everything else stays text.
+ * @param {string} hint
+ */
+function hintHtml(hint) {
+  return hint
+    .split(/(https:\/\/[^\s]+)/)
+    .map((part, i) =>
+      i % 2 === 1
+        ? `<a href="${esc(part)}" target="_blank" rel="noopener noreferrer">${esc(part)}</a>`
+        : esc(part)
+    )
+    .join('')
+}
+
+/**
  * @param {ErrorEnvelope['error']} error
  * @param {{ viewer?: boolean }} [opts] `viewer`: the hosted viewer, which has no local app behind it
  * @returns {string}
@@ -197,7 +213,7 @@ export function errorCardHtml(error, opts = {}) {
     '<main id="main" class="home">' +
     `<section class="panel error-card" data-code="${esc(error.code)}" aria-labelledby="err-h">` +
     `<div class="panel-h"><h2 id="err-h">${esc(card.title)} <span class="mono muted">${esc(error.code)}</span></h2></div>` +
-    `<div class="body"><p>${esc(error.message)}</p>${error.hint ? `<p class="muted">${esc(error.hint)}</p>` : ''}` +
+    `<div class="body"><p>${esc(error.message)}</p>${error.hint ? `<p class="muted">${hintHtml(error.hint)}</p>` : ''}` +
     `<p>${esc(card.action)}</p>` +
     '<p><button class="cmd fill" type="button" id="retry">retry</button></p></div></section></main>'
   )
