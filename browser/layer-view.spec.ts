@@ -241,6 +241,22 @@ test.describe('the bar of one layer at a time', () => {
       await expect(nav).toHaveAttribute('aria-label', 'Previous and next layer')
       await expect.poll(() => barAtTop(page)).toBe(true)
     })
+
+    test('the rail’s switch from a point’s stop opens the layer on that point', async ({
+      page,
+      reviewUrl,
+    }) => {
+      await page.goto(reviewUrl + '#point-p-1')
+      await expect(page.locator('#stop-nav')).toHaveAttribute('aria-label', 'Attention points')
+      await page.locator('nav.rail [data-act="layer-view"][data-view="layers"]').click()
+      await expect(page.locator('#stop-nav')).toHaveAttribute('aria-label', 'Previous and next layer')
+      await expect(page).toHaveURL(/#point-p-1$/)
+      await expect
+        .poll(() =>
+          page.locator('#point-p-1').evaluate(card => Math.abs(card.getBoundingClientRect().top) < 1)
+        )
+        .toBe(true)
+    })
   })
 })
 
