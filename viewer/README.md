@@ -31,7 +31,8 @@ the page's `/api` calls, and `viewer-api.ts` answers them in the browser:
   that file with its line counts and says its diff was not sent, and a banner names the files left
   out and the ones past the list's limit.
 - The canvas is the newest canvas comment on the pull request written by its author or by an owner,
-  member, or collaborator of the repository, read with `readCanvasZip` like an import. A canvas
+  member, or collaborator of the repository (the local app's rule, from `src/host/canvas-author.ts`),
+  read with `readCanvasZip` like an import. A canvas
   comment from anyone else is skipped, with a warning naming its author. It shows as ready, carried over, or outdated by the same rules as the local app.
 - Review marks, dismissals, hidden threads, the pending review, and the skin and theme stay in
   `localStorage`.

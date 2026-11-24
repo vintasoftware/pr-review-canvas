@@ -36,6 +36,7 @@ import type { PrState } from '../src/contract/state.js'
 import { readCanvasZip } from '../src/canvas/zip.js'
 import { fetchComments } from '../src/github/comments.js'
 import { mapPull } from '../src/github/pr.js'
+import { type CanvasAuthor, hasGithubRole, isReviewAuthor } from '../src/host/canvas-author.js'
 import { HostCliError } from '../src/host/client.js'
 import { toPr } from '../src/host/pr.js'
 import {
@@ -82,22 +83,22 @@ const LOCAL_APP_HINT = 'install the CLI and run pr-review serve for this'
 const notInViewer = (what: string) =>
   new ViewerError(501, 'NOT_IMPLEMENTED', `${what} is not available in the viewer`, LOCAL_APP_HINT)
 
-/** The canvas comment's envelope, as src/canvas/comment.ts writes it. */
-/** GitHub's `author_association` values for people with a role on the repository. */
-const REPOSITORY_ROLES = new Set(['OWNER', 'MEMBER', 'COLLABORATOR'])
-
 /**
- * Whether a comment's author may supply the canvas: the pull request's author, or an owner,
- * member, or collaborator. `ghost` stands for any deleted account, so it matches nobody.
+ * Whether a comment's author may supply the canvas, by the local app's rule
+ * (`src/host/canvas-author.ts`): the pull request's author, or an owner, member, or collaborator.
  */
 function trustedAuthor(
   comment: Pick<IssueComment, 'author' | 'authorAssociation'>,
   prAuthor: string
 ): boolean {
-  if (REPOSITORY_ROLES.has(comment.authorAssociation ?? '')) return true
-  return comment.author !== 'ghost' && comment.author.toLowerCase() === prAuthor.toLowerCase()
+  const author: CanvasAuthor = {
+    login: comment.author,
+    ...(comment.authorAssociation === undefined ? {} : { association: comment.authorAssociation }),
+  }
+  return isReviewAuthor(author.login, prAuthor) || hasGithubRole(author)
 }
 
+/** The canvas comment's envelope, as src/canvas/comment.ts writes it. */
 const CANVAS_ENVELOPE = /<!-- pr-review-canvas:v1\n([A-Za-z0-9._-]+\.zip)\n([A-Za-z0-9+/]+={0,2})\n-->/
 
 function decodeBase64(encoded: string): Uint8Array {
