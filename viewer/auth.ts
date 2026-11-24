@@ -106,6 +106,8 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
   let session: AuthSession | null = readJson<AuthSession>(deps.storage, SESSION_KEY)
   let refreshing: Promise<AuthSession | null> | null = null
   const listeners = new Set<() => void>()
+  /** Told when the session ends without the reader signing out: GitHub refused to renew it. */
+  const lost = new Set<() => void>()
 
   const save = (next: AuthSession | null) => {
     session = next
@@ -135,14 +137,17 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
   async function refresh(): Promise<AuthSession | null> {
     const current = session
     if (current === null || current.refreshToken === null) return null
-    if (current.refreshExpiresAt !== null && current.refreshExpiresAt <= deps.now()) {
-      save(null)
-      return null
-    }
-    const next = await postWorker('/refresh', { refreshToken: current.refreshToken })
+    const next =
+      current.refreshExpiresAt !== null && current.refreshExpiresAt <= deps.now()
+        ? 'the refresh token expired'
+        : await postWorker('/refresh', { refreshToken: current.refreshToken })
     // A refresh token works once: a failed refresh leaves nothing to retry with.
     save(typeof next === 'string' ? null : next)
-    return typeof next === 'string' ? null : next
+    if (typeof next === 'string') {
+      for (const listener of lost) listener()
+      return null
+    }
+    return next
   }
 
   return {
@@ -225,6 +230,15 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
     onChange(listener: () => void): () => void {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+
+    /**
+     * Calls `listener` when the session ends because it could not be renewed, as after the reader
+     * revoked the app on GitHub, so the page can say why it reads anonymously now.
+     */
+    onLost(listener: () => void): () => void {
+      lost.add(listener)
+      return () => lost.delete(listener)
     },
   }
 }

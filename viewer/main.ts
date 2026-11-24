@@ -16,6 +16,9 @@ import { createViewerState } from './review-state.js'
 import { parseTarget } from './target.js'
 import { createViewerApi, type ViewerTarget } from './viewer-api.js'
 
+/** What the account bar says when GitHub stops accepting the reader's token, or will not renew it. */
+const SIGN_IN_LOST = 'GitHub no longer accepts your sign-in; the page reads anonymously. Sign in again.'
+
 /** The page's API base. Nothing is served here: the fetch below answers it. */
 const API_BASE = '/__viewer/'
 const APPEARANCE_KEY = 'pr-review-viewer:appearance'
@@ -170,6 +173,7 @@ async function main(): Promise<void> {
   const notice = auth === null ? null : (configProblem(config!) ?? (await finishSignIn(auth, redirectUri)))
   /** Says a line in the account bar, once it is drawn. */
   let say: (message: string) => void = () => {}
+  auth?.onLost(() => say(SIGN_IN_LOST))
   const gh = createBrowserGithub({
     fetchImpl: realFetch,
     ...(auth === null
@@ -178,7 +182,7 @@ async function main(): Promise<void> {
           token: () => auth.token(),
           onUnauthorized: () => {
             auth.signOut()
-            say('GitHub no longer accepts your sign-in; the page reads anonymously. Sign in again.')
+            say(SIGN_IN_LOST)
           },
         }),
   })

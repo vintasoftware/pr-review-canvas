@@ -115,9 +115,26 @@ it('signs out when a refresh fails, since a refresh token works once', async () 
     '/refresh': [{ status: 400, body: { error: 'bad_refresh_token' } }],
   })
   await signIn(s)
+  let lost = 0
+  s.auth.onLost(() => lost++)
   s.advance(28800 * 1000)
   expect(await s.auth.token()).toBeNull()
   expect(s.auth.signedIn()).toBe(false)
+  // The page says why it reads anonymously now; a sign-out the reader asked for says nothing.
+  expect(lost).toBe(1)
+  s.auth.signOut()
+  expect(lost).toBe(1)
+})
+
+it('ends a session whose refresh token expired, and says the sign-in was lost', async () => {
+  const s = setup({ '/token': [{ status: 200, body: TOKENS }] })
+  await signIn(s)
+  let lost = 0
+  s.auth.onLost(() => lost++)
+  s.advance(15897600 * 1000)
+  expect(await s.auth.token()).toBeNull()
+  expect(lost).toBe(1)
+  expect(s.sent.filter(r => r.url.endsWith('/refresh'))).toEqual([])
 })
 
 it('refuses a redirect whose state this tab did not start, and a sign-in GitHub cancelled', async () => {
