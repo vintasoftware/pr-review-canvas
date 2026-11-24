@@ -192,6 +192,27 @@ test.describe('the bar of one layer at a time', () => {
     await expect(page.locator('#layer-other')).toBeVisible()
     await expect(on).toBeFocused()
   })
+
+  test.describe('out of the attention points', () => {
+    test.use({ settings: { layerView: 'one', readByPoints: true } })
+
+    test('the bar and the rail’s switch open the layer under its bar, as a step does', async ({
+      page,
+      reviewUrl,
+    }) => {
+      const nav = page.locator('#stop-nav')
+      await page.goto(reviewUrl + '#point-p-3')
+      await page.locator('#stop-nav a[data-act="layer-view"]').click()
+      await expect(nav).toHaveAttribute('aria-label', 'Previous and next layer')
+      await expect.poll(() => barAtTop(page)).toBe(true)
+
+      await page.locator('nav.rail [data-act="layer-view"][data-view="points"]').click()
+      await expect(nav).toHaveAttribute('aria-label', 'Attention points')
+      await page.locator('nav.rail [data-act="layer-view"][data-view="layers"]').click()
+      await expect(nav).toHaveAttribute('aria-label', 'Previous and next layer')
+      await expect.poll(() => barAtTop(page)).toBe(true)
+    })
+  })
 })
 
 test.describe('compact attention points saved in the settings', () => {
