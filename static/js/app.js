@@ -94,12 +94,17 @@ function projectLinkOf(bootstrap) {
 /**
  * @param {string} version
  * @param {PrBundle} [bundle]
+ * @param {boolean} [viewer] the hosted viewer; read from the bundle when there is one
  */
-function footerHtml(version, bundle) {
+function footerHtml(version, bundle, viewer = bundle?.viewer === true) {
   const canvas = bundle?.canvas
     ? `<span>canvas <span class="mono">${esc(bundle.canvas.headSha.slice(0, 7))}</span> · ${esc(bundle.canvas.source)}</span>`
     : ''
-  return `<footer><span>pr-review ${esc(version)}</span>${canvas}<span>local review app · ${esc(hostLabel())} operations and AI requests contact their services</span></footer>`
+  // The hosted viewer runs no AI and has no local app behind it: the browser talks to the forge.
+  const where = viewer
+    ? `hosted viewer · your browser talks to ${esc(hostLabel())} directly`
+    : `local review app · ${esc(hostLabel())} operations and AI requests contact their services`
+  return `<footer><span>pr-review ${esc(version)}</span>${canvas}<span>${where}</span></footer>`
 }
 
 /** @param {ReadonlyArray<string>} warnings */
@@ -272,8 +277,8 @@ export class PrAppElement extends HTMLElement {
           theme: readTheme(document.documentElement),
           skin: readSkin(document.documentElement),
         }) +
-        errorCardHtml(toEnvelopeError(err)) +
-        footerHtml(this.bootstrap.version)
+        errorCardHtml(toEnvelopeError(err), { viewer: this.bootstrap.viewer === true }) +
+        footerHtml(this.bootstrap.version, undefined, this.bootstrap.viewer === true)
       qs('#retry', this)?.addEventListener('click', () => void this.boot())
       this.wireAppearance()
       return
@@ -368,13 +373,19 @@ export class PrAppElement extends HTMLElement {
         comments: bundle.comments.reviewComments,
         state: bundle.state,
         now,
+        // The viewer has no clone to fetch into: a missing patch is one GitHub would not send.
+        ...(bundle.viewer
+          ? {
+              unavailable: `${hostLabel()} sent no diff for this file because it is too large. Read it on ${hostLabel()}, or in the local app.`,
+            }
+          : {}),
       })
       defineLayerElements()
       const staleBar =
         bundle.status === 'stale' && bundle.stale
-          ? staleBarHtml(bundle.stale, bundle.local)
+          ? staleBarHtml(bundle.stale, bundle.local, { viewer: bundle.viewer })
           : bundle.carriedOver
-            ? carriedOverBarHtml(bundle.carriedOver)
+            ? carriedOverBarHtml(bundle.carriedOver, { viewer: bundle.viewer })
             : ''
       const marksBar =
         bundle.marksCarriedFrom === undefined
@@ -396,7 +407,8 @@ export class PrAppElement extends HTMLElement {
               canComment: /** @type {const} */ (false),
               tokenKind: bundle.capabilities.tokenKind,
               login: bundle.capabilities.login,
-              reason: `this canvas is for ${bundle.stale?.relation === 'other-base' ? 'an older diff of this commit' : 'an older commit'}; generate one for the current head to post`,
+              // The viewer generates nothing: there, the author publishes the next canvas.
+              reason: `this canvas is for ${bundle.stale?.relation === 'other-base' ? 'an older diff of this commit' : 'an older commit'}; ${bundle.viewer ? 'posting waits for a canvas of the current head' : 'generate one for the current head to post'}`,
             }
           : bundle.capabilities
       const canvasManifest = bundle.canvas?.manifest ?? null
@@ -423,6 +435,7 @@ export class PrAppElement extends HTMLElement {
         setLayerView: (view, place) => this.switchLayerView(view, place),
         stepStop: (direction, fits, here) => this.layerView?.step(direction, fits, here),
         openAtTop: el => this.layerView?.openAtTop(el) ?? false,
+        viewer: bundle.viewer === true,
       })
       this.interactions = interactions
       if (chatEnabled) {
@@ -452,8 +465,10 @@ export class PrAppElement extends HTMLElement {
       }
       // A reviewer's page follows the author's resolutions while it stays open. The author's own
       // page has them from the server's answer to each settlement.
+      // The hosted viewer has no settle route to ask.
       if (
         typeof boot.prNumber === 'number' &&
+        boot.viewer !== true &&
         bundle.status === 'ready' &&
         !bundle.selfReview &&
         bundle.canvas
@@ -722,7 +737,9 @@ export class PrAppElement extends HTMLElement {
    */
   startPolling(until) {
     const boot = this.bootstrap
-    if (!boot) {
+    // The hosted viewer reads GitHub again only when the reader refreshes, so asking it on a timer
+    // would only spend the reader's rate limit on the same answer.
+    if (!boot || boot.viewer === true) {
       return
     }
     this.stopPolling()

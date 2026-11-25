@@ -11,7 +11,9 @@ import { type DiscoveryCache, DiscoveryCacheSchema } from '../contract/discovery
 import { type LocalPrepareTarget, LocalPrepareTargetSchema } from '../contract/generation-context.js'
 import { isLocalKey, type LocalKey, type ReviewKey, reviewFolder } from '../contract/review-key.js'
 import { type Pr, PrSchema } from '../contract/review-artifact.js'
+import { PrStateSchema } from '../contract/state.js'
 import { readJson, readJsonOrDefault, writeJsonAtomic } from './atomic-json.js'
+import type { StatePersistence } from './state-store.js'
 
 /** Target-keyed files: the cached PR meta and the last comments payload. */
 export interface PrStore {
@@ -131,5 +133,15 @@ export function createPrStore(repoRoot: string, worktree: string | null): PrStor
       rows.sort((a, b) => b.mtime - a.mtime)
       return rows.slice(0, limit).map(({ number, title, updatedAt }) => ({ number, title, updatedAt }))
     },
+  }
+}
+
+/** The local app's review state: one `state.json` in each target's folder. */
+export function stateFiles(prs: PrStore): StatePersistence<ReviewKey> {
+  const file = (key: ReviewKey): string => path.join(prs.prDir(key), 'state.json')
+  return {
+    // A file that does not match the schema was written by an older tool version: start afresh.
+    read: key => readJsonOrDefault(file(key), PrStateSchema, () => null),
+    write: (key, state) => writeJsonAtomic(file(key), state),
   }
 }

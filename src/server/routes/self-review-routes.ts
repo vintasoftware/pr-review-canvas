@@ -14,7 +14,8 @@ import type { AppContext } from '../context.js'
 import { AppError } from '../errors.js'
 import { oneAtATime } from '../one-at-a-time.js'
 import { parseHeadShaQuery, parseTargetKey, requirePrNumber } from './api.js'
-import { mentionsCanvas, postOnPr, readBody, requireSameDiff } from './review-routes.js'
+import { requireSameDiff } from '../../review/sign-off-guards.js'
+import { mentionsCanvas, postOnPr, readBody } from './review-routes.js'
 
 /** Settling changes what every reviewer reads, so only the pull request's author may do it. */
 async function requireAuthor(ctx: AppContext, pr: Pr): Promise<void> {

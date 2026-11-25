@@ -1,0 +1,145 @@
+name: Static viewer
+
+# Builds and tests the static viewer and its auth Worker on every change to them. Deploys only
+# from a `viewer-v*` tag on a commit of main, through the `viewer-production` environment, so
+# the code people run always matches a tagged commit (docs/adr/0005-static-read-only-viewer.md).
+#
+# Repository variables: VIEWER_GITHUB_CLIENT_ID, VIEWER_GITHUB_APP_SLUG, VIEWER_AUTH_WORKER_URL,
+# VIEWER_ORIGIN, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_PAGES_PROJECT.
+# Environment secret of viewer-production: CLOUDFLARE_API_TOKEN, scoped to Pages and Workers
+# of that account. The Worker's GITHUB_CLIENT_SECRET is set once with `wrangler secret put`.
+
+on:
+  push:
+    branches: [main]
+    tags: ['viewer-v*']
+    paths:
+      - 'viewer/**'
+      - 'worker/**'
+      - 'static/**'
+      - 'src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/viewer.yml'
+      - '.github/deploy-tools/**'
+  pull_request:
+    paths:
+      - 'viewer/**'
+      - 'worker/**'
+      - 'static/**'
+      - 'src/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/viewer.yml'
+      - '.github/deploy-tools/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: viewer-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Runs the project's dependencies (install, tests, the Vite build) with no secret in reach, and
+  # hands the built site on with its digest.
+  build:
+    name: Build and test the viewer
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node_modules/.bin/vitest run viewer worker
+      - name: Build
+        run: pnpm viewer:build
+        env:
+          VITE_GITHUB_CLIENT_ID: ${{ vars.VIEWER_GITHUB_CLIENT_ID }}
+          VITE_GITHUB_APP_SLUG: ${{ vars.VIEWER_GITHUB_APP_SLUG }}
+          VITE_AUTH_WORKER_URL: ${{ vars.VIEWER_AUTH_WORKER_URL }}
+      - name: Check the build carries its headers and no secret
+        run: |
+          grep -q "Content-Security-Policy: default-src 'none'" dist-viewer/_headers
+          ! grep -rq GITHUB_CLIENT_SECRET dist-viewer
+      - name: Pack the site and record its digest
+        id: digest
+        run: |
+          tar --sort=name --mtime='@0' --owner=0 --group=0 --numeric-owner -cf dist-viewer.tar dist-viewer
+          echo "digest=$(sha256sum dist-viewer.tar | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: dist-viewer
+          path: dist-viewer.tar
+          retention-days: 7
+
+  # Holds the Cloudflare token, so it runs none of the project's dependencies: it checks the site
+  # against the digest the build recorded, and runs only wrangler, installed from its own lockfile
+  # in .github/deploy-tools with install scripts off.
+  deploy:
+    name: Deploy the viewer and its Worker
+    if: startsWith(github.ref, 'refs/tags/viewer-v')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: viewer-production
+      url: ${{ vars.VIEWER_ORIGIN }}
+    env:
+      npm_config_ignore_scripts: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+      WRANGLER: ${{ github.workspace }}/.github/deploy-tools/node_modules/.bin/wrangler
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Refuse a tag that is not on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: dist-viewer
+      # The archive is data from a job that ran third-party code: it is checked, then unpacked
+      # away from the checkout, so it cannot plant a .npmrc or overwrite the Worker's config for
+      # the steps below.
+      - name: Check the site is the one the build made, and unpack it apart
+        run: |
+          echo "$DIGEST  dist-viewer.tar" | sha256sum --check
+          if tar -tvf dist-viewer.tar | grep -Ev '^[-d]'; then echo 'archive holds a link or device' >&2; exit 1; fi
+          if tar -tf dist-viewer.tar | grep -Ev '^dist-viewer(/|$)'; then echo 'archive holds a path outside dist-viewer/' >&2; exit 1; fi
+          if tar -tf dist-viewer.tar | grep -E '(^|/)\.\.(/|$)'; then echo 'archive holds a .. path' >&2; exit 1; fi
+          mkdir -p "$RUNNER_TEMP/site"
+          tar -xf dist-viewer.tar -C "$RUNNER_TEMP/site" --no-same-owner --no-same-permissions
+          rm dist-viewer.tar
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+      - name: Install wrangler from its lockfile
+        run: npm ci --prefix .github/deploy-tools --ignore-scripts --no-audit --no-fund
+      - name: Deploy the viewer to Cloudflare Pages
+        working-directory: ${{ runner.temp }}
+        run: >-
+          "$WRANGLER" pages deploy "$RUNNER_TEMP/site/dist-viewer"
+          --project-name "$PAGES_PROJECT" --branch main --commit-hash "$GITHUB_SHA"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+      - name: Deploy the auth Worker
+        run: >-
+          "$WRANGLER" deploy --config worker/wrangler.toml
+          --var "GITHUB_CLIENT_ID:$CLIENT_ID" --var "ALLOWED_ORIGINS:$VIEWER_ORIGIN"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLIENT_ID: ${{ vars.VIEWER_GITHUB_CLIENT_ID }}
+          VIEWER_ORIGIN: ${{ vars.VIEWER_ORIGIN }}

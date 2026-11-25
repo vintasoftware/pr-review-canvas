@@ -1,0 +1,8 @@
+{
+  "name": "pr-review-canvas-deploy-tools",
+  "private": true,
+  "description": "The tools the static viewer's deploy job runs, locked apart from the project's own dependencies.",
+  "dependencies": {
+    "wrangler": "4.158.0"
+  }
+}

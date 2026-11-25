@@ -295,6 +295,9 @@ export async function main(argv: string[]): Promise<number> {
           canvasDir: namedCanvasDir(command, own),
           createDataDir: command !== 'validate' && command !== 'publish',
         })
+        // A config that fails to parse falls back to the defaults. The server shows why on the review
+        // page; a one-shot command has no page, so it says so here, where stdout keeps its JSON line.
+        for (const warning of ctx.projectConfig.warnings) io.stderr(`warning: ${warning}`)
         switch (command) {
           case 'prepare':
             return await runPrepare(ctx, own, io)

@@ -51,3 +51,27 @@ export function marksOn(state, canvas) {
     )
   )
 }
+
+/**
+ * Whether two diffs change the same code: the same patch keys, each with the same patch body.
+ * The patches are the diff; the files listed beside them only count and flag what the patches
+ * already say, so comparing the patches is comparing the whole change.
+ * @param {Readonly<Record<string, string>>} a
+ * @param {Readonly<Record<string, string>>} b
+ */
+export function samePatches(a, b) {
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every(k => a[k] === b[k])
+}
+
+/**
+ * Whether a canvas of the diff `canvas` explains the head's diff `head` by being identical to it.
+ * Two empty diffs are equal by having nothing to compare, which is no evidence that the canvas
+ * explains the head; an empty change set has nothing to review either way, so the strict reading
+ * costs the reviewer nothing.
+ * @param {Readonly<Record<string, string>>} canvas
+ * @param {Readonly<Record<string, string>>} head
+ */
+export function explainsHead(canvas, head) {
+  return Object.keys(head).length > 0 && samePatches(canvas, head)
+}

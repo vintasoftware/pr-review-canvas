@@ -155,24 +155,65 @@ export const ERROR_CARDS = {
 }
 
 /**
- * @param {ErrorEnvelope['error']} error
- * @returns {ErrorCard}
+ * The hosted viewer's wording where the local app's names a clone, a CLI, or a server log: the
+ * viewer has none of them, and reads GitHub as the reader, signed in or not.
+ * @type {Record<string, ErrorCard>}
  */
-export function errorCardFor(error) {
-  return ERROR_CARDS[error.code] ?? FALLBACK
+export const VIEWER_ERROR_CARDS = {
+  PR_NOT_FOUND: {
+    title: 'Pull request not found',
+    action: 'Check the owner, the repository, and the number.',
+  },
+  GH_UNAUTHENTICATED: {
+    title: 'Not signed in to GitHub',
+    action: 'Sign in with GitHub at the top of the page, then retry.',
+  },
+  INTERNAL: {
+    title: 'Something went wrong',
+    action: 'Retry. If it keeps failing, report it with the version in the footer.',
+  },
 }
 
 /**
  * @param {ErrorEnvelope['error']} error
+ * @param {{ viewer?: boolean }} [opts] `viewer`: the hosted viewer, which has no local app behind it
+ * @returns {ErrorCard}
+ */
+export function errorCardFor(error, opts = {}) {
+  if (opts.viewer !== true) return ERROR_CARDS[error.code] ?? FALLBACK
+  return (
+    VIEWER_ERROR_CARDS[error.code] ?? ERROR_CARDS[error.code] ?? VIEWER_ERROR_CARDS['INTERNAL'] ?? FALLBACK
+  )
+}
+
+/**
+ * A hint with its https addresses as links, such as the page where an owner installs the viewer's
+ * GitHub App. Everything else stays text.
+ * @param {string} hint
+ */
+function hintHtml(hint) {
+  return hint
+    .split(/(https:\/\/[^\s]+)/)
+    .map((part, i) =>
+      i % 2 === 1
+        ? `<a href="${esc(part)}" target="_blank" rel="noopener noreferrer">${esc(part)}</a>`
+        : esc(part)
+    )
+    .join('')
+}
+
+/**
+ * @param {ErrorEnvelope['error']} error
+ * @param {{ viewer?: boolean }} [opts] `viewer`: the hosted viewer, which has no local app behind it
  * @returns {string}
  */
-export function errorCardHtml(error) {
-  const card = errorCardFor(error)
+export function errorCardHtml(error, opts = {}) {
+  const card = errorCardFor(error, opts)
   return (
     '<main id="main" class="home">' +
     `<section class="panel error-card" data-code="${esc(error.code)}" aria-labelledby="err-h">` +
     `<div class="panel-h"><h2 id="err-h">${esc(card.title)} <span class="mono muted">${esc(error.code)}</span></h2></div>` +
-    `<div class="body"><p>${esc(error.message)}</p>${error.hint ? `<p class="muted">${esc(error.hint)}</p>` : ''}` +
+    `<div class="body"><p>${esc(error.message)}</p>${error.hint ? `<p class="muted">${hintHtml(error.hint)}</p>` : ''}` +
     `<p>${esc(card.action)}</p>` +
     '<p><button class="cmd fill" type="button" id="retry">retry</button></p></div></section></main>'
   )

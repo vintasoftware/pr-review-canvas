@@ -242,6 +242,21 @@ Set them for everyone in `pr-review.config.yml`, or for yourself as `canvasComme
 `mentionCanvas` in `.pr-review/settings.yml`. A personal value of `true` or `false` wins over the
 project's; `null` follows it.
 
+### Linking the static viewer
+
+The static viewer (`viewer/` in this repository) opens a canvas from its PR comment in a browser,
+with nothing to install; see [ADR 0005](adr/0005-static-read-only-viewer.md). Set
+`sharing.viewerLink` to its address, such as `https://viewer.example.com`, and the canvas comment on
+a GitHub pull request opens with a link to the viewer's page for that pull request, followed by
+the `pr-review serve` instructions. GitLab merge requests get no link, since the viewer reads GitHub
+only. The address must be `https`, or `http` on `localhost` or `127.0.0.1` for trying a viewer out,
+with no query or fragment.
+
+The viewer is a page a third party hosts that reads the repository with the reviewer's GitHub
+token, so each project decides whether its client terms allow it. That is why the setting is the
+project's alone, with no personal override in `.pr-review/settings.yml`, and why it is off by
+default.
+
 A scratch `--data-dir` or `PR_REVIEW_DATA_DIR` changes storage, not sharing. Disable
 `sharing.canvasComment` or personal `canvasComment` to keep a PR test run local. For one run only,
 [`pr-review generate <n> --out <file|dir>`](#generating-from-the-terminal) posts nothing and writes
@@ -409,7 +424,9 @@ Validation failures from `validate` use its report format instead.
 ## Project config
 
 All keys are optional. See the [example configuration](../pr-review.config.example.yml) for a
-starting file. Invalid YAML or invalid values produce a warning and fall back to the defaults.
+starting file. Invalid YAML or invalid values produce a warning and fall back to the defaults. The
+warning shows on the review page and in the server log, and the one-shot commands (`prepare`,
+`validate`, `publish`, `export`, `import`, `clean`) print it on stderr.
 Lists you supply replace their defaults.
 
 Path patterns match repository-relative paths. `**` crosses directories; `*` and `?` match
@@ -433,6 +450,7 @@ within one path segment.
 | `canvas.incremental`            | `true`                                                                      | Regenerate a canvas for a new head by updating the newest canvas of a commit the head was built on; see [incremental canvases](#incremental-canvases). Set to `false` to generate every canvas from a blank page                                                                                                                                                                                                                                                                                                   |
 | `sharing.canvasComment`         | `true`                                                                      | Set to `false` to keep canvases local: `publish` posts no PR/MR comment; see [turning sharing off](#turning-sharing-off)                                                                                                                                                                                                                                                                                                                                                                                           |
 | `sharing.mentionCanvas`         | `true`                                                                      | Set to `false` to keep the canvas out of what the review page posts                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `sharing.viewerLink`            | `false`                                                                     | The [static viewer](#linking-the-static-viewer) the canvas comment links to on GitHub pull requests: its `https` address, or `false` for none                                                                                                                                                                                                                                                                                                                                                                      |
 | `prompts`                       | Bundled templates                                                           | See [prompt templates](#prompt-templates) for supported keys and behavior                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 Generation's numeric options and text caps must be positive integers. An empty `layers` list

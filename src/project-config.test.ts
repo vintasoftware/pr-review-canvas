@@ -50,7 +50,7 @@ describe('mergeProjectConfig', () => {
       tests: { patterns: [...DEFAULT_TEST_PATTERNS] },
       chat: { enabled: false },
       canvas: { keepForIdenticalDiff: true, incremental: true },
-      sharing: { canvasComment: true, mentionCanvas: true },
+      sharing: { canvasComment: true, mentionCanvas: true, viewerLink: false },
     })
     expect(ProjectConfigSchema.parse(config)).toEqual(config)
     const allCaps = Object.fromEntries(Object.keys(TEXT_CAPS).map(k => [k, 1]))
@@ -104,19 +104,51 @@ describe('mergeProjectConfig', () => {
     )
   })
 
-  it('reads the sharing settings and defaults both to on', () => {
-    expect(mergeProjectConfig({}).config.sharing).toEqual({ canvasComment: true, mentionCanvas: true })
+  it('reads the sharing settings, defaulting the comment and mentions to on and the viewer link to off', () => {
+    expect(mergeProjectConfig({}).config.sharing).toEqual({
+      canvasComment: true,
+      mentionCanvas: true,
+      viewerLink: false,
+    })
     expect(mergeProjectConfig({ sharing: { canvasComment: false } }).config.sharing).toEqual({
       canvasComment: false,
       mentionCanvas: true,
+      viewerLink: false,
     })
     expect(mergeProjectConfig({ sharing: { mentionCanvas: false } }).config.sharing).toEqual({
       canvasComment: true,
       mentionCanvas: false,
+      viewerLink: false,
     })
     expect(mergeProjectConfig({ sharing: { canvasComment: 'no' } }).warnings[0]).toContain(
       'sharing.canvasComment'
     )
+  })
+
+  it.each([
+    ['https://viewer.example.com', true],
+    ['https://example.com/tools/viewer/', true],
+    ['http://127.0.0.1:4174', true],
+    ['http://localhost:4174/', true],
+    ['http://viewer.example.com', false],
+    ['https://viewer.example.com/?pr=a/b/1', false],
+    ['https://viewer.example.com/#x', false],
+    ['https://user:pass@viewer.example.com', false],
+    ['javascript:alert(1)', false],
+    ['viewer.example.com', false],
+  ])('takes %s as sharing.viewerLink: %s', (link, ok) => {
+    const merged = mergeProjectConfig({ sharing: { viewerLink: link } })
+    if (ok) {
+      expect(merged.warnings).toEqual([])
+      expect(merged.config.sharing.viewerLink).toBe(link)
+    } else {
+      expect(merged.warnings[0]).toContain('sharing.viewerLink')
+      expect(merged.config.sharing.viewerLink).toBe(false)
+    }
+  })
+
+  it('refuses true for sharing.viewerLink, which needs an address', () => {
+    expect(mergeProjectConfig({ sharing: { viewerLink: true } }).warnings[0]).toContain('sharing.viewerLink')
   })
 
   it('warns and uses defaults for an unknown generation mode', () => {

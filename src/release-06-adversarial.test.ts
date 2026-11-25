@@ -59,7 +59,10 @@ async function context(local = false) {
   contexts.push(t)
   t.ctx.projectConfig = {
     ...t.ctx.projectConfig,
-    config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false } },
+    config: {
+      ...t.ctx.projectConfig.config,
+      sharing: { canvasComment: false, mentionCanvas: false, viewerLink: false },
+    },
   }
   return t
 }
@@ -289,7 +292,10 @@ it('posting a multiline settlement preserves the attention point range', async (
   contexts.push(t)
   t.ctx.projectConfig = {
     ...t.ctx.projectConfig,
-    config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false } },
+    config: {
+      ...t.ctx.projectConfig.config,
+      sharing: { canvasComment: false, mentionCanvas: false, viewerLink: false },
+    },
   }
   const artifact = syntheticArtifact()
   artifact.points[0] = { ...artifact.points[0]!, audience: 'author', line: 3, endLine: 5 }

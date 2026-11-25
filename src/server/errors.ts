@@ -1,11 +1,13 @@
 import { inspect } from 'node:util'
-import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { ConfigError } from '../config.js'
-import type { ErrorCode, ErrorEnvelope } from '../contract/api.js'
+import type { ErrorCode } from '../contract/api.js'
+import { AppError } from './app-error.js'
 import { GitError } from '../git/git.js'
 import { LocalTargetError } from '../git/local-target.js'
 import { PrNotFoundError } from '../host/pr.js'
 import { CLI_INFO, type HostCli, HostCliError } from '../host/client.js'
+
+export { AppError, fromEnvelope } from './app-error.js'
 
 /** The codes each host CLI's failures map to. The front end and the docs name them one by one. */
 const CLI_ERROR_CODES: Record<HostCli, { missing: ErrorCode; unauthenticated: ErrorCode; api: ErrorCode }> = {
@@ -17,45 +19,6 @@ const CLI_ERROR_CODES: Record<HostCli, { missing: ErrorCode; unauthenticated: Er
 export const CLI_SETUP_CODES: ReadonlySet<ErrorCode> = new Set(
   Object.values(CLI_ERROR_CODES).flatMap(c => [c.missing, c.unauthenticated])
 )
-
-export class AppError extends Error {
-  readonly code: ErrorCode
-  readonly status: ContentfulStatusCode
-  readonly hint: string | undefined
-  /** What a rejected file got wrong, one line each. Never the file's content. */
-  readonly issues: string[] | undefined
-
-  constructor(
-    code: ErrorCode,
-    message: string,
-    status: ContentfulStatusCode,
-    hint?: string,
-    issues?: string[]
-  ) {
-    super(message)
-    this.name = 'AppError'
-    this.code = code
-    this.status = status
-    this.hint = hint
-    this.issues = issues
-  }
-
-  toEnvelope(): ErrorEnvelope {
-    const error: ErrorEnvelope['error'] = { code: this.code, message: this.message }
-    if (this.hint !== undefined) {
-      error.hint = this.hint
-    }
-    if (this.issues !== undefined) {
-      error.issues = this.issues
-    }
-    return { error }
-  }
-}
-
-/** The AppError an error envelope describes, as a command reads it back from the server. */
-export function fromEnvelope(error: ErrorEnvelope['error'], status: ContentfulStatusCode): AppError {
-  return new AppError(error.code, error.message, status, error.hint, error.issues)
-}
 
 /** Maps every error the routes can see to one AppError, so the envelope is built in one place. */
 export function toAppError(err: unknown): AppError {

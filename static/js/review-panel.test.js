@@ -99,6 +99,16 @@ describe('the review tab', () => {
     expect(old?.querySelector('[data-copy]')?.getAttribute('data-copy')).toBe('Mind the guard.')
     expect(old?.querySelector('[data-act="pending-delete"]')).not.toBeNull()
     expect(old?.querySelector('[data-act="pending-edit"]')).toBeNull()
+    expect(document.body.textContent).toContain('These can be submitted only if the diff is unchanged.')
+    // The hosted viewer keeps no earlier diff to compare with, so it never submits them.
+    document.body.innerHTML = reviewPanelHtml(state, {
+      on: ON,
+      points: artifact.points,
+      now: NOW,
+      viewer: true,
+    })
+    expect(document.body.textContent).toContain('The hosted viewer cannot submit these.')
+    expect(document.body.textContent).not.toContain('only if the diff is unchanged')
     // A draft of the same commit written from another merge base is an earlier diff too, and says so.
     const rebased = { ...BASE, pending: [draft({ id: 'rebased', mergeBaseSha: 'c'.repeat(40) })] }
     document.body.innerHTML = reviewPanelHtml(rebased, { on: ON, points: artifact.points, now: NOW })

@@ -4,8 +4,8 @@ import type { CarriedOverInfo, StaleRelation } from '../contract/api.js'
 import type { Pr } from '../contract/review-artifact.js'
 import type { AppContext } from '../server/context.js'
 import { type CanvasLookup, relateToHead } from '../store/canvas-store.js'
-import { sameDiff } from '../../static/js/diff-identity.js'
-import type { Derived, DiffedCommit } from '../store/derived-store.js'
+import { explainsHead, sameDiff } from '../../static/js/diff-identity.js'
+import type { DiffedCommit } from '../store/derived-store.js'
 
 export type { DiffedCommit } from '../store/derived-store.js'
 
@@ -33,20 +33,7 @@ export async function standsForHead(
   if (older === null || head === null) {
     return false
   }
-  // Two empty diffs are equal by having nothing to compare, which is no evidence that the canvas
-  // explains the head. An empty change set has nothing to review either way, so the strict
-  // reading costs the reviewer nothing here.
-  return Object.keys(head.patches).length > 0 && samePatches(older, head)
-}
-
-/**
- * Whether two diffs change the same code: the same patch keys, each with the same patch body.
- * The patches are the diff; the files array beside them only counts and flags what the patches
- * already say, so comparing the patches is comparing the whole change.
- */
-export function samePatches(a: Derived, b: Derived): boolean {
-  const keys = Object.keys(a.patches)
-  return keys.length === Object.keys(b.patches).length && keys.every(k => a.patches[k] === b.patches[k])
+  return explainsHead(older.patches, head.patches)
 }
 
 /**

@@ -163,6 +163,12 @@ export interface PrBundle {
   /** More than 400 files or 50 000 changed lines: the page says the canvas was capped. */
   largePr: boolean
   /**
+   * Set by the hosted static viewer (viewer/), never by the local server. No local app stands behind
+   * the page, so it draws no command that generates, imports, or exports a canvas, or opens the
+   * settings, which live in the local app's settings file.
+   */
+  viewer?: true
+  /**
    * Whether settling shares the canvas comment again: false when `sharing.canvasComment` is off or
    * the review is local, where there is no pull request to share on.
    */
@@ -303,4 +309,9 @@ export interface ReviewBootstrap {
   hideInlineKinds: InlineKind[]
   /** What going to a hidden item does, from the settings file. */
   hiddenItemClick: HiddenItemClick
+  /**
+   * Set by the hosted static viewer, as on the bundle, so a page that failed before it read a
+   * bundle still words its error and footer for the viewer.
+   */
+  viewer?: true
 }

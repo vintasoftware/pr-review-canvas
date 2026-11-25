@@ -12,7 +12,7 @@ import { cssEscape, drawCardOf, drawCardsOf, fileCardOf, findRow, parseLineId } 
 import { fetchReviewBody, saveSettings } from './api.js'
 import { chatContextFromElement, WHOLE_PR } from './chat-context.js'
 import { setFoldShown } from './code-folds.js'
-import { runCommand, runControl, showCommandError, toast } from './commands.js'
+import { errorText, runCommand, runControl, showCommandError, toast } from './commands.js'
 import {
   applyCapabilityGating,
   closeComposers,
@@ -273,6 +273,7 @@ export function padUnderStickyBar(doc, bar) {
  *   openAtTop?: (el: Element | null) => boolean,
  *   openReview?: () => void,
  *   uncover?: () => void,
+ *   viewer?: boolean,
  * }} [opts]
  */
 export function wireReview(root, session, opts = {}) {
@@ -398,7 +399,11 @@ export function wireReview(root, session, opts = {}) {
       }
     }
     refreshPendingBar(root, state, session)
-    refreshReviewPanel(root, state, { on: session, points: session.artifact.points })
+    refreshReviewPanel(root, state, {
+      on: session,
+      points: session.artifact.points,
+      viewer: opts.viewer === true,
+    })
     // A draft about a point the author resolved since says so, wherever it is drawn.
     refreshResolvedDrafts(root, state)
     refreshComposerCommands(root, state.pending.length > 0)
@@ -407,7 +412,11 @@ export function wireReview(root, session, opts = {}) {
   }
   const unsubscribe = session.subscribe(onState)
   // The review tab is drawn from the state too; the rest of the page came drawn with it.
-  refreshReviewPanel(root, session.state, { on: session, points: session.artifact.points })
+  refreshReviewPanel(root, session.state, {
+    on: session,
+    points: session.artifact.points,
+    viewer: opts.viewer === true,
+  })
 
   /** @param {import('./contract-types.js').PostCommentInput} input */
   const postComment = async input => {
@@ -826,7 +835,7 @@ export function wireReview(root, session, opts = {}) {
         } catch (err) {
           // The command that opened the dialog sits behind it, so the reason is shown inside.
           if (opening === signoffOpening) {
-            showSignoffError(dialog, err instanceof Error ? err.message : String(err))
+            showSignoffError(dialog, errorText(err))
           }
           throw err
         }

@@ -1,11 +1,12 @@
-import path from 'node:path'
+// The review state's rules: marks, dismissals, hidden threads, the pending review, and what was
+// posted. Where the state is kept is the caller's: files under .pr-review/ for the local app
+// (`stateFiles` in pr-store.ts), the browser's storage for the static viewer. No node module is
+// imported here, so both read the same rules.
 import type { ReviewKey } from '../contract/review-key.js'
-import { emptyState, type PrState, PrStateSchema } from '../contract/state.js'
+import { emptyState, type PrState } from '../contract/state.js'
 import type { AddPendingInput, PendingComment } from '../contract/pending.js'
-import { readJsonOrDefault, writeJsonAtomic } from './atomic-json.js'
 import { marksOn } from '../../static/js/diff-identity.js'
 import type { DiffedCommit } from './derived-store.js'
-import type { PrStore } from './pr-store.js'
 
 /** What the canvas posted to GitHub, so the sign-off body can list it. */
 export interface PostedEntry {
@@ -14,38 +15,40 @@ export interface PostedEntry {
   proposalFingerprint?: string
 }
 
+/** Where the state of each key is kept. `read` answers null when nothing valid is kept. */
+export interface StatePersistence<K> {
+  read(key: K): Promise<PrState | null>
+  write(key: K, state: PrState): Promise<void>
+}
+
 /** Per-target local state: reviewed cards, dismissed points, hidden threads, posted comments. */
-export interface StateStore {
+export interface StateStore<K = ReviewKey> {
   /** Defaults when the file is missing or does not match the schema (an older tool version wrote it). */
-  read(key: ReviewKey): Promise<PrState>
+  read(key: K): Promise<PrState>
   /**
    * Read, change, write. Calls for the same target run one after another, so two requests that
    * arrive together both land instead of one overwriting the other.
    */
-  update(key: ReviewKey, mutate: (state: PrState) => PrState): Promise<PrState>
+  update(key: K, mutate: (state: PrState) => PrState): Promise<PrState>
   /**
    * Marks one layer or file. `canvas` is the diff of the canvas the page was showing: when it
    * differs from the one the marks describe, by its commit or by its merge base, the old marks are
    * dropped, because they were about other code, and `carried` takes their place — the marks the
    * caller worked out may follow that canvas from the one it was generated from.
    */
-  setReviewed(key: ReviewKey, id: string, reviewed: boolean, opts?: SetReviewedOptions): Promise<PrState>
-  setDismissed(key: ReviewKey, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
-  setThreadHidden(key: ReviewKey, rootCommentId: number, hidden: boolean): Promise<PrState>
-  addPosted(key: ReviewKey, entries: readonly PostedEntry[]): Promise<PrState>
+  setReviewed(key: K, id: string, reviewed: boolean, opts?: SetReviewedOptions): Promise<PrState>
+  setDismissed(key: K, fingerprint: string, dismissed: boolean, reason?: string): Promise<PrState>
+  setThreadHidden(key: K, rootCommentId: number, hidden: boolean): Promise<PrState>
+  addPosted(key: K, entries: readonly PostedEntry[]): Promise<PrState>
   /** Adds one comment to the pending review and returns the state that holds it. */
-  addPending(key: ReviewKey, input: AddPendingInput, diff: DiffedCommit): Promise<PrState>
+  addPending(key: K, input: AddPendingInput, diff: DiffedCommit): Promise<PrState>
   /** Rewrites one draft's body. A draft that is no longer there leaves the state alone. */
-  editPending(key: ReviewKey, id: string, body: string): Promise<PrState>
-  removePending(key: ReviewKey, id: string): Promise<PrState>
+  editPending(key: K, id: string, body: string): Promise<PrState>
+  removePending(key: K, id: string): Promise<PrState>
   /** Discards every draft at the reviewer's request. */
-  clearPending(key: ReviewKey): Promise<PrState>
+  clearPending(key: K): Promise<PrState>
   /** Acknowledge submitted versions, preserving drafts added or edited while posting. */
-  completePending(
-    key: ReviewKey,
-    submitted: ReadonlyArray<PendingComment>,
-    posted: PostedEntry[]
-  ): Promise<PrState>
+  completePending(key: K, submitted: ReadonlyArray<PendingComment>, posted: PostedEntry[]): Promise<PrState>
 }
 
 export interface SetReviewedOptions {
@@ -73,23 +76,25 @@ function pendingId(now: () => Date, seq: number): string {
   return `p${now().getTime().toString(36)}-${seq.toString(36)}`
 }
 
-export function createStateStore(prs: PrStore, now: () => Date): StateStore {
+export function createStateStore<K = ReviewKey>(
+  persist: StatePersistence<K>,
+  now: () => Date
+): StateStore<K> {
   let pendingSeq = 0
-  const file = (key: ReviewKey): string => path.join(prs.prDir(key), 'state.json')
-  const read = (key: ReviewKey): Promise<PrState> =>
-    readJsonOrDefault(file(key), PrStateSchema, () => emptyState(now().toISOString()))
+  const read = async (key: K): Promise<PrState> =>
+    (await persist.read(key)) ?? emptyState(now().toISOString())
 
   /** One chain per target; each update waits for the one before it. */
-  const chains = new Map<ReviewKey, Promise<unknown>>()
+  const chains = new Map<K, Promise<unknown>>()
 
-  const update = (key: ReviewKey, mutate: (state: PrState) => PrState): Promise<PrState> => {
+  const update = (key: K, mutate: (state: PrState) => PrState): Promise<PrState> => {
     const run = async (): Promise<PrState> => {
       const current = await read(key)
       const changed = mutate(current)
       if (changed === current) return current
       // Every write counts up, so the page can tell which of two answers was written later.
       const next = { ...changed, rev: (current.rev ?? 0) + 1, updatedAt: now().toISOString() }
-      await writeJsonAtomic(file(key), next)
+      await persist.write(key, next)
       return next
     }
     const chained = (chains.get(key) ?? Promise.resolve()).then(run, run)

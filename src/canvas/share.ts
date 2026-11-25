@@ -3,7 +3,7 @@
 import type { CanvasSharing } from '../contract/self-review.js'
 import { resolveSharing } from '../contract/settings.js'
 import type { AppContext } from '../server/context.js'
-import { buildCanvasComment } from './comment.js'
+import { buildCanvasComment, viewerPrUrl } from './comment.js'
 import { tallyCanvas } from '../review/self-review.js'
 import { exportCanvas, zipStoredCanvas } from './export.js'
 
@@ -16,12 +16,18 @@ export async function shareCanvasOnPr(
   headSha: string,
   number: number
 ): Promise<CanvasSharing> {
-  if (!resolveSharing(ctx.projectConfig.config.sharing, await ctx.settings.read()).canvasComment) {
+  const sharing = resolveSharing(ctx.projectConfig.config.sharing, await ctx.settings.read())
+  if (!sharing.canvasComment) {
     return { status: 'off' }
   }
+  // The viewer reads GitHub only, so a GitLab merge request gets no link to it.
+  const viewerUrl =
+    sharing.viewerLink !== false && ctx.config.host.kind === 'github'
+      ? viewerPrUrl(sharing.viewerLink, ctx.config.repo, number)
+      : undefined
   try {
     const { zip, artifact } = await zipStoredCanvas(ctx, headSha, number)
-    const body = buildCanvasComment(zip, tallyCanvas(artifact), ctx.config.host.canvasCommentLimit)
+    const body = buildCanvasComment(zip, tallyCanvas(artifact), ctx.config.host.canvasCommentLimit, viewerUrl)
     const comment = await ctx.prs.postComments(number, async () => {
       const shared = await ctx.config.host.shareCanvas(ctx.gh, ctx.config.repo, number, body)
       return { result: shared, comments: [{ kind: 'issue', comment: shared }] }

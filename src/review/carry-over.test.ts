@@ -18,7 +18,8 @@ import {
   SYNTHETIC_DIFF_MOVED_BY_BASE,
   syntheticArtifact,
 } from '../testing/synthetic.js'
-import { lookupCanvas, samePatches, standsForHead } from './carry-over.js'
+import { samePatches as samePatchMaps } from '../../static/js/diff-identity.js'
+import { lookupCanvas, standsForHead } from './carry-over.js'
 
 /** The commit the canvas describes; the pull request moved on to HEAD_SHA afterwards. */
 const OLD = 'e'.repeat(40)
@@ -46,6 +47,8 @@ function history(headDiff: string): FakeGitOptions {
     blobs: SYNTHETIC_BLOBS,
   }
 }
+
+const samePatches = (a: Derived, b: Derived): boolean => samePatchMaps(a.patches, b.patches)
 
 describe('samePatches', () => {
   it('is identity: the same changed lines in moved hunks are another diff', () => {

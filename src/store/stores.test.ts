@@ -18,7 +18,7 @@ import { isNotFound, readJson, readText, writeJsonAtomic, writeTextAtomic } from
 import { createCanvasStore } from './canvas-store.js'
 import { ensureDataDir, repoDir, resolveDataDir } from './data-dir.js'
 import { createDerivedStore } from './derived-store.js'
-import { createPrStore } from './pr-store.js'
+import { createPrStore, stateFiles } from './pr-store.js'
 import { createStateStore } from './state-store.js'
 
 const now = () => new Date('2026-09-10T12:00:00.000Z')
@@ -316,7 +316,7 @@ describe('pr-store and state-store', () => {
 
   it('reads state.json or falls back to defaults for missing, invalid JSON, and old shapes', async () => {
     const prs = createPrStore(dir, null)
-    const state = createStateStore(prs, now)
+    const state = createStateStore(stateFiles(prs), now)
     expect(await state.read(42)).toEqual(emptyState('2026-09-10T12:00:00.000Z'))
     const file = path.join(prs.prDir(42), 'state.json')
     await mkdir(path.dirname(file), { recursive: true })

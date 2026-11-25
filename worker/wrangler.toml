@@ -1,0 +1,16 @@
+# The auth Worker of the static viewer (docs/adr/0005-static-read-only-viewer.md).
+# CI deploys it (.github/workflows/viewer.yml) with the wrangler locked in .github/deploy-tools.
+# Set the secret once with that wrangler: see "Deploy" in viewer/README.md.
+name = "pr-review-canvas-auth"
+main = "auth-worker.ts"
+compatibility_date = "2026-11-01"
+
+[vars]
+# The GitHub App's client ID.
+GITHUB_CLIENT_ID = ""
+# The viewer's origins, comma separated, as "https://viewer.example.com".
+ALLOWED_ORIGINS = ""
+
+# The Worker logs nothing; keep Workers Logs off so request metadata is not kept either.
+[observability]
+enabled = false

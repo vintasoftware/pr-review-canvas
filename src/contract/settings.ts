@@ -159,6 +159,8 @@ export function resolveSharing(project: Sharing, settings: Settings): Sharing {
   return {
     canvasComment: settings.canvasComment ?? project.canvasComment,
     mentionCanvas: settings.mentionCanvas ?? project.mentionCanvas,
+    // The project's decision alone: a reader cannot point the comment at a viewer of their own.
+    viewerLink: project.viewerLink,
   }
 }
 

@@ -39,6 +39,8 @@
     "vitest.config.ts",
     "vitest.setup.ts",
     "browser/**/*.ts",
+    "viewer/**/*.ts",
+    "worker/**/*.ts",
     "playwright.config.ts"
   ]
 }

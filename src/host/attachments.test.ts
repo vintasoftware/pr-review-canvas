@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { rankCandidates } from '../canvas/name.js'
 import { buildCanvasComment } from '../canvas/comment.js'
 import type { CanvasTally } from '../review/self-review.js'
 import { buildCanvasZip } from '../canvas/zip.js'
@@ -22,7 +23,6 @@ import {
   discoveryFingerprint,
   downloadAttachment,
   importFailureReason,
-  rankCandidates,
 } from './attachments.js'
 import { gitlabHost } from './host.js'
 

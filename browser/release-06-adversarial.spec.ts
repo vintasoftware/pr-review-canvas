@@ -138,7 +138,10 @@ test('settling with sharing disabled and the reason unchecked stays local across
       t.ctx.fixtureArtifact = null
       t.ctx.projectConfig = {
         ...t.ctx.projectConfig,
-        config: { ...t.ctx.projectConfig.config, sharing: { canvasComment: false, mentionCanvas: false } },
+        config: {
+          ...t.ctx.projectConfig.config,
+          sharing: { canvasComment: false, mentionCanvas: false, viewerLink: false },
+        },
       }
       const artifact = syntheticArtifact()
       artifact.points[0] = { ...artifact.points[0]!, audience: 'author' }

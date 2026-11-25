@@ -29,7 +29,10 @@
     "site:image": "node scripts/render-social-preview.mjs",
     "site:build": "vite build --config site/vite.config.js",
     "site:preview": "vite preview --config site/vite.config.js",
-    "site:test": "playwright test --config site/playwright.config.js"
+    "site:test": "playwright test --config site/playwright.config.js",
+    "viewer:dev": "vite --config viewer/vite.config.js",
+    "viewer:build": "vite build --config viewer/vite.config.js",
+    "viewer:preview": "vite preview --config viewer/vite.config.js"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",

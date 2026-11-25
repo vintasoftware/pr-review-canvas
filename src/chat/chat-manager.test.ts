@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentEvent } from '../acpx/events.js'
 import type { ChatContext, ChatEvent } from '../contract/chat.js'
 import { toFileEntry, toPatchMap } from '../git/diff-collector.js'
-import { createPrStore } from '../store/pr-store.js'
+import { createPrStore, stateFiles } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
 import { createStateStore, type StateStore } from '../store/state-store.js'
 import { createFakeRunner, type FakeRunner } from '../testing/fake-runner.js'
@@ -68,7 +68,7 @@ function build(
     null
   )
   const prs = createPrStore(dataDir, null)
-  state = createStateStore(prs, () => new Date('2026-09-11T10:00:00.000Z'))
+  state = createStateStore(stateFiles(prs), () => new Date('2026-09-11T10:00:00.000Z'))
   settings = createSettingsStore(dataDir)
   transcripts = createTranscriptStore(number => prs.prDir(number))
   manager = createChatManager({

@@ -15,14 +15,19 @@ import type { Pr, ReviewArtifact } from '../../contract/review-artifact.js'
 import { resolveSharing } from '../../contract/settings.js'
 import type { PrState } from '../../contract/state.js'
 import { checkInlineTarget } from '../../git/patch-lines.js'
-import { PostReviewInputSchema, type ReviewEvent } from '../../contract/reviews.js'
-import { lookupCanvas, samePatches } from '../../review/carry-over.js'
+import { PostReviewInputSchema } from '../../contract/reviews.js'
+import { lookupCanvas } from '../../review/carry-over.js'
 import { marksForCanvas } from '../../review/carry-marks.js'
 import { buildReviewBody, reviewedDiff, stateForCanvas, unreviewedLayers } from '../../review/review-body.js'
 import { isLocalKey, keyLabel, type ReviewKey } from '../../contract/review-key.js'
-import { authorSignOffReason } from '../../review/self-review.js'
+import {
+  refuseAuthorSignOff,
+  requireLayersReviewed,
+  requireSameDiff,
+  signOffOnStaleCanvas,
+} from '../../review/sign-off-guards.js'
 import { isReviewedId } from '../../store/state-store.js'
-import { draftDiff, marksOn, sameDiff } from '../../../static/js/diff-identity.js'
+import { draftDiff, marksOn, sameDiff, samePatches } from '../../../static/js/diff-identity.js'
 import type { Derived, DiffedCommit } from '../../store/derived-store.js'
 import { LOCAL_CAPABILITIES, type PrLoader } from '../bundle.js'
 import type { AppContext } from '../context.js'
@@ -51,25 +56,6 @@ const ReviewedBodySchema = z.object({
 })
 const DismissedBodySchema = z.object({ dismissed: z.boolean(), reason: z.string().max(500).optional() })
 const HiddenBodySchema = z.object({ hidden: z.boolean() })
-
-/**
- * The page says which diff it was showing. When the pull request has moved on to another head or
- * another base, the write is refused instead of landing on code the reader never saw.
- */
-export function requireSameDiff(
-  page: { headSha?: string | undefined; mergeBaseSha?: string | undefined },
-  current: DiffedCommit
-): void {
-  const moved = (seen: string | undefined, now: string) => seen !== undefined && seen !== now
-  if (moved(page.headSha, current.headSha) || moved(page.mergeBaseSha, current.mergeBaseSha)) {
-    throw new AppError(
-      'CANVAS_STALE',
-      'the pull request has a new head commit or base since this page was drawn',
-      409,
-      'reload the page and try again'
-    )
-  }
-}
 
 /** A JSON body the route can read, or a 400 that says what shape it expected. */
 export async function readBody<T>(request: Request, schema: z.ZodType<T>, expected: string): Promise<T> {
@@ -114,14 +100,7 @@ async function canvasForSignOff(
     return { artifact: { ...ctx.fixtureArtifact, pr }, state: stateForCanvas(stored, pr) }
   }
   const found = await lookupCanvas(ctx, number, pr)
-  if (found.status !== 'ready') {
-    throw new AppError(
-      'SIGNOFF_INCOMPLETE',
-      'the canvas on screen was generated for another commit or another base',
-      409,
-      'regenerate the canvas for the current head, then review its layers'
-    )
-  }
+  if (found.status !== 'ready') throw signOffOnStaleCanvas()
   const [artifact, manifest] = await Promise.all([
     ctx.canvases.readArtifact(found.headSha),
     ctx.canvases.readManifest(found.headSha),
@@ -203,30 +182,6 @@ export async function requirePosting(
       caps.reason ?? `this ${ctx.config.host.label} login cannot post on this repository`,
       403,
       hints.length === 0 ? undefined : hints.join(', or ')
-    )
-  }
-}
-
-/**
- * Refuses an approval or a request for changes from the pull request's author, even when the forge
- * allows it. A comment-only review goes through. When the login is unknown, the forge decides.
- */
-export async function refuseAuthorSignOff(
-  ctx: AppContext,
-  pr: Pick<Pr, 'author'>,
-  event: ReviewEvent
-): Promise<void> {
-  if (event === 'COMMENT') {
-    return
-  }
-  const { login } = await ctx.capabilities.get()
-  const reason = authorSignOffReason(login, pr, ctx.config.host.noun)
-  if (reason !== null) {
-    throw new AppError(
-      'SIGNOFF_BY_AUTHOR',
-      reason,
-      403,
-      'ask another reviewer to sign off, or post a comment-only review'
     )
   }
 }
@@ -413,19 +368,9 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
     await requirePosting(ctx)
     const pr = await loader.currentPr(number)
     requireSameDiff(input, pr)
-    await refuseAuthorSignOff(ctx, pr, input.event)
+    refuseAuthorSignOff((await ctx.capabilities.get()).login, pr, ctx.config.host.noun, input.event)
     const { artifact, state } = await canvasForSignOff(ctx, number, pr)
-    if (input.event === 'APPROVE') {
-      const missing = unreviewedLayers(artifact, state)
-      if (missing.length > 0) {
-        throw new AppError(
-          'SIGNOFF_INCOMPLETE',
-          `${missing.length} ${missing.length === 1 ? 'layer is' : 'layers are'} not reviewed yet`,
-          409,
-          missing.map(l => l.title).join(', ')
-        )
-      }
-    }
+    requireLayersReviewed(artifact, state, input.event)
     const comments = (await ctx.prs.readComments(number)) ?? (await loader.refreshComments(number)).comments
     const body =
       input.body ??
@@ -452,7 +397,7 @@ export function reviewRoutes(ctx: AppContext, loader: PrLoader): Hono {
       if (
         !ctx.projectConfig.config.canvas.keepForIdenticalDiff ||
         original === null ||
-        !samePatches(original, diff)
+        !samePatches(original.patches, diff.patches)
       ) {
         throw new AppError(
           'CANVAS_STALE',

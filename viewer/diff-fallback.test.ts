@@ -1,0 +1,171 @@
+import { SYNTHETIC_DIFF } from '../src/testing/synthetic.js'
+import {
+  diffFromFiles,
+  diffFromText,
+  ghFiles,
+  incompleteWarning,
+  explainsLoadedHead,
+} from './diff-fallback.js'
+
+/** The files GitHub lists for the synthetic diff, as its pull request files API answers. */
+const LISTED = [
+  {
+    filename: 'src/app.ts',
+    status: 'modified',
+    additions: 3,
+    deletions: 1,
+    patch: [
+      '@@ -1,4 +1,5 @@',
+      " import { a } from './a'",
+      "+import { b } from './b'",
+      ' export function run() {',
+      '-  return a()',
+      '+  return a() + b()',
+      ' }',
+      '@@ -10,3 +11,4 @@ export function other() {',
+      '   const x = 1',
+      '+  const y = 2',
+      '   return x',
+      ' }',
+    ].join('\n'),
+  },
+  {
+    filename: 'src/new.ts',
+    status: 'added',
+    additions: 2,
+    deletions: 0,
+    patch: '@@ -0,0 +1,2 @@\n+export const fresh = true\n+// </script><script>alert(1)</script>',
+  },
+  {
+    filename: 'src/gone.ts',
+    status: 'removed',
+    additions: 0,
+    deletions: 2,
+    patch: '@@ -1,2 +0,0 @@\n-export const old = 1\n-// bye\n\\ No newline at end of file',
+  },
+  {
+    filename: 'src/new-name.ts',
+    previous_filename: 'src/old-name.ts',
+    status: 'renamed',
+    additions: 1,
+    deletions: 1,
+    patch: '@@ -1,2 +1,2 @@\n-export const name = "old"\n+export const name = "new"\n export const keep = 1',
+  },
+  { filename: 'assets/logo.png', status: 'modified', additions: 0, deletions: 0 },
+  { filename: 'bin/run.sh', status: 'changed', additions: 0, deletions: 0 },
+  {
+    filename: 'src/app.test.ts',
+    status: 'modified',
+    additions: 2,
+    deletions: 1,
+    patch: [
+      '@@ -1,3 +1,4 @@',
+      " import { run } from './app'",
+      " test('runs', () => {",
+      '-  expect(run()).toBe(1)',
+      '+  expect(run()).toBe(3)',
+      '+  expect(run()).not.toBe(1)',
+      ' })',
+    ].join('\n'),
+  },
+]
+
+it('rebuilds the same files and patches from the file list as from the diff GitHub sends', () => {
+  const whole = diffFromText(SYNTHETIC_DIFF)
+  const rebuilt = diffFromFiles(ghFiles(LISTED), LISTED.length)
+  expect(rebuilt.files.map(f => f.path).sort()).toEqual(whole.files.map(f => f.path).sort())
+  for (const file of rebuilt.files) {
+    expect(file).toEqual(whole.files.find(f => f.path === file.path))
+    expect(rebuilt.patches[file.key]).toBe(whole.patches[file.key])
+  }
+  expect(rebuilt.files.find(f => f.path === 'bin/run.sh')?.status).toBe('modified')
+  expect(rebuilt.files.find(f => f.path === 'src/new-name.ts')).toMatchObject({
+    status: 'renamed',
+    oldPath: 'src/old-name.ts',
+  })
+  expect(rebuilt.files.find(f => f.path === 'assets/logo.png')?.status).toBe('binary')
+  expect(rebuilt.missing).toEqual([])
+  expect(incompleteWarning(rebuilt)).toBeNull()
+})
+
+it('lists a file too large to diff with its counts and no patch, and says so', () => {
+  const big = { filename: 'data/huge.json', status: 'modified', additions: 90000, deletions: 12 }
+  const diff = diffFromFiles(ghFiles([...LISTED, big]), LISTED.length + 1)
+  const entry = diff.files.find(f => f.path === 'data/huge.json')
+  expect(entry).toMatchObject({ additions: 90000, deletions: 12, status: 'modified' })
+  expect(diff.patches[entry!.key]).toBeUndefined()
+  expect(diff.missing).toEqual(['data/huge.json'])
+  expect(incompleteWarning(diff)).toBe(
+    'GitHub sent no changes for 1 file too large to diff (data/huge.json), so the page lists it without its lines. Read them on GitHub, or in the local app (pr-review serve), which diffs a clone.'
+  )
+})
+
+it('counts the files a full list could not hold', () => {
+  expect(incompleteWarning(diffFromFiles(ghFiles(LISTED), 3200))).toContain(
+    'GitHub lists at most 3000 files of a pull request, so 3193 files are not shown'
+  )
+  expect(incompleteWarning(diffFromFiles(ghFiles(LISTED), 'unknown'))).toContain(
+    'GitHub lists at most 300 files of a comparison this large'
+  )
+})
+
+it('calls two diffs the same only when neither left anything out', () => {
+  const whole = diffFromText(SYNTHETIC_DIFF)
+  expect(explainsLoadedHead(whole, diffFromFiles(ghFiles(LISTED), LISTED.length))).toBe(true)
+  expect(explainsLoadedHead(whole, diffFromText(SYNTHETIC_DIFF.replace('const y = 2', 'const y = 3')))).toBe(
+    false
+  )
+  const partial = diffFromFiles(ghFiles([...LISTED.slice(0, 4), { ...LISTED[0]!, patch: undefined }]), 5)
+  expect(explainsLoadedHead(partial, partial)).toBe(false)
+  expect(ghFiles([{ filename: 'x' }, null, 'y'])).toEqual([])
+})
+
+it('leaves out a file whose name or patch could pose as another file, and says so', () => {
+  const forgedName = {
+    filename: 'innocent.ts\ndiff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts',
+    status: 'modified',
+    additions: 1,
+    deletions: 0,
+    patch: '@@ -1,1 +1,2 @@\n context\n+added',
+  }
+  const forgedPatch = {
+    filename: 'other.ts',
+    status: 'modified',
+    additions: 1,
+    deletions: 0,
+    patch: '@@ -1,1 +1,2 @@\n context\n+added\ndiff --git a/hidden.ts b/hidden.ts',
+  }
+  const honest = LISTED[0]!
+  const diff = diffFromFiles(ghFiles([honest, forgedName, forgedPatch]), 3)
+  expect(diff.files.map(f => f.path)).toEqual(['src/app.ts'])
+  expect(diff.patches[diff.files[0]!.key]).toBe(honest.patch)
+  expect(diff.refused).toEqual([
+    'innocent.ts\\ndiff --git a/src/app.ts b/src/app.ts\\n--- a/src/app.ts\\n+++ b/src/app.ts',
+    'other.ts',
+  ])
+  expect(incompleteWarning(diff)).toContain(
+    'The page left out 2 files whose names or patches hold line breaks'
+  )
+  expect(explainsLoadedHead(diff, diff)).toBe(false)
+})
+
+it('leaves out a file whose name would read back as another', () => {
+  const padded = { ...LISTED[0]!, filename: ' src/app.ts ' }
+  const ambiguous = { filename: 'x b/src/app.ts', status: 'changed', additions: 0, deletions: 0 }
+  const diff = diffFromFiles(ghFiles([LISTED[1]!, padded, ambiguous]), 3)
+  expect(diff.files.map(f => f.path)).toEqual(['src/new.ts'])
+  expect(diff.refused).toEqual([' src/app.ts ', 'x b/src/app.ts'])
+})
+
+it('names at most five files in each part of the warning, and counts one unlisted file as one', () => {
+  const names = Array.from({ length: 7 }, (_v, i) => `f${i}.ts`)
+  const diff = { files: [], patches: {}, missing: names, refused: names, unlisted: 1 }
+  const warning = incompleteWarning(diff)!
+  expect(warning).toContain('7 files too large to diff (f0.ts, f1.ts, f2.ts, f3.ts, f4.ts, and 2 more)')
+  expect(warning).toContain('left out 7 files whose names or patches hold')
+  expect(warning).toContain('so 1 file is not shown')
+  const one = incompleteWarning({ files: [], patches: {}, missing: [], refused: ['x'], unlisted: 0 })!
+  expect(one).toContain(
+    'left out 1 file whose name or patch holds line breaks or other control characters, which could pass for other files (x)'
+  )
+})

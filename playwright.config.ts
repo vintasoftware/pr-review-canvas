@@ -12,8 +12,16 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },
-    { name: 'tablet', use: { viewport: { width: 1100, height: 800 } } },
-    { name: 'mobile', use: { viewport: { width: 800, height: 900 } } },
+    { name: 'desktop', testIgnore: 'viewer/**', use: { viewport: { width: 1440, height: 900 } } },
+    { name: 'tablet', testIgnore: 'viewer/**', use: { viewport: { width: 1100, height: 800 } } },
+    { name: 'mobile', testIgnore: 'viewer/**', use: { viewport: { width: 800, height: 900 } } },
+    // The static viewer's production build, made once per run (browser/viewer/build.setup.ts).
+    { name: 'viewer-build', testMatch: 'viewer/build.setup.ts' },
+    {
+      name: 'viewer',
+      testMatch: 'viewer/**/*.spec.ts',
+      dependencies: ['viewer-build'],
+      use: { viewport: { width: 1440, height: 900 } },
+    },
   ],
 })
