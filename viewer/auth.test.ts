@@ -150,6 +150,26 @@ it('keeps the session when the sign-in service cannot be reached, and retries th
   ])
 })
 
+it('keeps the session when GitHub or the Worker fails on its side, and retries the refresh', async () => {
+  const s = setup({
+    '/token': [{ status: 200, body: TOKENS }],
+    '/refresh': [
+      { status: 502, body: { error: 'github_unavailable' } },
+      { status: 503, body: 'Service Unavailable' },
+      { status: 200, body: { ...TOKENS, accessToken: 'ghu_2', refreshToken: 'ghr_2' } },
+    ],
+  })
+  await signIn(s)
+  let lost = 0
+  s.auth.onLost(() => lost++)
+  s.advance(28800 * 1000)
+  expect(await s.auth.token()).toBeNull()
+  expect(await s.auth.token()).toBeNull()
+  expect(s.auth.signedIn()).toBe(true)
+  expect(lost).toBe(0)
+  expect(await s.auth.token()).toBe('ghu_2')
+})
+
 it('ends a session whose refresh token expired, and says the sign-in was lost', async () => {
   const s = setup({ '/token': [{ status: 200, body: TOKENS }] })
   await signIn(s)

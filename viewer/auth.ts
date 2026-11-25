@@ -37,8 +37,15 @@ const PENDING_MS = 10 * 60 * 1000
 /** A token this close to expiring is refreshed before use. */
 const REFRESH_MARGIN_MS = 60 * 1000
 const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize'
-/** What postWorker returns when the request never reached the Worker, so it spent nothing. */
-const UNREACHABLE = 'the sign-in service could not be reached'
+/**
+ * Why the Worker gave no token. `retry` when the code or refresh token was most likely not spent:
+ * the request never reached the Worker, or the Worker or GitHub's token endpoint failed (a 5xx,
+ * `github_unavailable` among them). A token GitHub did spend fails the retry as a refusal.
+ */
+interface WorkerFailure {
+  error: string
+  retry: boolean
+}
 
 export interface AuthDeps {
   storage: Storage | null
@@ -117,7 +124,7 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
     for (const listener of listeners) listener()
   }
 
-  async function postWorker(path: string, body: unknown): Promise<AuthSession | string> {
+  async function postWorker(path: string, body: unknown): Promise<AuthSession | WorkerFailure> {
     let res: Response
     try {
       res = await deps.fetchImpl(`${worker}${path}`, {
@@ -126,14 +133,17 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
         body: JSON.stringify(body),
       })
     } catch {
-      return UNREACHABLE
+      return { error: 'the sign-in service could not be reached', retry: true }
     }
     const answer: unknown = await res.json().catch(() => null)
     if (!res.ok) {
       const code = (answer as { error?: unknown } | null)?.error
-      return typeof code === 'string' ? code : `the sign-in service answered ${res.status}`
+      return {
+        error: typeof code === 'string' ? code : `the sign-in service answered ${res.status}`,
+        retry: res.status >= 500,
+      }
     }
-    return toSession(answer, deps.now()) ?? 'the sign-in service sent no token'
+    return toSession(answer, deps.now()) ?? { error: 'the sign-in service sent no token', retry: false }
   }
 
   async function refresh(): Promise<AuthSession | null> {
@@ -141,16 +151,17 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
     if (current === null || current.refreshToken === null) return null
     const next =
       current.refreshExpiresAt !== null && current.refreshExpiresAt <= deps.now()
-        ? 'the refresh token expired'
+        ? { error: 'the refresh token expired', retry: false }
         : await postWorker('/refresh', { refreshToken: current.refreshToken })
-    if (next === UNREACHABLE) {
-      // The refresh token never left the page, so it still works: keep the session for the next
-      // request to retry, and use the access token meanwhile while GitHub still takes it.
+    if ('retry' in next && next.retry) {
+      // The refresh token most likely still works: keep the session for the next request to
+      // retry, and use the access token meanwhile while GitHub still takes it.
       return current.expiresAt !== null && current.expiresAt > deps.now() ? current : null
     }
-    // A refresh token works once: a refresh the Worker refused leaves nothing to retry with.
-    save(typeof next === 'string' ? null : next)
-    if (typeof next === 'string') {
+    // A refresh token works once: a refresh GitHub refused leaves nothing to retry with.
+    const failed = 'retry' in next
+    save(failed ? null : next)
+    if (failed) {
       for (const listener of lost) listener()
       return null
     }
@@ -203,8 +214,8 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
         }
       }
       const next = await postWorker('/token', { code, codeVerifier: pending.verifier, redirectUri })
-      if (typeof next === 'string')
-        return { status: 'failed', error: `GitHub sign-in failed: ${next}`, returnTo }
+      if ('retry' in next)
+        return { status: 'failed', error: `GitHub sign-in failed: ${next.error}`, returnTo }
       save(next)
       return { status: 'signed-in', returnTo }
     },
