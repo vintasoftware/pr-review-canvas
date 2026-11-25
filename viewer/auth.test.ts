@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { type AuthDeps, base64Url, createAuth } from './auth.js'
+import { type AuthDeps, base64Url, createAuth, RenewalPendingError } from './auth.js'
 
 const config = { clientId: 'Iv1.client', workerUrl: 'https://auth.example.com/' }
 const REDIRECT = 'https://viewer.example.com/'
@@ -135,9 +135,9 @@ it('keeps the session when the sign-in service cannot be reached, and retries th
   // Inside the refresh margin, the unexpired access token still serves while the Worker is away.
   s.advance(28800 * 1000 - 30_000)
   expect(await s.auth.token()).toBe('ghu_1')
-  // Past its expiry, nothing serves, but the session waits for the Worker to come back.
+  // Past its expiry, requests fail rather than go out anonymously, and the session waits.
   s.advance(60_000)
-  expect(await s.auth.token()).toBeNull()
+  await expect(s.auth.token()).rejects.toThrow(RenewalPendingError)
   expect(s.auth.signedIn()).toBe(true)
   expect(lost).toBe(0)
   refreshes.push({ status: 200, body: { ...TOKENS, accessToken: 'ghu_2', refreshToken: 'ghr_2' } })
@@ -163,8 +163,8 @@ it('keeps the session when GitHub or the Worker fails on its side, and retries t
   let lost = 0
   s.auth.onLost(() => lost++)
   s.advance(28800 * 1000)
-  expect(await s.auth.token()).toBeNull()
-  expect(await s.auth.token()).toBeNull()
+  await expect(s.auth.token()).rejects.toThrow("GitHub sign-in can't be renewed right now")
+  await expect(s.auth.token()).rejects.toThrow(RenewalPendingError)
   expect(s.auth.signedIn()).toBe(true)
   expect(lost).toBe(0)
   expect(await s.auth.token()).toBe('ghu_2')

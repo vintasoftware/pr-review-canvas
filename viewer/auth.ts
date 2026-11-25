@@ -38,6 +38,18 @@ const PENDING_MS = 10 * 60 * 1000
 const REFRESH_MARGIN_MS = 60 * 1000
 const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize'
 /**
+ * What `token()` throws when the access token has expired and its renewal failed in a way worth
+ * retrying. The reader stays signed in, and the request fails instead of going out anonymously,
+ * where a private repository would read as not found.
+ */
+export class RenewalPendingError extends Error {
+  constructor() {
+    super("GitHub sign-in can't be renewed right now; try again in a moment")
+    this.name = 'RenewalPendingError'
+  }
+}
+
+/**
  * Why the Worker gave no token. `retry` when the code or refresh token was most likely not spent:
  * the request never reached the Worker, or the Worker or GitHub's token endpoint failed (a 5xx,
  * `github_unavailable` among them). A token GitHub did spend fails the retry as a refusal.
@@ -156,7 +168,8 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
     if ('retry' in next && next.retry) {
       // The refresh token most likely still works: keep the session for the next request to
       // retry, and use the access token meanwhile while GitHub still takes it.
-      return current.expiresAt !== null && current.expiresAt > deps.now() ? current : null
+      if (current.expiresAt !== null && current.expiresAt > deps.now()) return current
+      throw new RenewalPendingError()
     }
     // A refresh token works once: a refresh GitHub refused leaves nothing to retry with.
     const failed = 'retry' in next
@@ -220,7 +233,10 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
       return { status: 'signed-in', returnTo }
     },
 
-    /** The token to send to GitHub, refreshed first when it is about to expire; null when signed out. */
+    /**
+     * The token to send to GitHub, refreshed first when it is about to expire; null when signed
+     * out. Throws `RenewalPendingError` while an expired token's renewal is being retried.
+     */
     async token(): Promise<string | null> {
       const current = session
       if (current === null) return null

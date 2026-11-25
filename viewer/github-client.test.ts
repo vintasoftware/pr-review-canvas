@@ -1,3 +1,4 @@
+import { RenewalPendingError } from './auth.js'
 import { createBrowserGithub, FRESH_MS } from './github-client.js'
 import { parseTarget } from './target.js'
 
@@ -116,6 +117,25 @@ it('tells the page when GitHub refuses the token', async () => {
   })
   await expect(gh.api('user')).rejects.toThrow(/sign in again/)
   expect(refused).toBe(1)
+})
+
+it('fails a request while the sign-in is being renewed, instead of sending it anonymously', async () => {
+  const { fetchImpl, requests } = scripted([])
+  const gh = createBrowserGithub({
+    fetchImpl,
+    storage: null,
+    token: () => Promise.reject(new RenewalPendingError()),
+  })
+  await expect(gh.api('repos/a/b/pulls/1')).rejects.toThrow(RenewalPendingError)
+  expect(requests).toHaveLength(0)
+  // The reader is still signed in; only the renewal is waiting.
+  expect(await gh.authStatus()).toMatchObject({ authenticated: true })
+  const broken = createBrowserGithub({
+    fetchImpl,
+    storage: null,
+    token: () => Promise.reject(new Error('boom')),
+  })
+  await expect(broken.authStatus()).rejects.toThrow('boom')
 })
 
 it('asks GraphQL only when signed in, and reports its errors', async () => {

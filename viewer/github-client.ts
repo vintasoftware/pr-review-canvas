@@ -2,6 +2,7 @@
 // GitHub App token once they sign in. It answers through the same HostClient interface the
 // server's gh client does, so the server's mappers (pull request, comments) run here unchanged.
 import { type CliResponse, type HostClient, HostCliError } from '../src/host/client.js'
+import { RenewalPendingError } from './auth.js'
 
 export const GITHUB_API = 'https://api.github.com'
 
@@ -210,7 +211,11 @@ export function createBrowserGithub(opts: BrowserGithubOptions = {}) {
       return parsed.data
     },
     async authStatus() {
-      const token = await tokenOf()
+      // A renewal being retried leaves the reader signed in; the request itself says it failed.
+      const token = await tokenOf().catch((err: unknown) => {
+        if (err instanceof RenewalPendingError) return 'renewing'
+        throw err
+      })
       return {
         installed: true,
         authenticated: token !== null,
