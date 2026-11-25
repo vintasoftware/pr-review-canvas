@@ -30,12 +30,16 @@ the page's `/api` calls, and `viewer-api.ts` answers them in the browser:
   300 for an older canvas. GitHub sends no patch for a file too large to diff, so the page lists
   that file with its line counts and says its diff was not sent, and a banner names the files left
   out and the ones past the list's limit.
-- The canvas is the newest canvas comment on the pull request written by its author or by an owner,
+- The canvas comes from a canvas comment on the pull request written by its author or by an owner,
   member, or collaborator of the repository (the local app's rule, from `src/host/canvas-author.ts`),
-  read with `readCanvasZip` like an import. A canvas
-  comment from anyone else is skipped, with a warning naming its author. It shows as ready, carried over, or outdated by the same rules as the local app.
+  read with `readCanvasComment` and `readCanvasZip` like an import. A canvas comment from anyone
+  else is skipped, with a warning naming its author. With several, the viewer ranks them as the
+  local app does (`rankCandidates`): a canvas of the head first, then one exported for this pull
+  request, then the newest. It shows as ready, carried over, or outdated by the same rules as the
+  local app.
 - Review marks, dismissals, hidden threads, the pending review, and the skin and theme stay in
-  `localStorage`.
+  `localStorage`. The state follows the local app's own rules (`src/store/state-store.ts`); only
+  the storage differs.
 - A signed-in reader posts comments (on a line, as a reply, or on the pull request) and submits
   reviews with the server's own GitHub code (`src/github/post-comment.ts`,
   `src/github/post-review.ts`). The same checks run first: the line must be in the diff, the page
@@ -167,6 +171,11 @@ git tag viewer-v0.1.0 && git push origin viewer-v0.1.0
 - Anonymous reads are limited to 60 requests an hour per address, and GitHub counts a 304 against
   that too. A cold load of a pull request costs about six requests. Answers are reused for five
   minutes, and the page's refresh command asks again. Signed in, the limit is the reader's own.
+  The page never asks on a timer: a canvas published after the page loaded shows on refresh, and
+  so do the author's resolutions.
+- A canvas whose diff is identical to the head's always stands for the head. The viewer cannot
+  read `pr-review.config.yml`, so it does not honour `canvas.keepForIdenticalDiff: false`; in such
+  a project the local app marks that canvas outdated and the viewer does not.
 - Anonymous readers see resolved review threads as open: GitHub's GraphQL API, which reports
   them, needs a token.
 - On an outdated canvas, posting is off until the author publishes a canvas of the current head:

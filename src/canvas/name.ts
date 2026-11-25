@@ -54,3 +54,41 @@ export function parseCanvasZipName(filename: string, repo: Repo): ParsedCanvasNa
   const pr = m?.[1]
   return pr === undefined ? { shaPrefix } : { prNumber: Number(pr), shaPrefix }
 }
+
+/** What ranking reads of a canvas found on a pull request: its name, when it appeared, and where. */
+export interface RankedCandidate {
+  parsed: ParsedCanvasName
+  /** When the text carrying it was last edited. */
+  postedAt: string
+  /** Position in the scan, used when two carry the same time. */
+  order: number
+}
+
+/** True when the name names a pull request, and it is not the one being looked at. */
+export function namesAnotherPr(c: RankedCandidate, prNumber: number): boolean {
+  return c.parsed.prNumber !== undefined && c.parsed.prNumber !== prNumber
+}
+
+/**
+ * The canvas for this head wins, then one exported for this PR, then the one attached last. A name
+ * that carries another pull request's number sorts below all of them: import refuses it, so it may
+ * never take a place in the try budget from an attachment that could be used.
+ */
+export function rankCandidates<C extends RankedCandidate>(
+  candidates: readonly C[],
+  target: { headSha: string; prNumber: number }
+): C[] {
+  const shaPrefix = target.headSha.slice(0, 8)
+  const score = (c: RankedCandidate): number =>
+    namesAnotherPr(c, target.prNumber)
+      ? -1
+      : (c.parsed.shaPrefix === shaPrefix ? 2 : 0) + (c.parsed.prNumber === target.prNumber ? 1 : 0)
+  return [...candidates].sort(
+    (a, b) => score(b) - score(a) || b.postedAt.localeCompare(a.postedAt) || b.order - a.order
+  )
+}
+
+/** Whether two names are the same repository: GitHub and GitLab compare them case-blind. */
+export function sameRepo(a: Repo, b: Repo): boolean {
+  return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
+}

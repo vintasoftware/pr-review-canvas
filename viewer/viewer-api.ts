@@ -23,15 +23,28 @@ import { postedFromPending } from '../src/review/posted-comments.js'
 import {
   buildReviewBody,
   type ReviewBodyInput,
+  stateForCanvas,
   unreviewedLayers,
   VIEWER_REVIEW_BODY_FOOTER,
 } from '../src/review/review-body.js'
 import { authorSignOffReason } from '../src/review/self-review.js'
+import {
+  refuseAuthorSignOff,
+  requireLayersReviewed,
+  requireSameDiff,
+  signOffOnStaleCanvas,
+} from '../src/review/sign-off-guards.js'
+import { AppError } from '../src/server/app-error.js'
+import type { StateStore } from '../src/store/state-store.js'
+import type { DiffedCommit } from '../src/store/derived-store.js'
+import { readCanvasComment } from '../src/canvas/comment.js'
+import { parseCanvasZipName, rankCandidates, sameRepo } from '../src/canvas/name.js'
+import { isLargePr } from '../src/contract/generation-context.js'
 import { buildSkillCommand } from '../src/review/skill-command.js'
 import { draftDiff, sameDiff } from '../static/js/diff-identity.js'
 import type { CanvasManifest } from '../src/contract/canvas-manifest.js'
 import type { CommentsPayload, IssueComment } from '../src/contract/comments.js'
-import type { FileEntry, Pr, ReviewArtifact } from '../src/contract/review-artifact.js'
+import type { Pr, ReviewArtifact } from '../src/contract/review-artifact.js'
 import type { PrState } from '../src/contract/state.js'
 import { readCanvasZip } from '../src/canvas/zip.js'
 import { fetchComments } from '../src/github/comments.js'
@@ -43,14 +56,13 @@ import {
   COMPARE_FILES_MAX,
   diffFromFiles,
   diffFromText,
+  explainsLoadedHead,
   ghFiles,
   incompleteWarning,
   type LoadedDiff,
   PULL_FILES_MAX,
-  sameLoadedDiff,
 } from './diff-fallback.js'
 import type { BrowserGithub } from './github-client.js'
-import { type MarkedCanvas, type ViewerStateStore } from './review-state.js'
 
 export interface ViewerTarget {
   owner: string
@@ -63,25 +75,10 @@ export interface ApiAnswer {
   body: unknown
 }
 
-type ErrorCode = ErrorEnvelope['error']['code']
-
-class ViewerError extends Error {
-  readonly status: number
-  readonly code: ErrorCode
-  readonly hint: string | undefined
-
-  constructor(status: number, code: ErrorCode, message: string, hint?: string) {
-    super(message)
-    this.status = status
-    this.code = code
-    this.hint = hint
-  }
-}
-
 const LOCAL_APP_HINT = 'install the CLI and run pr-review serve for this'
 
 const notInViewer = (what: string) =>
-  new ViewerError(501, 'NOT_IMPLEMENTED', `${what} is not available in the viewer`, LOCAL_APP_HINT)
+  new AppError('NOT_IMPLEMENTED', `${what} is not available in the viewer`, 501, LOCAL_APP_HINT)
 
 /**
  * Whether a comment's author may supply the canvas, by the local app's rule
@@ -98,20 +95,13 @@ function trustedAuthor(
   return isReviewAuthor(author.login, prAuthor) || hasGithubRole(author)
 }
 
-/** The canvas comment's envelope, as src/canvas/comment.ts writes it. */
-const CANVAS_ENVELOPE = /<!-- pr-review-canvas:v1\n([A-Za-z0-9._-]+\.zip)\n([A-Za-z0-9+/]+={0,2})\n-->/
-
-function decodeBase64(encoded: string): Uint8Array {
-  const binary = atob(encoded)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
-
-/** Over 400 files or 50 000 changed lines, as src/contract/generation-context.ts counts it. */
-function largePr(files: readonly FileEntry[]): boolean {
-  const lines = files.reduce((n, f) => n + f.additions + f.deletions, 0)
-  return files.length > 400 || lines > 50_000
+/** Over 400 files or 50 000 changed lines, as the local app counts it. */
+function largePr(diff: LoadedDiff): boolean {
+  const counts = diff.files.reduce(
+    (n, f) => ({ ...n, additions: n.additions + f.additions, deletions: n.deletions + f.deletions }),
+    { files: diff.files.length, additions: 0, deletions: 0 }
+  )
+  return isLargePr(counts)
 }
 
 const APP_WRITE_HINT =
@@ -155,12 +145,7 @@ class Answer {
 function parseBody<T>(schema: z.ZodType<T>, body: unknown, expected: string): T {
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
-    throw new ViewerError(
-      400,
-      'BAD_REQUEST',
-      `send a JSON body: ${expected}`,
-      parsed.error.issues[0]?.message
-    )
+    throw new AppError('BAD_REQUEST', `send a JSON body: ${expected}`, 400, parsed.error.issues[0]?.message)
   }
   return parsed.data
 }
@@ -175,21 +160,21 @@ function githubMessage(err: unknown): string {
 }
 
 /** GitHub's refusal of a write, as the page's error envelope. */
-function writeError(err: unknown): ViewerError {
-  if (err instanceof ViewerError) return err
+function writeError(err: unknown): AppError {
+  if (err instanceof AppError) return err
   const message = err instanceof Error ? err.message : String(err)
   if (/HTTP 401/.test(message)) {
-    return new ViewerError(401, 'GH_UNAUTHENTICATED', 'sign in with GitHub to post', 'sign in again')
+    return new AppError('GH_UNAUTHENTICATED', 'sign in with GitHub to post', 401, 'sign in again')
   }
   if (/HTTP 40[34]/.test(message)) {
-    return new ViewerError(
-      403,
+    return new AppError(
       'COMMENT_FORBIDDEN',
       `GitHub refused the post: ${githubMessage(err)}`,
+      403,
       APP_WRITE_HINT
     )
   }
-  return new ViewerError(502, 'GITHUB_API_ERROR', githubMessage(err))
+  return new AppError('GITHUB_API_ERROR', githubMessage(err), 502)
 }
 
 type Diff = LoadedDiff
@@ -217,25 +202,26 @@ export function createViewerApi(
   deps: {
     gh: BrowserGithub
     /**
-     * The review state of one reader: `null` is the anonymous reader. Each GitHub login gets its
-     * own, so a browser shared by two people never sends one person's drafts, or counts their
-     * marks, under the other's name.
+     * The review state, keyed per reader: the anonymous reader keeps the pull request's own key,
+     * and each GitHub login gets its own, so a browser shared by two people never sends one
+     * person's drafts, or counts their marks, under the other's name.
      */
-    state: (reader: string | null) => ViewerStateStore
+    state: StateStore<string>
     now?: () => Date
     /** Where an owner installs the GitHub App, to name in a not-found answer to a signed-in reader. */
     installUrl?: string
   }
 ) {
-  const { gh } = deps
-  /** The store of the reader making the current request, set as each request starts. */
-  let state: ViewerStateStore = deps.state(null)
+  const { gh, state: store } = deps
   const now = deps.now ?? (() => new Date())
   const repoPath = `repos/${target.owner}/${target.repo}`
+  const prKey = `github/${target.owner}/${target.repo}/${target.number}`.toLowerCase()
+  const keyOf = (reader: string | null): string =>
+    reader === null ? prKey : `${prKey}@${reader.toLowerCase()}`
   const diffs = new Map<string, Promise<Diff>>()
   let loading: Promise<Loaded> | null = null
   /** The canvas the bundle keyed its marks to, so a mark lands on the diff the reader saw. */
-  let markedCanvas: MarkedCanvas | null = null
+  let markedCanvas: DiffedCommit | null = null
 
   /**
    * The diff GitHub could not send whole, rebuilt from a file list: the pull request's own when
@@ -280,29 +266,37 @@ export function createViewerApi(
   }
 
   /**
-   * The newest canvas comment on the pull request, read like `pr-review import` reads a zip. Only
-   * the pull request's author or someone with a role on the repository can supply it: on a public
-   * repository anyone can comment, and the viewer's link always opens the newest canvas.
+   * The canvas the pull request carries, read like the local app reads a canvas comment
+   * (src/host/attachments.ts): only from the pull request's author or someone with a role on the
+   * repository, since anyone can comment on a public one, and ranked the same way, a canvas of the
+   * head first, then one exported for this pull request, then the newest. One that cannot be read
+   * gives way to the next.
    */
-  function findCanvas(comments: CommentsPayload, prAuthor: string, warnings: string[]): SharedCanvas | null {
-    const newestFirst = [...comments.issueComments].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    for (const comment of newestFirst) {
-      const match = CANVAS_ENVELOPE.exec(comment.body)
-      if (match === null) continue
-      if (!trustedAuthor(comment, prAuthor)) {
+  function findCanvas(comments: CommentsPayload, pr: Pr, warnings: string[]): SharedCanvas | null {
+    const repo = { owner: target.owner, name: target.repo }
+    const candidates = comments.issueComments.flatMap((comment, order) => {
+      const embedded = readCanvasComment(comment.body)
+      const parsed = embedded === null ? null : parseCanvasZipName(embedded.name, repo)
+      if (embedded === null || parsed === null) return []
+      if (!trustedAuthor(comment, pr.author)) {
         warnings.push(
           `the canvas comment at ${comment.url} is by @${comment.author}, who is neither the pull request's author nor an owner, member, or collaborator of ${target.owner}/${target.repo}; skipped`
         )
-        continue
+        return []
       }
+      return [{ comment, bytes: embedded.bytes, parsed, postedAt: comment.updatedAt, order }]
+    })
+    for (const { comment, bytes } of rankCandidates(candidates, {
+      headSha: pr.headSha,
+      prNumber: target.number,
+    })) {
       try {
-        const contents = readCanvasZip(decodeBase64(match[2]!))
-        const { repo } = contents.manifest
-        if (
-          repo.owner.toLowerCase() !== target.owner.toLowerCase() ||
-          repo.name.toLowerCase() !== target.repo.toLowerCase()
-        ) {
-          warnings.push(`the canvas comment at ${comment.url} is for ${repo.owner}/${repo.name}; skipped`)
+        const contents = readCanvasZip(bytes)
+        const { repo: canvasRepo } = contents.manifest
+        if (!sameRepo(canvasRepo, repo)) {
+          warnings.push(
+            `the canvas comment at ${comment.url} is for ${canvasRepo.owner}/${canvasRepo.name}; skipped`
+          )
           continue
         }
         if (contents.prNumber !== undefined && contents.prNumber !== target.number) {
@@ -338,24 +332,28 @@ export function createViewerApi(
     return typeof user.login === 'string' ? user.login : null
   }
 
-  async function load(): Promise<Loaded> {
-    const meta = mapPull(await gh.api(`${repoPath}/pulls/${target.number}`))
-    const compare = (await gh.api(
+  /**
+   * The pull request and the merge base its diff runs from. `read` is the client's cached read, or
+   * its fresh one when a write must see the head as GitHub has it now.
+   */
+  async function readPr(read: (path: string) => Promise<unknown>): Promise<Pr> {
+    const meta = mapPull(await read(`${repoPath}/pulls/${target.number}`))
+    const compare = (await read(
       `${repoPath}/compare/${await diffBase(meta.baseRef, meta.mergeCommitSha)}...${meta.headSha}`
     )) as { merge_base_commit?: { sha?: unknown } }
     const mergeBaseSha = compare.merge_base_commit?.sha
     if (typeof mergeBaseSha !== 'string') {
-      throw new ViewerError(
-        502,
-        'GITHUB_API_ERROR',
-        'GitHub did not report the merge base of this pull request'
-      )
+      throw new AppError('GITHUB_API_ERROR', 'GitHub did not report the merge base of this pull request', 502)
     }
-    const pr = toPr(meta, { owner: target.owner, name: target.repo }, { headSha: meta.headSha, mergeBaseSha })
+    return toPr(meta, { owner: target.owner, name: target.repo }, { headSha: meta.headSha, mergeBaseSha })
+  }
+
+  async function load(): Promise<Loaded> {
+    const pr = await readPr(path => gh.api(path))
     const fetched = await fetchComments(gh, pr.repo, target.number, pr.headSha, now)
     // GraphQL needs a token, so resolved threads read as open; that is expected here, not news.
     const warnings = fetched.warnings.filter(w => !w.startsWith('resolved state unavailable'))
-    const canvas = findCanvas(fetched.payload, meta.author, warnings)
+    const canvas = findCanvas(fetched.payload, pr, warnings)
     return { pr, comments: fetched.payload, canvas, warnings }
   }
 
@@ -395,10 +393,10 @@ export function createViewerApi(
     return { ...base, relation: 'unrelated' }
   }
 
-  async function bundle(refresh: boolean): Promise<PrBundle> {
+  async function bundle(refresh: boolean, reader: string | null): Promise<PrBundle> {
     const { pr, comments, canvas, warnings: loadWarnings } = await loaded(refresh)
     const warnings = [...loadWarnings]
-    const reader = await login()
+    const stored = await store.read(keyOf(reader))
     const common = {
       pr,
       comments,
@@ -424,8 +422,8 @@ export function createViewerApi(
         status: 'missing',
         files: head.files,
         derivable: true,
-        state: state.forCanvas(pr),
-        largePr: largePr(head.files),
+        state: stateForCanvas(stored, pr),
+        largePr: largePr(head),
       }
     }
 
@@ -433,22 +431,22 @@ export function createViewerApi(
     const artifact: ReviewArtifact = { ...canvas.artifact, source: 'import' }
     const info = { headSha: manifest.headSha, source: 'import' as const, manifest }
     const own = await diffOf(manifest.mergeBaseSha, manifest.headSha)
-    const ofHead = manifest.headSha === pr.headSha && manifest.mergeBaseSha === pr.mergeBaseSha
     let status: PrBundle['status'] = 'ready'
     let carriedOver: CarriedOverInfo | undefined
     let stale: StaleInfo | undefined
-    if (!ofHead) {
+    if (!sameDiff(manifest, pr)) {
       const head = await diffOf(pr.mergeBaseSha, pr.headSha)
-      if (sameLoadedDiff(head, own)) {
+      if (!explainsLoadedHead(own, head)) {
+        status = 'stale'
+        stale = await staleRelation(pr, manifest)
+      } else if (manifest.headSha !== pr.headSha) {
+        // The head's own canvas on another base with the same diff is simply ready, as locally.
         const relation = await staleRelation(pr, manifest)
         carriedOver = {
           canvasHeadSha: manifest.headSha,
           currentHeadSha: pr.headSha,
           ...(relation.relation === 'ancestor' ? { commitsBehind: relation.commitsBehind } : {}),
         }
-      } else {
-        status = 'stale'
-        stale = await staleRelation(pr, manifest)
       }
     }
     markedCanvas = { headSha: manifest.headSha, mergeBaseSha: manifest.mergeBaseSha }
@@ -461,8 +459,8 @@ export function createViewerApi(
       derivable: true,
       artifact,
       canvas: info,
-      state: state.forCanvas(markedCanvas),
-      largePr: largePr(own.files),
+      state: stateForCanvas(stored, markedCanvas),
+      largePr: largePr(own),
       ...(carriedOver === undefined ? {} : { carriedOver }),
       ...(stale === undefined ? {} : { stale }),
     }
@@ -483,21 +481,15 @@ export function createViewerApi(
   const stateBody = (s: PrState): StateResponse => ({ prNumber: target.number, state: s })
 
   /**
-   * The pull request as GitHub has it now, refusing a write made from a page drawn on another diff.
-   * A page that names its diff gets it checked against a fresh read: the copy loaded with the page
-   * would still hold the head the page was drawn on, however many commits were pushed since.
+   * The pull request, refusing a write made from a page drawn on another diff. A page that names
+   * its diff gets it checked against the head and base GitHub reports now: the copy loaded with the
+   * page would still hold the head it was drawn on, however many commits were pushed since. Only
+   * the pull request is read again, not its comments.
    */
   async function currentPr(page: { headSha?: string | undefined; mergeBaseSha?: string | undefined }) {
-    const { pr } = await loaded(page.headSha !== undefined || page.mergeBaseSha !== undefined)
-    const moved = (seen: string | undefined, current: string) => seen !== undefined && seen !== current
-    if (moved(page.headSha, pr.headSha) || moved(page.mergeBaseSha, pr.mergeBaseSha)) {
-      throw new ViewerError(
-        409,
-        'CANVAS_STALE',
-        'the pull request has a new head commit or base since this page was drawn',
-        'reload the page and try again'
-      )
-    }
+    if (page.headSha === undefined && page.mergeBaseSha === undefined) return (await loaded(false)).pr
+    const pr = await readPr(path => gh.apiFresh(path))
+    requireSameDiff(page, pr)
     return pr
   }
 
@@ -505,45 +497,37 @@ export function createViewerApi(
   async function requireInlineTarget(pr: Pr, line: Parameters<typeof checkInlineTarget>[1]) {
     const problem = checkInlineTarget((await diffOf(pr.mergeBaseSha, pr.headSha)).files, line)
     if (problem !== null) {
-      throw new ViewerError(422, 'COMMENT_LINE_NOT_IN_DIFF', problem, 'comment on a line the diff shows')
+      throw new AppError('COMMENT_LINE_NOT_IN_DIFF', problem, 422, 'comment on a line the diff shows')
     }
   }
 
-  async function requireLogin(): Promise<string> {
-    const who = await login()
-    if (who === null) {
-      throw new ViewerError(
-        401,
+  function requireLogin(reader: string | null): string {
+    if (reader === null) {
+      throw new AppError(
         'GH_UNAUTHENTICATED',
         'sign in with GitHub to post',
+        401,
         'use sign in with GitHub at the top of the page'
       )
     }
-    return who
+    return reader
   }
 
   /** The canvas a review signs off on, with the marks made on it: only one that describes the head. */
-  async function signOffCanvas(): Promise<{
+  async function signOffCanvas(reader: string | null): Promise<{
     artifact: ReviewArtifact
     state: PrState
     comments: CommentsPayload
     pr: Pr
   }> {
-    const shown = await bundle(false)
-    if (shown.status !== 'ready' || shown.artifact === undefined) {
-      throw new ViewerError(
-        409,
-        'SIGNOFF_INCOMPLETE',
-        'the canvas on screen was generated for another commit or another base',
-        'regenerate the canvas for the current head, then review its layers'
-      )
-    }
+    const shown = await bundle(false, reader)
+    if (shown.status !== 'ready' || shown.artifact === undefined) throw signOffOnStaleCanvas()
     return { artifact: shown.artifact, state: shown.state, comments: shown.comments, pr: shown.pr }
   }
 
-  async function postOnPr(body: unknown): Promise<Answer> {
+  async function postOnPr(body: unknown, reader: string | null): Promise<Answer> {
     const input = parseBody(PostCommentInputSchema, body, 'an inline, reply, or issue comment')
-    await requireLogin()
+    requireLogin(reader)
     const pr = await currentPr(input)
     if (input.kind === 'inline') await requireInlineTarget(pr, input)
     let posted: Awaited<ReturnType<typeof postComment>>
@@ -561,11 +545,11 @@ export function createViewerApi(
         ? { proposalFingerprint: input.proposalFingerprint }
         : {}),
     }
-    return new Answer(201, { ...posted, state: state.addPosted([entry]) })
+    return new Answer(201, { ...posted, state: await store.addPosted(keyOf(reader), [entry]) })
   }
 
-  async function reviewBody(): Promise<ReviewBodyResponse> {
-    const { artifact, state: marks, comments, pr } = await signOffCanvas()
+  async function reviewBody(reader: string | null): Promise<ReviewBodyResponse> {
+    const { artifact, state: marks, comments, pr } = await signOffCanvas(reader)
     return {
       headSha: pr.headSha,
       body: viewerReviewBody({ artifact, state: marks, comments, headSha: pr.headSha }),
@@ -574,39 +558,22 @@ export function createViewerApi(
     }
   }
 
-  async function submitReview(body: unknown): Promise<Answer> {
+  async function submitReview(body: unknown, reader: string | null): Promise<Answer> {
     const input = parseBody(PostReviewInputSchema, body, '{ "event": "APPROVE" }')
-    const who = await requireLogin()
+    const who = requireLogin(reader)
     const pr = await currentPr(input)
-    const byAuthor = input.event === 'COMMENT' ? null : authorSignOffReason(who, pr, 'pull request')
-    if (byAuthor !== null) {
-      throw new ViewerError(
-        403,
-        'SIGNOFF_BY_AUTHOR',
-        byAuthor,
-        'ask another reviewer to sign off, or post a comment-only review'
-      )
-    }
-    const { artifact, state: marks, comments } = await signOffCanvas()
-    if (input.event === 'APPROVE') {
-      const missing = unreviewedLayers(artifact, marks)
-      if (missing.length > 0) {
-        throw new ViewerError(
-          409,
-          'SIGNOFF_INCOMPLETE',
-          `${missing.length} ${missing.length === 1 ? 'layer is' : 'layers are'} not reviewed yet`,
-          missing.map(l => l.title).join(', ')
-        )
-      }
-    }
+    refuseAuthorSignOff(who, pr, 'pull request', input.event)
+    const { artifact, state: marks, comments } = await signOffCanvas(reader)
+    requireLayersReviewed(artifact, marks, input.event)
     const text = input.body ?? viewerReviewBody({ artifact, state: marks, comments, headSha: pr.headSha })
-    const pending = input.includePending ? state.read().pending : []
+    const key = keyOf(reader)
+    const pending = input.includePending ? (await store.read(key)).pending : []
     // The viewer keeps no older diffs to compare, so a draft goes out only on the diff it was written on.
     if (pending.some(p => !sameDiff(draftDiff(p, pr), pr))) {
-      throw new ViewerError(
-        409,
+      throw new AppError(
         'CANVAS_STALE',
         'pending comments were written on a different diff',
+        409,
         'copy or delete the drafts written on an earlier diff in the pending review, then comment on the current code'
       )
     }
@@ -623,8 +590,9 @@ export function createViewerApi(
     const { comments: submittedComments, warnings, ...review } = posted
     const next =
       pending.length === 0
-        ? state.read()
-        : state.completePending(
+        ? await store.read(key)
+        : await store.completePending(
+            key,
             pending.map(p => ({ ...p, reviewId: review.id })),
             postedFromPending(pending, submittedComments)
           )
@@ -637,84 +605,82 @@ export function createViewerApi(
     })
   }
 
-  async function addPending(body: unknown): Promise<Answer> {
+  async function addPending(body: unknown, reader: string | null): Promise<Answer> {
     const input = parseBody(AddPendingInputSchema, body, 'a comment on a line of the diff')
     const pr = await currentPr(input)
     await requireInlineTarget(pr, input)
-    return new Answer(201, stateBody(state.addPending(input, pr)))
+    return new Answer(201, stateBody(await store.addPending(keyOf(reader), input, pr)))
   }
 
-  function editPending(id: string, body: unknown): StateResponse {
+  async function editPending(id: string, body: unknown, reader: string | null): Promise<StateResponse> {
     const { body: text } = parseBody(EditPendingInputSchema, body, '{ "body": "…" }')
-    if (!state.read().pending.some(p => p.id === id)) {
-      throw new ViewerError(404, 'NOT_FOUND', `no pending comment ${id}`, 'reload the page')
+    const key = keyOf(reader)
+    if (!(await store.read(key)).pending.some(p => p.id === id)) {
+      throw new AppError('NOT_FOUND', `no pending comment ${id}`, 404, 'reload the page')
     }
-    return stateBody(state.editPending(id, text))
+    return stateBody(await store.editPending(key, id, text))
   }
 
-  async function route(method: string, url: URL, body: unknown): Promise<unknown> {
+  async function route(method: string, url: URL, body: unknown, reader: string | null): Promise<unknown> {
     const parts = url.pathname.split('/').filter(Boolean)
     // ['api', 'prs', '<n>', ...rest] or ['api', '<name>']
-    if (parts[0] !== 'api') throw new ViewerError(404, 'NOT_FOUND', `no route ${url.pathname}`)
-    if (parts[1] === 'appearance' && method === 'PUT') return body
+    if (parts[0] !== 'api') throw new AppError('NOT_FOUND', `no route ${url.pathname}`, 404)
     if (parts[1] !== 'prs') throw notInViewer('this')
-    if (parts[2] !== String(target.number))
-      throw new ViewerError(404, 'NOT_FOUND', 'this viewer shows one pull request')
+    if (parts[2] !== String(target.number)) {
+      throw new AppError('NOT_FOUND', 'this viewer shows one pull request', 404)
+    }
+    const key = keyOf(reader)
     const rest = parts.slice(3)
     const sub = rest.join('/')
-    if (method === 'GET' && sub === '') return bundle(url.searchParams.get('refresh') === '1')
+    if (method === 'GET' && sub === '') return bundle(url.searchParams.get('refresh') === '1', reader)
     if (method === 'GET' && sub === 'patches') return patches(url.searchParams.get('headSha'))
-    if (method === 'GET' && sub === 'state') return stateBody(state.read())
-    if (method === 'GET' && sub === 'capabilities') return capabilitiesFor(await login())
+    if (method === 'GET' && sub === 'state') return stateBody(await store.read(key))
+    if (method === 'GET' && sub === 'capabilities') return capabilitiesFor(reader)
     if (method === 'GET' && sub === 'comments') return (await loaded(true)).comments
     if (method === 'GET' && sub === 'chat/threads') return { threads: [] }
     const input = (body ?? {}) as Record<string, unknown>
     if (method === 'PUT' && rest[0] === 'reviewed' && rest.length > 1) {
       const id = decodeURIComponent(rest.slice(1).join('/'))
       const fallback = markedCanvas ?? (await loaded(false)).pr
-      const canvas: MarkedCanvas = {
+      const canvas: DiffedCommit = {
         headSha: typeof input['canvasSha'] === 'string' ? input['canvasSha'] : fallback.headSha,
         mergeBaseSha:
           typeof input['canvasMergeBaseSha'] === 'string'
             ? input['canvasMergeBaseSha']
             : fallback.mergeBaseSha,
       }
-      return stateBody(state.setReviewed(id, input['reviewed'] === true, canvas))
+      return stateBody(await store.setReviewed(key, id, input['reviewed'] === true, { canvas }))
     }
     if (method === 'PUT' && rest[0] === 'points' && rest[2] === 'dismissed') {
       const reason = typeof input['reason'] === 'string' ? input['reason'] : undefined
-      return stateBody(state.setDismissed(decodeURIComponent(rest[1]!), input['dismissed'] === true, reason))
+      const fingerprint = decodeURIComponent(rest[1]!)
+      return stateBody(await store.setDismissed(key, fingerprint, input['dismissed'] === true, reason))
     }
     if (method === 'PUT' && rest[0] === 'threads' && rest[2] === 'hidden') {
-      return stateBody(state.setThreadHidden(Number(rest[1]), input['hidden'] === true))
+      return stateBody(await store.setThreadHidden(key, Number(rest[1]), input['hidden'] === true))
     }
-    if (method === 'POST' && sub === 'comments') return postOnPr(body)
-    if (method === 'POST' && sub === 'pending') return addPending(body)
-    if (method === 'DELETE' && sub === 'pending') return stateBody(state.clearPending())
+    if (method === 'POST' && sub === 'comments') return postOnPr(body, reader)
+    if (method === 'POST' && sub === 'pending') return addPending(body, reader)
+    if (method === 'DELETE' && sub === 'pending') return stateBody(await store.clearPending(key))
     if (rest[0] === 'pending' && rest.length === 2) {
       const id = decodeURIComponent(rest[1]!)
-      if (method === 'PATCH') return editPending(id, body)
-      if (method === 'DELETE') return stateBody(state.removePending(id))
+      if (method === 'PATCH') return editPending(id, body, reader)
+      if (method === 'DELETE') return stateBody(await store.removePending(key, id))
     }
-    if (method === 'GET' && sub === 'review/body') return reviewBody()
-    if (method === 'POST' && sub === 'review') return submitReview(body)
+    if (method === 'GET' && sub === 'review/body') return reviewBody(reader)
+    if (method === 'POST' && sub === 'review') return submitReview(body, reader)
     throw notInViewer(rest[0] === 'chat' ? 'AI chat' : 'this')
   }
 
   /** One request, answered as the server would: JSON, or the error envelope. */
   async function handle(method: string, url: URL, body: unknown): Promise<ApiAnswer> {
     try {
-      state = deps.state(await login())
-      const answer = await route(method, url, body)
+      const answer = await route(method, url, body, await login())
       return answer instanceof Answer
         ? { status: answer.status, body: answer.body }
         : { status: 200, body: answer }
     } catch (err) {
-      if (err instanceof ViewerError) {
-        const error: ErrorEnvelope['error'] = { code: err.code, message: err.message }
-        if (err.hint !== undefined) error.hint = err.hint
-        return { status: err.status, body: { error } }
-      }
+      if (err instanceof AppError) return { status: err.status, body: err.toEnvelope() }
       const message = err instanceof Error ? err.message : String(err)
       if (!/HTTP 404/.test(message)) {
         return { status: 502, body: { error: { code: 'GITHUB_API_ERROR', message: githubMessage(err) } } }

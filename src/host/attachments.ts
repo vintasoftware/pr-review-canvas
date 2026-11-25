@@ -3,7 +3,7 @@
 import { readCanvasComment } from '../canvas/comment.js'
 import { createHash } from 'node:crypto'
 import { CanvasCommitTakenError, importCanvas } from '../canvas/import.js'
-import { type ParsedCanvasName, parseCanvasZipName } from '../canvas/name.js'
+import { namesAnotherPr, type ParsedCanvasName, parseCanvasZipName, rankCandidates } from '../canvas/name.js'
 import { CANVAS_ZIP_MAX_BYTES, hasZipMagic } from '../canvas/zip.js'
 import type { ImportResult, SharedCanvasInfo } from '../contract/api.js'
 import type { CommentsPayload } from '../contract/comments.js'
@@ -139,30 +139,6 @@ export async function keepTrustedCandidates(
     }
   }
   return { trusted, warnings }
-}
-
-/** True when the name names a pull request, and it is not the one being looked at. */
-function namesAnotherPr(c: AttachmentCandidate, prNumber: number): boolean {
-  return c.parsed.prNumber !== undefined && c.parsed.prNumber !== prNumber
-}
-
-/**
- * The canvas for this head wins, then one exported for this PR, then the one attached last. A name
- * that carries another pull request's number sorts below all of them: import refuses it, so it may
- * never take a place in the try budget from an attachment that could be used.
- */
-export function rankCandidates(
-  candidates: AttachmentCandidate[],
-  target: { headSha: string; prNumber: number }
-): AttachmentCandidate[] {
-  const shaPrefix = target.headSha.slice(0, 8)
-  const score = (c: AttachmentCandidate): number =>
-    namesAnotherPr(c, target.prNumber)
-      ? -1
-      : (c.parsed.shaPrefix === shaPrefix ? 2 : 0) + (c.parsed.prNumber === target.prNumber ? 1 : 0)
-  return [...candidates].sort(
-    (a, b) => score(b) - score(a) || b.postedAt.localeCompare(a.postedAt) || b.order - a.order
-  )
 }
 
 /** How many attachments one scan tries before it reports the best one as unusable. */

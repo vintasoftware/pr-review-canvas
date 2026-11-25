@@ -12,7 +12,8 @@ import { isTheme } from '../static/js/theme.js'
 import { authConfigFrom, configProblem, renderAccount, safeReturnTo } from './account.js'
 import { type Auth, createAuth } from './auth.js'
 import { type BrowserGithub, createBrowserGithub } from './github-client.js'
-import { createViewerState } from './review-state.js'
+import { createStateStore } from '../src/store/state-store.js'
+import { browserState } from './review-state.js'
 import { parseTarget } from './target.js'
 import { createViewerApi, type ViewerTarget } from './viewer-api.js'
 
@@ -169,6 +170,7 @@ async function main(): Promise<void> {
   const realFetch = window.fetch.bind(window)
   const config = authConfigFrom(import.meta.env)
   const auth = config === null ? null : createAuth(config)
+  // GitHub sends the code back to the viewer's own page, without its query.
   const redirectUri = `${location.origin}${location.pathname}`
   const notice = auth === null ? null : (configProblem(config!) ?? (await finishSignIn(auth, redirectUri)))
   /** Says a line in the account bar, once it is drawn. */
@@ -198,11 +200,9 @@ async function main(): Promise<void> {
     return
   }
 
-  const key = `github/${target.owner}/${target.repo}/${target.number}`.toLowerCase()
   const api = createViewerApi(target, {
     gh,
-    // Anonymous reading keeps the key it always had; each login gets its own.
-    state: reader => createViewerState(reader === null ? key : `${key}@${reader.toLowerCase()}`),
+    state: createStateStore(browserState(), () => new Date()),
     ...(config?.installUrl === undefined ? {} : { installUrl: config.installUrl }),
   })
   installApi(api.handle, realFetch)

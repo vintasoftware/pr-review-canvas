@@ -1,5 +1,11 @@
 import { SYNTHETIC_DIFF } from '../src/testing/synthetic.js'
-import { diffFromFiles, diffFromText, ghFiles, incompleteWarning, sameLoadedDiff } from './diff-fallback.js'
+import {
+  diffFromFiles,
+  diffFromText,
+  ghFiles,
+  incompleteWarning,
+  explainsLoadedHead,
+} from './diff-fallback.js'
 
 /** The files GitHub lists for the synthetic diff, as its pull request files API answers. */
 const LISTED = [
@@ -105,12 +111,12 @@ it('counts the files a full list could not hold', () => {
 
 it('calls two diffs the same only when neither left anything out', () => {
   const whole = diffFromText(SYNTHETIC_DIFF)
-  expect(sameLoadedDiff(whole, diffFromFiles(ghFiles(LISTED), LISTED.length))).toBe(true)
-  expect(sameLoadedDiff(whole, diffFromText(SYNTHETIC_DIFF.replace('const y = 2', 'const y = 3')))).toBe(
+  expect(explainsLoadedHead(whole, diffFromFiles(ghFiles(LISTED), LISTED.length))).toBe(true)
+  expect(explainsLoadedHead(whole, diffFromText(SYNTHETIC_DIFF.replace('const y = 2', 'const y = 3')))).toBe(
     false
   )
   const partial = diffFromFiles(ghFiles([...LISTED.slice(0, 4), { ...LISTED[0]!, patch: undefined }]), 5)
-  expect(sameLoadedDiff(partial, partial)).toBe(false)
+  expect(explainsLoadedHead(partial, partial)).toBe(false)
   expect(ghFiles([{ filename: 'x' }, null, 'y'])).toEqual([])
 })
 
@@ -140,7 +146,7 @@ it('leaves out a file whose name or patch could pose as another file, and says s
   expect(incompleteWarning(diff)).toContain(
     'The page left out 2 files whose names or patches hold line breaks'
   )
-  expect(sameLoadedDiff(diff, diff)).toBe(false)
+  expect(explainsLoadedHead(diff, diff)).toBe(false)
 })
 
 it('leaves out a file whose name would read back as another', () => {

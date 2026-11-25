@@ -10,6 +10,7 @@ import { extname, join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test as base, expect, type Page, type Route } from '@playwright/test'
 import { buildCanvasComment } from '../../src/canvas/comment.js'
+import { buildCanvasZipName } from '../../src/canvas/name.js'
 import { buildCanvasZip } from '../../src/canvas/zip.js'
 import type { CanvasManifest } from '../../src/contract/canvas-manifest.js'
 import { tallyCanvas } from '../../src/review/self-review.js'
@@ -119,7 +120,7 @@ export function canvasComment(opts: { login?: string; association?: string; id?:
   const m = manifest()
   const artifact = publishedSyntheticArtifact()
   const zip = {
-    name: 'pr-42-canvas.zip',
+    name: buildCanvasZipName({ repo: m.repo, headSha: m.headSha, generatedAt: m.generatedAt, prNumber: 42 }),
     headSha: m.headSha,
     prNumber: 42,
     bytes: buildCanvasZip(m, artifact),

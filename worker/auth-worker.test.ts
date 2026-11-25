@@ -146,3 +146,49 @@ it('says the client ID is unknown when GitHub answers 404', async () => {
   expect(res.status).toBe(400)
   expect(await res.json()).toEqual({ error: 'unknown_client' })
 })
+
+it.each([
+  ['an error code with odd characters', { error: 'bad code <x>' }, 'github_error'],
+  ['no access token', { token_type: 'bearer' }, 'github_error'],
+])('reads %s from GitHub as a GitHub error', async (_name, body, error) => {
+  const res = await handleAuth(post('/refresh', { refreshToken: 'ghr_refresh' }), env, github(body).fetchImpl)
+  expect(res.status).toBe(400)
+  expect(await res.json()).toEqual({ error })
+})
+
+it('keeps a token whose lifetimes GitHub left out as one that does not expire', async () => {
+  const res = await handleAuth(
+    post('/refresh', { refreshToken: 'ghr_refresh' }),
+    env,
+    github({ access_token: 'ghu_access', expires_in: -1 }).fetchImpl
+  )
+  expect(await res.json()).toEqual({
+    accessToken: 'ghu_access',
+    expiresIn: null,
+    refreshToken: null,
+    refreshTokenExpiresIn: null,
+  })
+})
+
+it('refuses a body that is not a JSON object, or a declared length over the limit', async () => {
+  const array = await handleAuth(post('/refresh', ['ghr_refresh']), env, github(TOKENS).fetchImpl)
+  expect(array.status).toBe(400)
+  const huge = new Request('https://auth.example.com/refresh', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: VIEWER, 'content-length': '999999' },
+    body: '{}',
+  })
+  expect((await handleAuth(huge, env, github(TOKENS).fetchImpl)).status).toBe(400)
+  const notJson = new Request('https://auth.example.com/refresh', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: VIEWER },
+    body: '{not json',
+  })
+  expect((await handleAuth(notJson, env, github(TOKENS).fetchImpl)).status).toBe(400)
+})
+
+it('answers 502 when GitHub sends something other than JSON', async () => {
+  const fetchImpl = (async () => new Response('<html>', { status: 200 })) as typeof fetch
+  const res = await handleAuth(post('/refresh', { refreshToken: 'ghr_refresh' }), env, fetchImpl)
+  expect(res.status).toBe(502)
+})

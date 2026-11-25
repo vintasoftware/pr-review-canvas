@@ -22,9 +22,16 @@ export default defineConfig({
     maxWorkers: '50%',
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts', 'src/git/**/*.mjs', 'static/js/**/*.js'],
+      include: ['src/**/*.ts', 'src/git/**/*.mjs', 'static/js/**/*.js', 'viewer/**/*.ts', 'worker/**/*.ts'],
       exclude: [
         'src/cli.ts',
+        // The viewer's entry and build shims, run by the Playwright specs in browser/viewer/.
+        'viewer/main.ts',
+        'viewer/node-stub.ts',
+        'viewer/zod-config.ts',
+        'viewer/**/*.d.ts',
+        'viewer/**/*.test.ts',
+        'worker/**/*.test.ts',
         'src/server/html.ts',
         'static/js/app.js',
         'static/vendor/**',

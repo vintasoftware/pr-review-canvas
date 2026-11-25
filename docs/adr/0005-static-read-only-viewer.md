@@ -88,9 +88,11 @@ place.
 
 Progress, dismissals, hidden threads, and the pending review live in `localStorage`, keyed by
 repository, pull request, and the signed-in GitHub login, so two accounts in one browser keep
-separate reviews. Review marks reset when a new canvas replaces the one they were made on, as they
-do locally. The state stays in that browser: moving between machines, or between the viewer and
-the local app, does not carry it.
+separate reviews. The viewer applies the local app's own state rules (`src/store/state-store.ts`)
+over that storage. One difference: when a new canvas replaces the one the marks were made on, the
+viewer starts the marks over, while the local app carries them along an incremental canvas's line
+of descent, which the viewer has no history to trace. The state stays in that browser: moving
+between machines, or between the viewer and the local app, does not carry it.
 
 Answers from the GitHub API are cached by ETag. Anonymous answers, which are public data, go in
 `sessionStorage`; answers fetched with a token stay in memory, so private code is never written to

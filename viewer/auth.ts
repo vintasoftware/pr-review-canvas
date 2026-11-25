@@ -151,11 +151,6 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
   }
 
   return {
-    /** The redirect URI GitHub sends the code to: the viewer's own page, without its query. */
-    redirectUri(location: { origin: string; pathname: string }): string {
-      return `${location.origin}${location.pathname}`
-    },
-
     /** Starts a sign-in: keeps its state and verifier, and returns GitHub's authorize URL. */
     async signInUrl(redirectUri: string, returnTo: string): Promise<string> {
       const state = base64Url(deps.randomBytes(24))

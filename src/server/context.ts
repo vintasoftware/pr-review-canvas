@@ -36,7 +36,7 @@ import type { LoadedProjectConfig } from '../project-config.js'
 import { type CanvasStore, createCanvasStore } from '../store/canvas-store.js'
 import { repoDir } from '../store/data-dir.js'
 import { createDerivedStore, type DerivedStore } from '../store/derived-store.js'
-import { createPrStore, type PrStore } from '../store/pr-store.js'
+import { createPrStore, type PrStore, stateFiles } from '../store/pr-store.js'
 import { createSettingsStore, type SettingsStore } from '../store/settings-store.js'
 import { createStateStore, type StateStore } from '../store/state-store.js'
 
@@ -130,7 +130,7 @@ export function createStores(dataDir: string, config: RuntimeConfig, git: Git, n
     canvases,
     derived: createDerivedStore(canvases, git, now),
     prs,
-    state: createStateStore(prs, now),
+    state: createStateStore(stateFiles(prs), now),
   }
 }
 

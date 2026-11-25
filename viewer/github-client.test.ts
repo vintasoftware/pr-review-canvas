@@ -157,3 +157,45 @@ it('posts as the signed-in reader, then asks GitHub again for what it kept', asy
   expect(await gh.api('repos/a/b/issues/1/comments')).toEqual([{ id: 1 }, { id: 2 }])
   expect(requests).toHaveLength(3)
 })
+
+it('asks GitHub now for a fresh read, however recent the kept answer, and revalidates with its ETag', async () => {
+  const { fetchImpl, requests } = scripted([json({ head: 'a' }), () => new Response(null, { status: 304 })])
+  const gh = createBrowserGithub({ fetchImpl, storage: null, now: () => 0 })
+  expect(await gh.api('repos/a/b/pulls/1')).toEqual({ head: 'a' })
+  expect(await gh.apiFresh('repos/a/b/pulls/1')).toEqual({ head: 'a' })
+  expect(requests).toHaveLength(2)
+  expect(requests[1]?.headers['if-none-match']).toBe('"v1"')
+})
+
+it("names the reader's own rate limit, keeps a refusal that is not JSON, and reports headers", async () => {
+  const { fetchImpl } = scripted([
+    () =>
+      new Response('{"message":"API rate limit exceeded"}', {
+        status: 429,
+        headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': 'soon' },
+      }),
+    () => new Response('<html>bad gateway</html>', { status: 502 }),
+    json([{ id: 1 }], { link: '<https://api.github.com/x?page=2>; rel="next"' }),
+  ])
+  const gh = createBrowserGithub({ fetchImpl, storage: null, token: () => Promise.resolve('ghu_1') })
+  await expect(gh.api('user')).rejects.toThrow(
+    /rate limit for your account is used up; it resets at within the hour/
+  )
+  await expect(gh.api('user')).rejects.toThrow(/HTTP 502: <html>bad gateway<\/html>/)
+  expect(await gh.apiWithHeaders('repos/a/b/pulls/1/comments')).toMatchObject({
+    status: 200,
+    headers: { link: '<https://api.github.com/x?page=2>; rel="next"' },
+    body: [{ id: 1 }],
+  })
+})
+
+it('refuses to post signed out, and reads an empty answer to a write as nothing', async () => {
+  const { fetchImpl, requests } = scripted([() => new Response(null, { status: 204 })])
+  await expect(createBrowserGithub({ fetchImpl, storage: null }).post('repos/a/b/x', {})).rejects.toThrow(
+    /HTTP 401: sign in with GitHub to post/
+  )
+  expect(requests).toHaveLength(0)
+  const gh = createBrowserGithub({ fetchImpl, storage: null, token: () => Promise.resolve('ghu_1') })
+  expect(await gh.post('repos/a/b/x', {}, 'DELETE')).toBeNull()
+  expect(await gh.authToken()).toBe('ghu_1')
+})

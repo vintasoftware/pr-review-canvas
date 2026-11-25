@@ -47,5 +47,5 @@ export function readCanvasComment(body: string): { name: string; bytes: Uint8Arr
   const name = match[1]!
   const encoded = match[2]!
   if (encoded.length > 1_000_000 || encoded.length % 4 !== 0) return null
-  return { name, bytes: Buffer.from(encoded, 'base64') }
+  return { name, bytes: Uint8Array.from(atob(encoded), c => c.charCodeAt(0)) }
 }

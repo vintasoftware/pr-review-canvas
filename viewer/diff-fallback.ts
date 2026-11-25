@@ -5,6 +5,7 @@
 // too large to diff, which comes with its line counts and no patch.
 import { parseUnifiedDiff, toFileEntry, toPatchMap } from '../src/git/diff-collector.js'
 import type { FileEntry } from '../src/contract/review-artifact.js'
+import { explainsHead } from '../static/js/diff-identity.js'
 
 /** The fields of one entry of GitHub's file lists the rebuild reads. */
 export interface GhFile {
@@ -22,8 +23,6 @@ export const COMPARE_FILES_MAX = 300
 
 /** What a diff is, however it came: the files and their patches, and what GitHub left out. */
 export interface LoadedDiff {
-  /** The diff as one text, so two diffs can be told apart. */
-  text: string
   files: FileEntry[]
   /** The patch of every file GitHub sent one for; a file left out has no key here. */
   patches: Record<string, string>
@@ -148,7 +147,7 @@ export function diffFromFiles(listed: readonly GhFile[], total: number | 'unknow
     return entry
   })
   const unlisted = total === 'unknown' ? 'unknown' : Math.max(0, total - listed.length)
-  return { text, files: entries, patches, missing, refused, unlisted }
+  return { files: entries, patches, missing, refused, unlisted }
 }
 
 /** Whether a file's block, parsed alone, is that one file under its own name and old name. */
@@ -167,7 +166,6 @@ function roundTrips(file: GhFile): boolean {
 export function diffFromText(text: string): LoadedDiff {
   const collected = parseUnifiedDiff(text)
   return {
-    text,
     files: collected.map(toFileEntry),
     patches: toPatchMap(collected),
     missing: [],
@@ -176,17 +174,13 @@ export function diffFromText(text: string): LoadedDiff {
   }
 }
 
-/** Whether two diffs are the same, as far as either says: one with files left out proves nothing. */
-export function sameLoadedDiff(a: LoadedDiff, b: LoadedDiff): boolean {
+/**
+ * Whether a canvas of the diff `canvas` explains the head's diff `head`, by the local app's rule
+ * (`explainsHead`). A diff GitHub sent only in part proves nothing, so it never does.
+ */
+export function explainsLoadedHead(canvas: LoadedDiff, head: LoadedDiff): boolean {
   const partial = (d: LoadedDiff) => d.missing.length > 0 || d.refused.length > 0 || d.unlisted !== 0
-  if (partial(a) || partial(b)) return false
-  const keys = Object.keys(a.patches)
-  return (
-    keys.length === Object.keys(b.patches).length &&
-    a.files.length === b.files.length &&
-    keys.every(key => a.patches[key] === b.patches[key]) &&
-    a.files.every((f, i) => f.path === b.files[i]?.path && f.status === b.files[i]?.status)
-  )
+  return !partial(canvas) && !partial(head) && explainsHead(canvas.patches, head.patches)
 }
 
 /** What the page says above a canvas whose diff GitHub sent only in part; null when it sent all. */

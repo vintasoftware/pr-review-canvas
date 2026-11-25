@@ -13,7 +13,7 @@ const tally = tallyCanvas(syntheticArtifact())
 it('round-trips binary bytes in one hidden comment and measures the complete body', () => {
   const body = buildCanvasComment(zip, tally, 65_536)
   expect(body).toContain('Run `pr-review serve`')
-  expect(readCanvasComment(body)).toEqual({ name: zip.name, bytes: Buffer.from(zip.bytes) })
+  expect(readCanvasComment(body)).toEqual({ name: zip.name, bytes: new Uint8Array(zip.bytes) })
   expect(buildCanvasComment(zip, tally, body.length)).toBe(body)
   expect(() => buildCanvasComment(zip, tally, body.length - 1)).toThrow(/host limit/)
 })
@@ -48,6 +48,6 @@ it("links the viewer's page for the pull request first, and keeps the local app 
   expect(body).toContain(
     '[Open the canvas in the viewer](https://example.com/tools/viewer/?pr=acme/widgets/42), nothing to install. Or run `pr-review serve` and open #42.'
   )
-  expect(readCanvasComment(body)).toEqual({ name: zip.name, bytes: Buffer.from(zip.bytes) })
+  expect(readCanvasComment(body)).toEqual({ name: zip.name, bytes: new Uint8Array(zip.bytes) })
   expect(buildCanvasComment(zip, tally, 65_536)).not.toContain('in the viewer')
 })

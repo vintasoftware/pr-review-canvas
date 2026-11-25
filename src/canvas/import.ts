@@ -6,6 +6,7 @@ import { type DiffedCommit, staleRelation, standsForHead } from '../review/carry
 import type { AppContext } from '../server/context.js'
 import { AppError } from '../server/errors.js'
 import { readsCanvas } from '../store/canvas-store.js'
+import { sameRepo } from './name.js'
 import { type CanvasZipContents, CanvasZipError, readCanvasZip } from './zip.js'
 
 export interface ImportOptions {
@@ -31,10 +32,6 @@ export interface ImportOptions {
  * pull request cannot read. Only an import with `discovered` raises it, and discovery reports it.
  */
 export class CanvasCommitTakenError extends Error {}
-
-function sameRepo(a: { owner: string; name: string }, b: { owner: string; name: string }): boolean {
-  return a.owner.toLowerCase() === b.owner.toLowerCase() && a.name.toLowerCase() === b.name.toLowerCase()
-}
 
 /** The zip error as the HTTP envelope the routes and the CLI both report. */
 export function toAppErrorFromZip(err: CanvasZipError): AppError {

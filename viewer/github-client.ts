@@ -13,6 +13,8 @@ export interface BrowserGithub extends HostClient {
   diff(owner: string, repo: string, base: string, head: string): Promise<string>
   /** Asks GitHub again on the next read of anything kept so far, as the page's refresh does. */
   refresh(): void
+  /** Like `api`, but asks GitHub now, however recent the answer kept for `path` is. */
+  apiFresh(path: string): Promise<unknown>
 }
 
 export interface BrowserGithubOptions {
@@ -129,12 +131,16 @@ export function createBrowserGithub(opts: BrowserGithubOptions = {}) {
     return apiError(path, res, body, token !== null)
   }
 
-  async function get(path: string, accept: string): Promise<{ res: Response | null; body: string }> {
+  async function get(
+    path: string,
+    accept: string,
+    fresh = false
+  ): Promise<{ res: Response | null; body: string }> {
     const url = `${GITHUB_API}/${path.replace(/^\//, '')}`
     const cacheKey = `${accept} ${url}`
     const { headers, cache, token } = await session(accept)
     const cached = cache.get(cacheKey)
-    if (cached !== null && cached.at > refreshedAt && now() - cached.at < FRESH_MS) {
+    if (!fresh && cached !== null && cached.at > refreshedAt && now() - cached.at < FRESH_MS) {
       return { res: null, body: cached.body }
     }
     if (cached !== null) headers['if-none-match'] = cached.etag
@@ -218,6 +224,10 @@ export function createBrowserGithub(opts: BrowserGithubOptions = {}) {
     },
     refresh() {
       refreshedAt = now()
+    },
+    async apiFresh(path) {
+      const { body } = await get(path, 'application/vnd.github+json', true)
+      return JSON.parse(body) as unknown
     },
   }
   return client

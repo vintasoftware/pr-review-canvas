@@ -465,8 +465,10 @@ export class PrAppElement extends HTMLElement {
       }
       // A reviewer's page follows the author's resolutions while it stays open. The author's own
       // page has them from the server's answer to each settlement.
+      // The hosted viewer has no settle route to ask.
       if (
         typeof boot.prNumber === 'number' &&
+        boot.viewer !== true &&
         bundle.status === 'ready' &&
         !bundle.selfReview &&
         bundle.canvas
@@ -735,7 +737,9 @@ export class PrAppElement extends HTMLElement {
    */
   startPolling(until) {
     const boot = this.bootstrap
-    if (!boot) {
+    // The hosted viewer reads GitHub again only when the reader refreshes, so asking it on a timer
+    // would only spend the reader's rate limit on the same answer.
+    if (!boot || boot.viewer === true) {
       return
     }
     this.stopPolling()

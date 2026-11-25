@@ -176,5 +176,30 @@ it('leaves an ordinary page load alone', async () => {
   expect(await s.auth.completeSignIn(new URL(`${REDIRECT}?pr=acme/widgets/42`), REDIRECT)).toEqual({
     status: 'none',
   })
-  expect(s.auth.redirectUri({ origin: 'https://viewer.example.com', pathname: '/' })).toBe(REDIRECT)
+})
+
+it('words a Worker that cannot be reached, answers without an error code, or sends no token', async () => {
+  const s = setup({
+    '/token': [
+      { status: 500, body: 'oops' },
+      { status: 200, body: { tokenType: 'bearer' } },
+    ],
+  })
+  expect((await signIn(s)).result).toMatchObject({
+    error: 'GitHub sign-in failed: the sign-in service answered 500',
+  })
+  expect((await signIn(s)).result).toMatchObject({
+    error: 'GitHub sign-in failed: the sign-in service sent no token',
+  })
+  // The queue is empty now, so the fetch itself fails.
+  expect((await signIn(s)).result).toMatchObject({
+    error: 'GitHub sign-in failed: the sign-in service could not be reached',
+  })
+})
+
+it('keeps a token GitHub issued without an expiry until sign-out', async () => {
+  const s = setup({ '/token': [{ status: 200, body: { accessToken: 'ghu_forever' } }] })
+  await signIn(s)
+  s.advance(365 * 24 * 60 * 60 * 1000)
+  expect(await s.auth.token()).toBe('ghu_forever')
 })
