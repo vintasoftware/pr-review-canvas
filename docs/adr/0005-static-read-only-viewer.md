@@ -10,6 +10,10 @@ host's API, and keeps review state in the browser. Reviewers open a URL and sign
 GitLab. Authors still generate and publish with the CLI, and the local app keeps every feature it
 has now.
 
+The first version reads GitHub only. This record describes GitLab too, so that the design covers
+both hosts, but GitLab sign-in, its diff, and its comments are not built yet. Until they are, a
+GitLab merge request's canvas comment does not link the viewer.
+
 This narrows ADR 0001. The public website and the local app stay separate. The viewer is a third
 piece: it shows real canvases of real pull requests but never runs an AI agent.
 
@@ -55,16 +59,19 @@ Those controls are hidden in the viewer, with a short note pointing to the local
 
 ### Canvas
 
-The viewer lists the pull request's comments, picks the newest canvas comment, and decodes it with
-the existing envelope (`<!-- pr-review-canvas:v1`) and `readCanvasZip`. The checks are the same ones
-the local import runs, so a canvas the CLI rejects is rejected here too. With no canvas comment, the
-page says so and links to the setup docs.
+The viewer lists the pull request's comments and picks a canvas comment the way the local app picks
+among canvases it finds (`rankCandidates`): a canvas of the pull request's head first, then one
+exported for this pull request, then any other, and a canvas named for another pull request last;
+the newer comment wins a tie. It decodes the chosen comment with the existing envelope
+(`<!-- pr-review-canvas:v1`) and `readCanvasZip`, and moves on to the next one if that fails. The
+checks are the same ones the local import runs, so a canvas the CLI rejects is rejected here too.
+With no canvas comment, the page says so and links to the setup docs.
 
-Anyone can comment on a public pull request, and the viewer's link always opens the newest canvas,
-so a stranger could otherwise post a forged canvas that every reviewer then reads. The viewer takes
-a canvas comment only from the pull request's author or from someone GitHub reports as an owner,
-member, or collaborator of the repository (the comment's `author_association`). It skips any other
-canvas comment and names its author in a warning on the page.
+Anyone can comment on a public pull request, and between two canvases of the same head the viewer
+opens the newer one, so a stranger could otherwise post a forged canvas that every reviewer then
+reads. The viewer takes a canvas comment only from the pull request's author or from someone GitHub
+reports as an owner, member, or collaborator of the repository (the comment's `author_association`).
+It skips any other canvas comment and names its author in a warning on the page.
 
 ### Diff
 
@@ -130,9 +137,9 @@ the viewer uses (pull requests read and write, contents read, metadata read), an
 expire after eight hours. The cost is that an organization admin has to install the app before its
 members can open private pull requests.
 
-GitLab.com supports the authorization-code flow with PKCE for public applications, with no secret,
-so GitLab sign-in runs entirely in the browser and does not use the Worker. A self-managed GitLab
-instance needs its own application registered there. The viewer takes the instance URL and
+GitLab sign-in is not built yet. GitLab.com supports the authorization-code flow with PKCE for
+public applications, with no secret, so GitLab sign-in will run entirely in the browser and does not use the Worker. A self-managed GitLab
+instance needs its own application registered there, so the viewer will take the instance URL and
 application ID as settings.
 
 The token lives in memory and `sessionStorage`, never in `localStorage` or IndexedDB, so it ends
