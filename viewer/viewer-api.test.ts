@@ -43,7 +43,7 @@ function manifest(over: Partial<CanvasManifest> = {}): CanvasManifest {
 function canvasComment(m: CanvasManifest, id = 3001) {
   const artifact = {
     ...publishedSyntheticArtifact(),
-    pr: { ...publishedSyntheticArtifact().pr, headSha: m.headSha },
+    pr: { ...publishedSyntheticArtifact().pr, headSha: m.headSha, number: m.prNumber ?? 42 },
   }
   const bytes = buildCanvasZip(m, artifact)
   // Named for acme/widgets, as discovery requires, whatever repository the manifest names.
@@ -237,7 +237,7 @@ it('does not carry an older canvas over when both diffs are empty, as the local 
 })
 
 it("shows the head's own canvas from another base as ready when the diff is the same, not carried over", async () => {
-  const otherBase = 'b'.repeat(40)
+  const otherBase = '9'.repeat(40)
   const { call } = viewer({
     comments: [canvasComment(manifest({ mergeBaseSha: otherBase }))],
     diffs: { [`${otherBase}...${HEAD_SHA}`]: SYNTHETIC_DIFF },
@@ -765,4 +765,167 @@ it('reports a diff GitHub refuses for another reason than size as its error', as
     status: 502,
     body: { error: { code: 'GITHUB_API_ERROR', message: 'HTTP 500: boom' } },
   })
+})
+
+it('refuses a review on an outdated canvas, which posting is off for on the page', async () => {
+  const { call, posts } = signedInViewer(
+    { 'repos/acme/widgets/pulls/42/reviews': { id: 7004, state: 'APPROVED', html_url: 'x' } },
+    {
+      comments: [canvasComment(manifest({ headSha: OLD_HEAD }))],
+      diffs: { [`${BASE_SHA}...${OLD_HEAD}`]: SYNTHETIC_DIFF.replace('+  const y = 2', '+  const y = 3') },
+      routes: { [`repos/acme/widgets/compare/${OLD_HEAD}...${HEAD_SHA}`]: { status: 'ahead', ahead_by: 1 } },
+    }
+  )
+  expect(((await call('GET', '/api/prs/42')).body as PrBundle).status).toBe('stale')
+  for (const event of ['APPROVE', 'COMMENT']) {
+    expect(await call('POST', '/api/prs/42/review', { event, body: 'ok' })).toMatchObject({
+      status: 409,
+      body: { error: { code: 'SIGNOFF_INCOMPLETE' } },
+    })
+  }
+  expect((await call('GET', '/api/prs/42/review/body')).status).toBe(409)
+  expect(posts).toEqual([])
+})
+
+it('skips a canvas comment exported for another pull request', async () => {
+  const { call } = viewer({ comments: [canvasComment(manifest({ prNumber: 7 }), 3011)] })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  expect(bundle.status).toBe('missing')
+  expect(bundle.warnings).toContain(
+    'the canvas comment at https://github.com/acme/widgets/pull/42#issuecomment-3011 is for #7; skipped'
+  )
+})
+
+it('carries over a canvas of a commit the head was not built on, without counting commits', async () => {
+  const { call } = viewer({
+    comments: [canvasComment(manifest({ headSha: OLD_HEAD }))],
+    diffs: { [`${BASE_SHA}...${OLD_HEAD}`]: SYNTHETIC_DIFF },
+    routes: { [`repos/acme/widgets/compare/${OLD_HEAD}...${HEAD_SHA}`]: { status: 'diverged', ahead_by: 1 } },
+  })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  expect(bundle.status).toBe('ready')
+  expect(bundle.carriedOver).toEqual({ canvasHeadSha: OLD_HEAD, currentHeadSha: HEAD_SHA })
+})
+
+it('names the app permission when GitHub refuses the review', async () => {
+  const { call } = signedInViewer({
+    'repos/acme/widgets/pulls/42/reviews': new Error('HTTP 403: Resource not accessible by integration'),
+  })
+  await call('GET', '/api/prs/42')
+  expect(await call('POST', '/api/prs/42/review', { event: 'COMMENT', body: 'ok' })).toMatchObject({
+    status: 403,
+    body: {
+      error: { code: 'COMMENT_FORBIDDEN', hint: expect.stringContaining('Pull requests: read and write') },
+    },
+  })
+})
+
+it('answers the read routes the page polls on demand, and refuses a path outside the API', async () => {
+  const { call, calls } = signedInViewer()
+  expect((await call('GET', '/api/prs/42/capabilities')).body).toMatchObject({ login: 'reviewer' })
+  expect((await call('GET', '/api/prs/42/chat/threads')).body).toEqual({ threads: [] })
+  const comments = (await call('GET', '/api/prs/42/comments')).body as { issueComments: unknown[] }
+  expect(comments.issueComments.length).toBeGreaterThan(0)
+  expect(calls).toContain('refresh')
+  expect(await call('GET', '/elsewhere')).toMatchObject({
+    status: 404,
+    body: { error: { code: 'NOT_FOUND' } },
+  })
+  await call('PUT', '/api/prs/42/points/fp-2/dismissed', { dismissed: true })
+  const { state } = (await call('GET', '/api/prs/42/state')).body as StateResponse
+  expect(state.dismissed['fp-2']).toEqual({ at: now().toISOString() })
+})
+
+it('records the chat proposal an inline comment came from, and signs a review with no body of its own', async () => {
+  const { call, posts } = signedInViewer({
+    'repos/acme/widgets/pulls/42/comments': GH_POSTED_INLINE,
+    'repos/acme/widgets/pulls/42/reviews': { id: 7005, state: 'COMMENTED', html_url: 'x' },
+  })
+  await call('GET', '/api/prs/42')
+  const inline = {
+    kind: 'inline',
+    path: 'src/app.ts',
+    line: 2,
+    side: 'new',
+    body: 'b?',
+    proposalFingerprint: 'pr-1',
+  }
+  const posted = (await call('POST', '/api/prs/42/comments', inline)).body as {
+    state: StateResponse['state']
+  }
+  expect(posted.state.posted).toEqual([
+    expect.objectContaining({ commentId: 5001, proposalFingerprint: 'pr-1' }),
+  ])
+  expect((await call('POST', '/api/prs/42/review', { event: 'COMMENT' })).status).toBe(201)
+  expect(String((posts.at(-1)!.body as { body: string }).body)).toContain(VIEWER_REVIEW_BODY_FOOTER)
+})
+
+it('diffs a merged pull request from its base branch when GitHub names no parent of the merge', async () => {
+  const merge = 'd'.repeat(40)
+  const { call, calls } = viewer({
+    routes: {
+      'repos/acme/widgets/pulls/42': { ...GH_PULL, state: 'closed', merged: true, merge_commit_sha: merge },
+      [`repos/acme/widgets/commits/${merge}`]: { parents: [] },
+    },
+  })
+  expect(((await call('GET', '/api/prs/42')).body as PrBundle).pr.state).toBe('merged')
+  expect(calls).toContain(`repos/acme/widgets/compare/main...${HEAD_SHA}`)
+})
+
+it("marks the head's own canvas from another base outdated when the diff differs, naming both bases", async () => {
+  const otherBase = '9'.repeat(40)
+  const { call } = viewer({
+    comments: [canvasComment(manifest({ mergeBaseSha: otherBase }))],
+    diffs: { [`${otherBase}...${HEAD_SHA}`]: SYNTHETIC_DIFF.replace('+  const y = 2', '+  const y = 3') },
+  })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  expect(bundle.status).toBe('stale')
+  expect(bundle.stale).toEqual({
+    canvasHeadSha: HEAD_SHA,
+    currentHeadSha: HEAD_SHA,
+    relation: 'other-base',
+    canvasMergeBaseSha: otherBase,
+    currentMergeBaseSha: BASE_SHA,
+  })
+  expect(bundle.skillCommand).toContain('--force')
+})
+
+it('reads as anonymous when GitHub names no login for the token', async () => {
+  const { call } = viewer({ signedIn: true, routes: { user: {} } })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  expect(bundle.capabilities).toMatchObject({ login: null, canComment: false })
+})
+
+it('rebuilds an older canvas from a full comparison list, saying files past it may be missing', async () => {
+  const tooSlow = new Error('HTTP 422: The diff is taking too long to generate.')
+  const files = Array.from({ length: 300 }, (_v, i) => ({
+    filename: `src/f${i}.ts`,
+    status: 'added',
+    additions: 1,
+    deletions: 0,
+    patch: '@@ -0,0 +1,1 @@\n+x',
+  }))
+  const { call } = viewer({
+    comments: [canvasComment(manifest({ headSha: OLD_HEAD }))],
+    diffs: { [`${BASE_SHA}...${OLD_HEAD}`]: tooSlow },
+    routes: {
+      [`repos/acme/widgets/compare/${BASE_SHA}...${OLD_HEAD}`]: { files },
+      [`repos/acme/widgets/compare/${OLD_HEAD}...${HEAD_SHA}`]: { status: 'ahead', ahead_by: 1 },
+    },
+  })
+  const bundle = (await call('GET', '/api/prs/42')).body as PrBundle
+  expect(bundle.files).toHaveLength(300)
+  expect(bundle.warnings.join('\n')).toContain('GitHub lists at most 300 files of a comparison this large')
+})
+
+it("serves the head's patches beside an outdated canvas's own", async () => {
+  const { call } = viewer({
+    comments: [canvasComment(manifest({ headSha: OLD_HEAD }))],
+    diffs: { [`${BASE_SHA}...${OLD_HEAD}`]: SYNTHETIC_DIFF.replace('+  const y = 2', '+  const y = 3') },
+    routes: { [`repos/acme/widgets/compare/${OLD_HEAD}...${HEAD_SHA}`]: { status: 'ahead', ahead_by: 1 } },
+  })
+  const head = (await call('GET', `/api/prs/42/patches?headSha=${HEAD_SHA}`)).body as {
+    patches: Record<string, string>
+  }
+  expect(Object.values(head.patches).join('\n')).toContain('const y = 2')
 })

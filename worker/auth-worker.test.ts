@@ -192,3 +192,20 @@ it('answers 502 when GitHub sends something other than JSON', async () => {
   const res = await handleAuth(post('/refresh', { refreshToken: 'ghr_refresh' }), env, fetchImpl)
   expect(res.status).toBe(502)
 })
+
+it('refuses a request with no content type, and a code exchange that names no redirect', async () => {
+  const bare = new Request('https://auth.example.com/token', {
+    method: 'POST',
+    headers: { origin: VIEWER },
+    body: new TextEncoder().encode('{}'),
+  })
+  expect((await handleAuth(bare, env, github(TOKENS).fetchImpl)).status).toBe(415)
+  const gh = github(TOKENS)
+  const noRedirect = await handleAuth(
+    post('/token', { code: 'abc123', codeVerifier: 'v'.repeat(64) }),
+    env,
+    gh.fetchImpl
+  )
+  expect(noRedirect.status).toBe(400)
+  expect(gh.sent).toEqual([])
+})

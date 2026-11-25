@@ -199,3 +199,34 @@ it('refuses to post signed out, and reads an empty answer to a write as nothing'
   expect(await gh.post('repos/a/b/x', {}, 'DELETE')).toBeNull()
   expect(await gh.authToken()).toBe('ghu_1')
 })
+
+it('keeps anonymous answers across pages in the tab storage, and ignores one it cannot read', async () => {
+  const stored = new Map<string, string>()
+  const storage = {
+    getItem: (k: string) => stored.get(k) ?? null,
+    setItem: (k: string, v: string) => void stored.set(k, v),
+  } as unknown as Storage
+  const { fetchImpl, requests } = scripted([json({ n: 1 }), json({ n: 2 })])
+  expect(
+    await createBrowserGithub({ fetchImpl, storage, now: () => 0 }).api('repos/a/b', { page: '1' })
+  ).toEqual({ n: 1 })
+  const later = createBrowserGithub({ fetchImpl, storage, now: () => 0 })
+  expect(await later.apiWithHeaders('repos/a/b?page=1')).toMatchObject({ status: 200, body: { n: 1 } })
+  expect(requests).toHaveLength(1)
+  expect(requests[0]?.url).toBe('https://api.github.com/repos/a/b?page=1')
+  for (const key of stored.keys()) stored.set(key, '{not json')
+  expect(
+    await createBrowserGithub({ fetchImpl, storage, now: () => 0 }).api('repos/a/b', { page: '1' })
+  ).toEqual({ n: 2 })
+  expect(await later.authStatus()).toMatchObject({ authenticated: false, detail: 'anonymous' })
+})
+
+it('reports a refused write and a refused GraphQL request with GitHub status', async () => {
+  const { fetchImpl } = scripted([
+    () => new Response('{"message":"Validation Failed"}', { status: 422 }),
+    () => new Response('{"message":"Bad gateway"}', { status: 502 }),
+  ])
+  const gh = createBrowserGithub({ fetchImpl, storage: null, token: () => Promise.resolve('ghu_1') })
+  await expect(gh.post('repos/a/b/pulls/1/comments', {})).rejects.toThrow(/HTTP 422: Validation Failed/)
+  await expect(gh.graphql('query { viewer { login } }', {})).rejects.toThrow(/HTTP 502: Bad gateway/)
+})

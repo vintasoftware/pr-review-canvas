@@ -156,3 +156,16 @@ it('leaves out a file whose name would read back as another', () => {
   expect(diff.files.map(f => f.path)).toEqual(['src/new.ts'])
   expect(diff.refused).toEqual([' src/app.ts ', 'x b/src/app.ts'])
 })
+
+it('names at most five files in each part of the warning, and counts one unlisted file as one', () => {
+  const names = Array.from({ length: 7 }, (_v, i) => `f${i}.ts`)
+  const diff = { files: [], patches: {}, missing: names, refused: names, unlisted: 1 }
+  const warning = incompleteWarning(diff)!
+  expect(warning).toContain('7 files too large to diff (f0.ts, f1.ts, f2.ts, f3.ts, f4.ts, and 2 more)')
+  expect(warning).toContain('left out 7 files whose names or patches hold')
+  expect(warning).toContain('so 1 file is not shown')
+  const one = incompleteWarning({ files: [], patches: {}, missing: [], refused: ['x'], unlisted: 0 })!
+  expect(one).toContain(
+    'left out 1 file whose name or patch holds line breaks or other control characters, which could pass for other files (x)'
+  )
+})
