@@ -126,6 +126,30 @@ it('signs out when a refresh fails, since a refresh token works once', async () 
   expect(lost).toBe(1)
 })
 
+it('keeps the session when the sign-in service cannot be reached, and retries the refresh', async () => {
+  const refreshes: Array<{ status: number; body: unknown }> = []
+  const s = setup({ '/token': [{ status: 200, body: TOKENS }], '/refresh': refreshes })
+  await signIn(s)
+  let lost = 0
+  s.auth.onLost(() => lost++)
+  // Inside the refresh margin, the unexpired access token still serves while the Worker is away.
+  s.advance(28800 * 1000 - 30_000)
+  expect(await s.auth.token()).toBe('ghu_1')
+  // Past its expiry, nothing serves, but the session waits for the Worker to come back.
+  s.advance(60_000)
+  expect(await s.auth.token()).toBeNull()
+  expect(s.auth.signedIn()).toBe(true)
+  expect(lost).toBe(0)
+  refreshes.push({ status: 200, body: { ...TOKENS, accessToken: 'ghu_2', refreshToken: 'ghr_2' } })
+  expect(await s.auth.token()).toBe('ghu_2')
+  // Every attempt sent the same refresh token: the failed ones never reached the Worker.
+  expect(s.sent.filter(r => r.url.endsWith('/refresh')).map(r => r.body)).toEqual([
+    { refreshToken: 'ghr_1' },
+    { refreshToken: 'ghr_1' },
+    { refreshToken: 'ghr_1' },
+  ])
+})
+
 it('ends a session whose refresh token expired, and says the sign-in was lost', async () => {
   const s = setup({ '/token': [{ status: 200, body: TOKENS }] })
   await signIn(s)

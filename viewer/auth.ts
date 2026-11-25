@@ -37,6 +37,8 @@ const PENDING_MS = 10 * 60 * 1000
 /** A token this close to expiring is refreshed before use. */
 const REFRESH_MARGIN_MS = 60 * 1000
 const AUTHORIZE_URL = 'https://github.com/login/oauth/authorize'
+/** What postWorker returns when the request never reached the Worker, so it spent nothing. */
+const UNREACHABLE = 'the sign-in service could not be reached'
 
 export interface AuthDeps {
   storage: Storage | null
@@ -124,7 +126,7 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
         body: JSON.stringify(body),
       })
     } catch {
-      return 'the sign-in service could not be reached'
+      return UNREACHABLE
     }
     const answer: unknown = await res.json().catch(() => null)
     if (!res.ok) {
@@ -141,7 +143,12 @@ export function createAuth(config: AuthConfig, deps: AuthDeps = browserDeps()) {
       current.refreshExpiresAt !== null && current.refreshExpiresAt <= deps.now()
         ? 'the refresh token expired'
         : await postWorker('/refresh', { refreshToken: current.refreshToken })
-    // A refresh token works once: a failed refresh leaves nothing to retry with.
+    if (next === UNREACHABLE) {
+      // The refresh token never left the page, so it still works: keep the session for the next
+      // request to retry, and use the access token meanwhile while GitHub still takes it.
+      return current.expiresAt !== null && current.expiresAt > deps.now() ? current : null
+    }
+    // A refresh token works once: a refresh the Worker refused leaves nothing to retry with.
     save(typeof next === 'string' ? null : next)
     if (typeof next === 'string') {
       for (const listener of lost) listener()
