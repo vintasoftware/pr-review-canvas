@@ -377,7 +377,7 @@ export function publishedSyntheticArtifact(): ReviewArtifact {
 /** A clone that holds PR #42: the head and base refs, the diff between them, and the file blobs. */
 export function gitFor42(): FakeGit {
   return createFakeGit({
-    refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, 'feat/b': HEAD_SHA },
+    refs: { 'refs/pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, 'feat/b': HEAD_SHA },
     mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA, [`main..${HEAD_SHA}`]: BASE_SHA },
     diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF },
     blobs: SYNTHETIC_BLOBS,

@@ -71,7 +71,7 @@ function artifactFor(headSha: string): ReviewArtifact {
  */
 function gitWithMerge(extra: FakeGitOptions = {}) {
   return createFakeGit({
-    refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, old: OLD_SHA },
+    refs: { 'refs/pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, old: OLD_SHA },
     mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA, [`${BASE_SHA}..${OLD_SHA}`]: BASE_SHA },
     diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF, [`${BASE_SHA}..${OLD_SHA}`]: SYNTHETIC_DIFF },
     blobs: SYNTHETIC_BLOBS,
@@ -124,7 +124,7 @@ async function bundle(refresh = false): Promise<PrBundle> {
 /** The pull request moved on to `sha`, `behind` commits past OLD_SHA, again with the identical diff. */
 function headMovedTo(sha: string, behind = 5): void {
   moveFakeHead(git, {
-    headRef: 'pull/42/head',
+    headRef: 'refs/pull/42/head',
     baseRef: 'refs/pr/42/base',
     headSha: sha,
     mergeBaseSha: BASE_SHA,
@@ -140,7 +140,7 @@ function headMovedTo(sha: string, behind = 5): void {
  */
 function baseAdvancedTo(sha: string, diff: string): void {
   moveFakeHead(git, {
-    headRef: 'pull/42/head',
+    headRef: 'refs/pull/42/head',
     baseRef: 'refs/pr/42/base',
     headSha: HEAD_SHA,
     mergeBaseSha: sha,
@@ -273,7 +273,7 @@ describe('a canvas whose head moved on with the identical diff', () => {
     expect((await load()).status).toBe('ready')
     const pushed = 'c'.repeat(40)
     moveFakeHead(git, {
-      headRef: 'pull/42/head',
+      headRef: 'refs/pull/42/head',
       baseRef: 'refs/pr/42/base',
       headSha: pushed,
       mergeBaseSha: BASE_SHA,
@@ -405,7 +405,7 @@ describe('a pull request moved to another base under the same head', () => {
   function retargeted(): void {
     Object.assign(git.options.refs ?? {}, { 'refs/heads/release': RELEASE })
     moveFakeHead(git, {
-      headRef: 'pull/42/head',
+      headRef: 'refs/pull/42/head',
       baseRef: 'refs/pr/42/base',
       headSha: HEAD_SHA,
       mergeBaseSha: RELEASE,
@@ -585,7 +585,7 @@ describe('the chat after the head moved', () => {
     // The older commit is not in the clone, so its diff cannot be rebuilt.
     await withOldCanvas({
       keepForIdenticalDiff: false,
-      git: { refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA } },
+      git: { refs: { 'refs/pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA } },
     })
     await bundle()
     const res = await sendChat()

@@ -62,7 +62,11 @@ export interface Host {
   /** `pull request` or `merge request`, and its abbreviation. */
   noun: string
   nounShort: string
-  /** The remote ref that holds a review's head, fetched into the same local ref for both hosts. */
+  /**
+   * The remote ref that holds a review's head, fetched into the same local ref for both hosts.
+   * It starts with `refs/`: under `fetch.prune`, git deletes the local ref of a refspec whose
+   * source is not a full remote ref name, so every other fetch would lose the head.
+   */
   remoteHeadRef(number: number): string
   compareUrl(repo: Repo, base: string, head: string): string
   fetchPrMeta(client: HostClient, repo: Repo, number: number): Promise<PrMeta>
@@ -116,7 +120,7 @@ export const GITHUB_HOST: Host = {
   webBase: 'https://github.com',
   noun: 'pull request',
   nounShort: 'PR',
-  remoteHeadRef: number => `pull/${number}/head`,
+  remoteHeadRef: number => `refs/pull/${number}/head`,
   compareUrl: (repo, base, head) => `https://github.com/${repo.owner}/${repo.name}/compare/${base}...${head}`,
   fetchPrMeta,
   findOpenPr: findOpenPull,
@@ -143,7 +147,7 @@ export function gitlabHost(hostname: string): Host {
     webBase,
     noun: 'merge request',
     nounShort: 'MR',
-    remoteHeadRef: number => `merge-requests/${number}/head`,
+    remoteHeadRef: number => `refs/merge-requests/${number}/head`,
     compareUrl: (repo, base, head) => `${webBase}/${repo.owner}/${repo.name}/-/compare/${base}...${head}`,
     fetchPrMeta: fetchMrMeta,
     findOpenPr: findOpenMr,

@@ -78,7 +78,7 @@ const OLD_DIFF = [
 /** PR #42 whose head is HEAD_SHA, with OLD_SHA one commit behind it. */
 function gitWithHistory(extra: FakeGitOptions = {}) {
   return createFakeGit({
-    refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, old: OLD_SHA },
+    refs: { 'refs/pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, old: OLD_SHA },
     mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA, [`${BASE_SHA}..${OLD_SHA}`]: BASE_SHA },
     diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF, [`${BASE_SHA}..${OLD_SHA}`]: OLD_DIFF },
     blobs: SYNTHETIC_BLOBS,
@@ -337,7 +337,7 @@ describe('transfer routes', () => {
     it('keeps an imported stale canvas readable when its commits are absent from the clone', async () => {
       t = await makeTestContext({
         git: gitWithHistory({
-          refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA },
+          refs: { 'refs/pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA },
           ancestors: {},
         }),
         gh: createFakeGh(ghWithBody('no attachment here')),
@@ -528,7 +528,11 @@ describe('transfer routes', () => {
         options.graphql = Array.from({ length: 12 }, () => GH_THREADS_PAGE)
         t = await makeTestContext({
           git: gitWithHistory({
-            refs: { 'pull/42/head': HEAD_SHA, 'pull/99/head': HEAD_SHA, 'refs/heads/main': BASE_SHA },
+            refs: {
+              'refs/pull/42/head': HEAD_SHA,
+              'refs/pull/99/head': HEAD_SHA,
+              'refs/heads/main': BASE_SHA,
+            },
             mergeBases: {
               [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA,
               [`refs/pr/99/base..${HEAD_SHA}`]: BASE_SHA,

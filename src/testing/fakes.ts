@@ -202,7 +202,7 @@ export function createFakeGit(options: FakeGitOptions = {}): FakeGit {
 
 /** A push that moved a fake pull request's head, as `moveFakeHead` applies it. */
 export interface FakeHeadMove {
-  /** The ref the head is read from, e.g. `pull/42/head`. */
+  /** The ref the head is read from, e.g. `refs/pull/42/head`. */
   headRef: string
   /** The ref the merge base is computed against, e.g. `refs/pr/42/base`. */
   baseRef: string

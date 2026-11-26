@@ -291,7 +291,7 @@ describe('settling an attention point', () => {
     t = await makeTestContext({ git, gh: gh() })
     await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), MANIFEST, 42)
     moveFakeHead(git, {
-      headRef: 'pull/42/head',
+      headRef: 'refs/pull/42/head',
       baseRef: 'refs/pr/42/base',
       headSha: 'c'.repeat(40),
       mergeBaseSha: BASE_SHA,
@@ -397,7 +397,7 @@ describe('the bundle', () => {
     t = await makeTestContext({ git, gh: gh({ routes: { user: ghJson({ login: 'octocat' }) } }) })
     await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), MANIFEST, 42)
     moveFakeHead(git, {
-      headRef: 'pull/42/head',
+      headRef: 'refs/pull/42/head',
       baseRef: 'refs/pr/42/base',
       headSha: 'c'.repeat(40),
       mergeBaseSha: BASE_SHA,
@@ -421,7 +421,7 @@ describe('the bundle', () => {
     t = await makeTestContext({ git, gh: gh({ routes: { user: ghJson({ login: 'octocat' }) } }) })
     await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), MANIFEST, 42)
     moveFakeHead(git, {
-      headRef: 'pull/42/head',
+      headRef: 'refs/pull/42/head',
       baseRef: 'refs/pr/42/base',
       headSha: 'c'.repeat(40),
       mergeBaseSha: BASE_SHA,
@@ -552,7 +552,7 @@ it('keeps legacy generated-point identity and resolutions through two incrementa
     for (const sha of ['c'.repeat(40), 'd'.repeat(40)]) {
       now = new Date(now.getTime() + 1000)
       moveFakeHead(clone, {
-        headRef: 'pull/42/head',
+        headRef: 'refs/pull/42/head',
         baseRef: 'refs/pr/42/base',
         headSha: sha,
         mergeBaseSha: BASE_SHA,

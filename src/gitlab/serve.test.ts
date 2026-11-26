@@ -118,7 +118,7 @@ function glabFor42() {
 /** The clone's view of MR 42, with its head fetched at `headSha`. */
 function gitForMr42(headSha = HEAD_SHA) {
   return createFakeGit({
-    refs: { 'merge-requests/42/head': headSha, 'refs/heads/main': BASE_SHA, main: BASE_SHA },
+    refs: { 'refs/merge-requests/42/head': headSha, 'refs/heads/main': BASE_SHA, main: BASE_SHA },
     mergeBases: { [`refs/pr/42/base..${headSha}`]: BASE_SHA },
     diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: SYNTHETIC_DIFF },
     blobs: SYNTHETIC_BLOBS,
@@ -188,7 +188,7 @@ describe('a GitLab origin', () => {
     expect(git.calls[0]).toEqual([
       'fetch',
       'origin',
-      `+merge-requests/42/head:refs/pr/42/head`,
+      `+refs/merge-requests/42/head:refs/pr/42/head`,
       `+refs/heads/main:refs/pr/42/base`,
     ])
     const page = await app.request('/review/42', { headers: LOCAL })
