@@ -1,11 +1,65 @@
 // @vitest-environment node
-import { createFakeGit, TEST_REPO } from '../testing/fakes.js'
+import { rm, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import { createFakeGit, makeTempDir, TEST_REPO } from '../testing/fakes.js'
 import { BASE_SHA, GH_PULL, HEAD_SHA } from '../testing/synthetic.js'
-import { GITHUB_HOST } from '../host/host.js'
+import { GITHUB_HOST, gitlabHost } from '../host/host.js'
 import { mapPull } from '../github/pr.js'
 import { toPr } from '../host/pr.js'
-import { GitError } from './git.js'
+import { createGit, execGit, GitError } from './git.js'
 import { fetchPrRefs, prBaseRef, prHeadRef } from './pr-refs.js'
+
+async function g(cwd: string, ...args: string[]): Promise<string> {
+  const r = await execGit(cwd, args)
+  if (r.code !== 0) {
+    throw new GitError(args, r.stderr, r.code)
+  }
+  return r.stdout.toString('utf8').trim()
+}
+
+describe('fetchPrRefs against real git', () => {
+  it.each([
+    { host: GITHUB_HOST, serverRef: 'refs/pull/42/head' },
+    { host: gitlabHost('gitlab.com'), serverRef: 'refs/merge-requests/42/head' },
+  ])(
+    'keeps the head ref across repeat fetches in a clone that prunes ($serverRef)',
+    async ({ host, serverRef }) => {
+      const work = await makeTempDir('pr-review-work-')
+      const origin = await makeTempDir('pr-review-origin-')
+      const clone = await makeTempDir('pr-review-clone-')
+      try {
+        await g(work, 'init', '-q', '-b', 'main')
+        await g(work, 'config', 'user.email', 'test@example.com')
+        await g(work, 'config', 'user.name', 'Test')
+        await writeFile(path.join(work, 'a.txt'), 'one\n')
+        await g(work, 'add', '.')
+        await g(work, 'commit', '-q', '-m', 'one')
+        const base = await g(work, 'rev-parse', 'HEAD')
+        await writeFile(path.join(work, 'a.txt'), 'two\n')
+        await g(work, 'commit', '-q', '-am', 'two')
+        const head = await g(work, 'rev-parse', 'HEAD')
+        await g(origin, 'clone', '-q', '--bare', work, origin)
+        await g(origin, 'update-ref', 'refs/heads/main', base)
+        await g(origin, 'update-ref', serverRef, head)
+        await g(work, 'clone', '-q', origin, clone)
+        // With `fetch.prune` set, as many people set it globally, git prunes the destination of a
+        // refspec whose source names no remote ref in full. Each fetch then deletes the head ref
+        // the fetch before it wrote, so every other fetch fails to resolve it.
+        await g(clone, 'config', 'fetch.prune', 'true')
+
+        const git = createGit(clone)
+        for (let i = 0; i < 2; i++) {
+          expect(await fetchPrRefs(git, host, mapPull(GH_PULL))).toEqual({
+            headSha: head,
+            mergeBaseSha: base,
+          })
+        }
+      } finally {
+        await Promise.all([work, origin, clone].map(dir => rm(dir, { recursive: true, force: true })))
+      }
+    }
+  )
+})
 
 describe('fetchPrRefs and toPr', () => {
   it('fetches head and base into local refs and resolves the shas', async () => {
