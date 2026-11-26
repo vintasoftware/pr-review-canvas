@@ -21,6 +21,8 @@
 
 - After `Enter` on a bar link of **One point at a time**, the focus stays on the bar, so `Enter`
   again moves on. Before, it went to the top of the page.
+- A clone with `fetch.prune` set keeps the PR head across fetches. Before, every other fetch
+  deleted `refs/pr/<n>/head`, so `prepare` or the page failed with `GIT_ERROR` from `rev-parse`.
 
 ### Sign-off
 

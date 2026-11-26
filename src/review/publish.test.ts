@@ -53,7 +53,7 @@ async function prepared(target: Parameters<typeof prepare>[1] = { kind: 'pr', nu
 /** The pull request's head moved to `sha` in the clone and on GitHub, with `diff` against the same merge base. */
 function headMovedTo(sha: string, diff: string): void {
   moveFakeHead(clone, {
-    headRef: 'pull/42/head',
+    headRef: 'refs/pull/42/head',
     baseRef: 'refs/pr/42/base',
     headSha: sha,
     mergeBaseSha: BASE_SHA,
@@ -558,7 +558,7 @@ describe('publish', () => {
     const retarget = (release: string, diff: string) => {
       Object.assign(clone.options.refs ?? {}, { 'refs/heads/release': release })
       moveFakeHead(clone, {
-        headRef: 'pull/42/head',
+        headRef: 'refs/pull/42/head',
         baseRef: 'refs/pr/42/base',
         headSha: HEAD_SHA,
         mergeBaseSha: release,

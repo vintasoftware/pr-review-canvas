@@ -75,7 +75,7 @@ afterEach(() => t?.cleanup())
 /** PR #42 at HEAD_SHA, with the canvas of OLD_SHA and a canvas generated from it for the head. */
 async function withIncrementalCanvas(basisCanvasSha: string | null = OLD_SHA): Promise<void> {
   const git = createFakeGit({
-    refs: { 'pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, old: OLD_SHA },
+    refs: { 'refs/pull/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA, main: BASE_SHA, old: OLD_SHA },
     mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA, [`${BASE_SHA}..${OLD_SHA}`]: BASE_SHA },
     diffs: { [`${BASE_SHA}..${HEAD_SHA}`]: TOUCHED_APP, [`${BASE_SHA}..${OLD_SHA}`]: SYNTHETIC_DIFF },
     blobs: SYNTHETIC_BLOBS,
@@ -109,7 +109,7 @@ async function markedOnBasis(): Promise<void> {
 async function withChain(): Promise<void> {
   const git = createFakeGit({
     refs: {
-      'pull/42/head': HEAD_SHA,
+      'refs/pull/42/head': HEAD_SHA,
       'refs/heads/main': BASE_SHA,
       main: BASE_SHA,
       old: OLD_SHA,

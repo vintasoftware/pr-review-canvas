@@ -136,7 +136,7 @@ describe('fetchMrDiffRefs', () => {
 describe('fetchPrRefs for a GitLab host', () => {
   it('fetches the merge-request head into the same local refs GitHub uses', async () => {
     const git = createFakeGit({
-      refs: { 'merge-requests/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA },
+      refs: { 'refs/merge-requests/42/head': HEAD_SHA, 'refs/heads/main': BASE_SHA },
       mergeBases: { [`refs/pr/42/base..${HEAD_SHA}`]: BASE_SHA },
     })
     const meta = mapMergeRequest(GL_MR, { additions: 0, deletions: 0 })
@@ -145,7 +145,7 @@ describe('fetchPrRefs for a GitLab host', () => {
     expect(git.calls[0]).toEqual([
       'fetch',
       'origin',
-      `+merge-requests/42/head:${prHeadRef(42)}`,
+      `+refs/merge-requests/42/head:${prHeadRef(42)}`,
       `+refs/heads/main:${prBaseRef(42)}`,
     ])
     expect(toPr(meta, TEST_REPO, shas)).toMatchObject({ number: 42, headSha: HEAD_SHA, repo: TEST_REPO })
@@ -155,7 +155,7 @@ describe('fetchPrRefs for a GitLab host', () => {
     const merge = 'c'.repeat(40)
     const fork = 'd'.repeat(40)
     const git = createFakeGit({
-      refs: { 'merge-requests/42/head': HEAD_SHA, 'refs/heads/main': merge },
+      refs: { 'refs/merge-requests/42/head': HEAD_SHA, 'refs/heads/main': merge },
       mergeBases: { [`${merge}^1..${HEAD_SHA}`]: fork },
     })
     const meta = mapMergeRequest(

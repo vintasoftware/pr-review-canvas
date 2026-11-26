@@ -12,7 +12,7 @@ describe('hosts', () => {
       nounShort: 'PR',
       cli: { cli: 'gh', env: {} },
     })
-    expect(GITHUB_HOST.remoteHeadRef(42)).toBe('pull/42/head')
+    expect(GITHUB_HOST.remoteHeadRef(42)).toBe('refs/pull/42/head')
     expect(GITHUB_HOST.compareUrl(TEST_REPO, 'main', 'feat')).toBe(
       'https://github.com/acme/widgets/compare/main...feat'
     )
@@ -27,7 +27,7 @@ describe('hosts', () => {
       nounShort: 'MR',
       cli: { cli: 'glab', env: { GITLAB_HOST: 'gitlab.example.com' } },
     })
-    expect(gitlab.remoteHeadRef(42)).toBe('merge-requests/42/head')
+    expect(gitlab.remoteHeadRef(42)).toBe('refs/merge-requests/42/head')
     expect(gitlab.compareUrl(TEST_REPO, 'main', 'feat')).toBe(
       'https://gitlab.example.com/acme/widgets/-/compare/main...feat'
     )

@@ -870,7 +870,7 @@ describe('the pending review', () => {
       for (const headSha of ['c'.repeat(40), 'd'.repeat(40)]) {
         const diff = identical ? SYNTHETIC_DIFF : SYNTHETIC_DIFF.replace('a() + b()', `a() * ${headSha[0]}()`)
         moveFakeHead(git, {
-          headRef: 'pull/42/head',
+          headRef: 'refs/pull/42/head',
           baseRef: 'refs/pr/42/base',
           headSha,
           mergeBaseSha: BASE_SHA,
@@ -906,7 +906,7 @@ describe('the pending review', () => {
     await app.request(...post('/api/prs/42/pending', DRAFT))
     const headSha = 'c'.repeat(40)
     moveFakeHead(git, {
-      headRef: 'pull/42/head',
+      headRef: 'refs/pull/42/head',
       baseRef: 'refs/pr/42/base',
       headSha,
       mergeBaseSha: BASE_SHA,

@@ -354,7 +354,7 @@ it('GitLab self-review posts the reason and shares the revised canvas, then reop
     },
   })
   const git = gitFor42()
-  git.options.refs!['merge-requests/42/head'] = HEAD_SHA
+  git.options.refs!['refs/merge-requests/42/head'] = HEAD_SHA
   const t = await makeTestContext({ git, gh: forge, host: gitlabHost('gitlab.example.com') })
   contexts.push(t)
   await t.ctx.canvases.write(HEAD_SHA, syntheticArtifact(), manifest, 42)
