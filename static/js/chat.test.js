@@ -1829,6 +1829,7 @@ describe('the question queue', () => {
     editField(root).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
   const T2 = 'pr-review-a-b-42-claude-t2'
   const NEXT = 'Next, when the answer in “overall” ends.'
+  const HELD = 'The line waits for this edit. Enter sends it, Esc sends the old text.'
 
   it('queues two questions in the thread that answers, and sends them oldest first', async () => {
     const { root, chat, streams, sent } = mountQueue()
@@ -2018,13 +2019,18 @@ describe('the question queue', () => {
     await sendMessage(root, 'first?')
     queueCmd(root, 'first?', 'edit').click()
     editField(root).value = 'first, edited?'
-    // The answer ends during the edit: the question in edit waits, and the panel keeps the text.
+    // While the answer comes in, the question in edit says when it goes, as the other rows do.
+    const when = () => el(root, '#chat-queue .chat-queue-when').textContent
+    const status = () => el(root, '#chat-queue-status').textContent
+    expect([when(), status()]).toEqual([NEXT, ''])
+    // The answer ends during the edit: the question in edit waits, says so, and keeps the text.
     streams[0]?.end()
     await flush()
     expect(sent.map(q => q.message)).toEqual(['overall?'])
     expect(editField(root).value).toBe('first, edited?')
     expect(document.activeElement).toBe(editField(root))
     expect(el(root, '#chat-stop').hidden).toBe(true)
+    expect([when(), status()]).toEqual([HELD, HELD])
     // A question asked meanwhile waits behind it, and can be sent now without a stop.
     await sendMessage(root, 'later?')
     expect(sent.map(q => q.message)).toEqual(['overall?'])
@@ -2032,12 +2038,15 @@ describe('the question queue', () => {
     await flush()
     expect(cancelled).toEqual([])
     expect(sent.map(q => q.message)).toEqual(['overall?', 'later?'])
+    expect([when(), status()]).toEqual([NEXT, ''])
     streams[1]?.end()
     await flush()
     expect(sent.map(q => q.message)).toEqual(['overall?', 'later?'])
+    expect([when(), status()]).toEqual([HELD, HELD])
     pressInEdit(root, 'Enter')
     await flush()
     expect(sent.map(q => q.message)).toEqual(['overall?', 'later?', 'first, edited?'])
+    expect(status()).toBe('')
     streams[2]?.end()
     await flush()
   })
