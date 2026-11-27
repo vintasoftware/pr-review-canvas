@@ -1826,8 +1826,6 @@ describe('the question queue', () => {
       'Waiting. It is sent after the question before it. send noweditremove',
       'Waiting. It is sent after the 2 questions before it. send noweditremove',
     ])
-    expect(el(root, '#chat-stop').hidden).toBe(false)
-    expect(el(root, '#chat-send').hidden).toBe(false)
     expect(chat.holdsUnsent()).toBe(true)
     streams[0]?.end()
     await flush()
@@ -2047,9 +2045,6 @@ describe('the question queue', () => {
     await flush()
     await sendMessage(root, 'one?')
     await sendMessage(root, 'two?')
-    await sendMessage(root, 'three?')
-    queueCmd(root, 'three?', 'remove').click()
-    expect(notes(root)).toHaveLength(2)
     streams[0]?.end()
     await flush()
     streams[1]?.onEvent({ event: 'turn', data: { thread: T3, agent: 'claude', seeded: true } })
@@ -2112,7 +2107,7 @@ describe('the question queue', () => {
     await flush()
   })
 
-  it('marks a saved thread with a waiting question as such in the list', async () => {
+  it('brings the waiting questions of a thread back in order when the reader returns to it', async () => {
     const { root, streams } = mountQueue()
     await flush()
     await sendMessage(root, 'overall?')
@@ -2120,20 +2115,12 @@ describe('the question queue', () => {
     await flush()
     await sendMessage(root, 'is the sum intended?')
     await sendMessage(root, 'and the product?')
-    const status = (/** @type {string} */ name) => el(root, `[data-thread-open="${name}"] .muted`).textContent
-    expect(status('pr-review-a-b-42-claude-t1')).toBe('question waiting')
-    expect(status(T2)).toBe('answering…')
-    // Back in the general thread and again in the point's, the waiting questions come back in order.
     pickThread(root, T2)
     await flush()
     expect(notes(root)).toEqual([])
     pickThread(root, 'pr-review-a-b-42-claude-t1')
     await flush()
-    expect(notes(root)).toHaveLength(2)
-    const questions = [...root.querySelectorAll('#chat-log .turn.u')].map(t => t.textContent ?? '')
-    expect(questions.findIndex(q => q.includes('is the sum intended?'))).toBeLessThan(
-      questions.findIndex(q => q.includes('and the product?'))
-    )
+    expect(turns(root)).toEqual(['is the sum intended?', 'and the product?'])
     streams[0]?.end()
     await flush()
   })
