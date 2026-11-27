@@ -353,16 +353,71 @@ textarea:disabled {
 .chat-activity.checking-out {
   color: var(--accent);
 }
-/* A waiting question: its note, then its commands on the same line, or on the next. */
-.chat-waiting {
-  margin: 6px 0 0;
+/* The questions that wait their turn in this thread, over the context line. A long queue
+   scrolls inside the panel, so the box stays in view. */
+.chat-queue {
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
 }
-.chat-waiting-cmds {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-left: 4px;
+.chat-queue-head {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
   font-size: 12px;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+/* The caret points up while the list shows, and down while it is folded. */
+.chat-queue-head::after {
+  content: '';
+  margin-left: auto;
+  padding: 3px;
+  border: solid currentcolor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-135deg);
+}
+.chat-queue-head[aria-expanded='false']::after {
+  transform: rotate(45deg);
+}
+.chat-queue-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 10px 8px;
+  list-style: none;
+}
+.chat-queue-item {
+  display: grid;
+  gap: 2px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+/* A question shows on one line; its title holds the whole text. */
+.chat-queue-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-queue-cmds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.chat-queue-edit {
+  min-height: 40px;
+  font: inherit;
 }
 .chat-composer {
   position: relative;
