@@ -105,6 +105,8 @@ export function renderChatShell(opts) {
     // thread. The bubble sits on the composer too, so it clears it at any height.
     '<form class="chat-composer" id="chat-form">' +
     '<button class="cmd unseen" type="button" id="chat-unseen" hidden aria-live="polite"></button>' +
+    // The questions that wait their turn in this thread; drawn while one waits.
+    '<section class="chat-queue" id="chat-queue" aria-label="Queued questions" hidden></section>' +
     '<p class="ctx-line" id="chat-ctx-line">Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
     ' <button class="cmd" type="button" id="thread-goto" title="Go to the code" hidden>go to code</button>' +
     ' <button class="cmd" type="button" id="chat-clear" title="Clear: ask about the whole PR" hidden>clear</button></p>' +
@@ -385,6 +387,7 @@ export function wireChat(options) {
   const clearButton = mustFind(root, '#chat-clear', HTMLElement)
   const bubble = mustFind(root, '#chat-unseen', HTMLElement)
   const stopButton = mustFind(root, '#chat-stop', HTMLElement)
+  const queueBox = mustFind(root, '#chat-queue', HTMLElement)
   const reviewPanel = qs(`#${REVIEW_PANEL_ID}`, pane)
 
   /** @type {ChatContext} */
@@ -468,11 +471,17 @@ export function wireChat(options) {
   let live = null
   /**
    * The questions asked while an answer comes in, oldest first. The server answers one question
-   * of a review at a time, so each is sent when the answer before it ends. The id of its turn
-   * names it in its commands.
-   * @type {Array<Question & { user: HTMLElement, shown: boolean }>}
+   * of a review at a time, so each is sent when the answer before it ends. A waiting question
+   * shows in the queue panel of its thread, and goes into the log when it is sent.
+   * @type {Array<Question & { id: string }>}
    */
   const queue = []
+  let queueSeq = 0
+  /** The id of the waiting question the reader edits in the panel. It holds the line. */
+  /** @type {string | null} */
+  let editing = null
+  /** Whether the queue panel shows its list or only its head. */
+  let queueOpen = true
   /**
    * The cancel requests on their way, as one promise. The server stops the turn that runs when a
    * cancel arrives, so the next turn starts only after each cancel has its reply.
@@ -539,7 +548,6 @@ export function wireChat(options) {
   /** Takes the log over to replace it: what the log showed goes off screen. */
   const claimLog = () => {
     if (live !== null) live.shown = false
-    for (const q of queue) q.shown = false
     return takeLog()
   }
 
@@ -592,11 +600,10 @@ export function wireChat(options) {
    * was about. A message about the whole PR, about the thread's own place, or one saved before
    * turns kept a context, names none.
    * @param {ChatContext | undefined} about
+   * @param {ChatContext | undefined} [place] the place of the message's thread
    */
-  const turnContext = about =>
-    about === undefined ||
-    about.kind === 'pr' ||
-    (openPlace !== undefined && sameChatContext(openPlace, about))
+  const turnContext = (about, place = openPlace) =>
+    about === undefined || about.kind === 'pr' || (place !== undefined && sameChatContext(place, about))
       ? {}
       : { context: chatContextLabel(about, layerTitle, pointTitle) }
   /**
@@ -675,9 +682,11 @@ export function wireChat(options) {
 
   /**
    * The composer of the thread on screen. It always takes a question: while an answer comes in,
-   * the question waits its turn. Stop shows while the open thread's own answer comes in.
+   * the question waits its turn in the queue panel. Stop shows while the open thread's own answer
+   * comes in.
    */
   const drawComposer = () => {
+    drawQueuePanel()
     stopButton.hidden = !(live !== null && live.shown)
     box.placeholder =
       live !== null
@@ -688,45 +697,61 @@ export function wireChat(options) {
   }
 
   /**
-   * The note on a waiting question: what it waits for, and its commands.
-   * @param {number} position how many questions wait before it
-   * @param {string} id
+   * One waiting question in the panel: its text, when it goes, and its commands, or a box to edit
+   * it in.
+   * @param {Question & { id: string }} q
    */
-  const waitingHtml = (position, id) => {
-    const text =
-      position === 0
-        ? `Waiting for the answer in “${answeringName()}”. It is sent as soon as that answer ends.`
-        : position === 1
-          ? 'Waiting. It is sent after the question before it.'
-          : `Waiting. It is sent after the ${position} questions before it.`
+  const queueItemHtml = q => {
+    const position = queue.indexOf(q)
     const cmd = /** @param {string} act @param {string} label */ (act, label) =>
-      `<button class="cmd" type="button" data-queue-act="${act}" data-queue-id="${esc(id)}">${label}</button>`
+      `<button class="cmd" type="button" data-queue-act="${act}" data-queue-id="${esc(q.id)}">${label}</button>`
+    if (q.id === editing) {
+      return (
+        `<li class="chat-queue-item"><textarea class="chat-queue-edit" rows="2" data-queue-id="${esc(q.id)}" aria-label="Edit the waiting question">${esc(q.message)}</textarea>` +
+        `<span class="chat-queue-cmds">${cmd('save', 'save')}${cmd('cancel', 'cancel')}<span class="muted small">enter to save · esc to cancel</span></span></li>`
+      )
+    }
+    const when =
+      position > 0
+        ? `After ${position === 1 ? '1 question' : `${position} questions`}.`
+        : live === null
+          ? 'Next.'
+          : `Next, when the answer in “${answeringName()}” ends.`
     return (
-      `<p class="muted small chat-waiting">${esc(text)} ` +
-      `<span class="chat-waiting-cmds">${cmd('send-now', 'send now')}${cmd('edit', 'edit')}${cmd('remove', 'remove')}</span></p>`
+      `<li class="chat-queue-item"><span class="chat-queue-text" title="${esc(q.message)}">${esc(q.message)}</span>` +
+      `<span class="muted small chat-queue-when">${esc(when)}</span>` +
+      `<span class="chat-queue-cmds">${cmd('send-now', 'send now')}${cmd('edit', 'edit')}${cmd('remove', 'remove')}</span></li>`
     )
   }
 
   /**
-   * Draws the note of each waiting question again, for its place in the queue. The waiting
-   * questions on screen go to the end of the log, in queue order, below each answer that started.
+   * The queue panel of the thread on screen: its waiting questions in the order they go, and how
+   * many wait in other threads. An edit keeps its text and focus across a redraw.
    */
-  const drawWaiting = () => {
-    queue.forEach((q, position) => {
-      if (q.shown) log.append(q.user)
-      const html = waitingHtml(position, q.user.id)
-      const note = q.user.querySelector('.chat-waiting')
-      if (note === null) {
-        q.user.insertAdjacentHTML('beforeend', html)
-      } else {
-        note.outerHTML = html
-      }
-    })
+  const drawQueuePanel = () => {
+    const here = queue.filter(isHere)
+    queueBox.hidden = here.length === 0
+    const field = queueBox.querySelector('textarea')
+    const typed = field instanceof HTMLTextAreaElement ? field.value : null
+    const focused = field !== null && document.activeElement === field
+    if (here.length === 0) {
+      queueBox.innerHTML = ''
+      return
+    }
+    const elsewhere = queue.length - here.length
+    queueBox.innerHTML =
+      `<button type="button" class="chat-queue-head" data-queue-act="toggle" aria-expanded="${queueOpen}">` +
+      `Queued · ${here.length}${elsewhere === 0 ? '' : `<span class="muted"> · ${elsewhere} in other threads</span>`}</button>` +
+      (queueOpen ? `<ol class="chat-queue-list">${here.map(queueItemHtml).join('')}</ol>` : '')
+    const next = queueBox.querySelector('textarea')
+    if (next instanceof HTMLTextAreaElement && typed !== null) {
+      next.value = typed
+      if (focused) next.focus()
+    }
   }
 
   /** Draws all that shows the queue. */
   const drawQueue = () => {
-    drawWaiting()
     drawComposer()
     drawIndex()
   }
@@ -1055,8 +1080,6 @@ export function wireChat(options) {
     drawHead()
     drawMarks()
     drawBackLinks()
-    // The first waiting question names the thread it waits for as the list now does.
-    drawWaiting()
   }
 
   /**
@@ -1129,7 +1152,7 @@ export function wireChat(options) {
 
   /**
    * Puts back the turns the saved transcript does not hold yet, when they belong to the thread on
-   * screen: the answer coming in, and the questions waiting for it.
+   * screen: the answer coming in, and the questions refused while the thread was off screen.
    * @param {ReadonlyArray<ChatTurn>} [saved] the thread's saved turns
    */
   const putBackPending = (saved = []) => {
@@ -1147,11 +1170,6 @@ export function wireChat(options) {
       live.redraw()
     }
     putBackRefused()
-    for (const q of queue.filter(isHere)) {
-      emptyNote()
-      log.append(q.user)
-      q.shown = true
-    }
     drawComposer()
   }
 
@@ -1201,23 +1219,39 @@ export function wireChat(options) {
     }
     /** @type {Question} */
     const question = { message, context, thread: activeThread, place: openPlace, draft }
-    const { turn } = appendTurn('user', renderMarkdown(message, { paths }), turnContext(context))
-    if (live !== null) {
-      queue.push({ ...question, user: turn, shown: true })
+    // A question waits while an answer comes in, or while others wait before it.
+    if (live !== null || queue.length > 0) {
+      queueSeq += 1
+      queue.push({ ...question, id: `q${queueSeq}` })
       drawQueue()
       return
     }
-    void runTurn(question, turn, true)
+    void runTurn(question)
   }
 
   /**
-   * Sends a question and draws its answer as it comes in, on screen while its thread is, and off
-   * screen otherwise. The oldest question that waits for it goes next.
-   * @param {Question} question
-   * @param {HTMLElement} user the question's turn
-   * @param {boolean} shown whether the question's thread is on screen
+   * Sends the oldest waiting question once no answer comes in. A question the reader edits holds
+   * the line until the edit ends.
    */
-  const runTurn = async (question, user, shown) => {
+  const drain = () => {
+    if (stopped || live !== null || queue[0] === undefined || queue[0].id === editing) {
+      return
+    }
+    const next = queue[0]
+    queue.shift()
+    void runTurn(next)
+  }
+
+  /**
+   * Sends a question and draws it and its answer as it comes in, on screen while its thread is,
+   * and off screen otherwise. The oldest question that waits for it goes next.
+   * @param {Question} question
+   */
+  const runTurn = async question => {
+    const shown = isHere(question)
+    const html = renderMarkdown(question.message, { paths })
+    const opts = turnContext(question.context, question.place)
+    const { turn: user } = shown ? appendTurn('user', html, opts) : makeTurn('user', html, opts)
     if (shown) {
       // The turn owns the log from here on, so a history load still on its way lands nowhere.
       takeLog()
@@ -1227,10 +1261,9 @@ export function wireChat(options) {
     const answer = shown ? appendTurn('assistant', '') : makeTurn('assistant', '')
     const current = { ...question, user, answer: answer.turn, shown, redraw: () => {} }
     live = current
-    // A first question's thread is listed by its place until the server names it.
-    drawIndex()
-    // The first waiting question now waits for this answer.
-    drawWaiting()
+    // A first question's thread is listed by its place until the server names it, and the first
+    // waiting question now waits for this answer.
+    drawQueue()
     /** Whether the agent took the turn: until then there is no answer to have missed. */
     let agentTookTurn = false
     const activity = document.createElement('p')
@@ -1412,13 +1445,8 @@ export function wireChat(options) {
           scrollToBottom('follow')
         }
         // A failed or stopped turn does not stop the queue.
-        const next = queue.shift()
-        drawComposer()
-        drawIndex()
-        if (next !== undefined) {
-          next.user.querySelector('.chat-waiting')?.remove()
-          void runTurn(next, next.user, next.shown)
-        }
+        drawQueue()
+        drain()
       }
     }
   }
@@ -1578,34 +1606,79 @@ export function wireChat(options) {
   }
 
   /**
-   * A command on a waiting question: send it now, edit it, or remove it.
+   * A command of the queue panel: show or hide its list, or send now, edit, save, cancel, or
+   * remove a waiting question.
    * @param {string} act
    * @param {string} id
    */
   const onQueueAct = (act, id) => {
-    const item = queue.find(q => q.user.id === id)
+    if (act === 'toggle') {
+      queueOpen = !queueOpen
+      drawQueuePanel()
+      return
+    }
+    const item = queue.find(q => q.id === id)
     if (item === undefined) {
       return
     }
-    queue.splice(queue.indexOf(item), 1)
-    if (act === 'send-now') {
-      // Move it to the front and stop the current answer. The drain then sends it.
-      queue.unshift(item)
-      drawQueue()
-      const button = item.user.querySelector('[data-queue-act="send-now"]')
-      if (button instanceof HTMLElement) {
-        void runCommand(button, cancelTurn, { pendingLabel: 'sending…' })
+    switch (act) {
+      case 'send-now': {
+        // Move it to the front and stop the current answer. The drain then sends it.
+        queue.splice(queue.indexOf(item), 1)
+        queue.unshift(item)
+        drawQueue()
+        const button = queueBox.querySelector(`[data-queue-act="send-now"][data-queue-id="${cssEscape(id)}"]`)
+        if (live === null) {
+          drain()
+        } else if (button instanceof HTMLElement) {
+          void runCommand(button, cancelTurn, { pendingLabel: 'sending…' })
+        }
+        return
       }
+      case 'edit': {
+        editing = id
+        drawQueuePanel()
+        const field = queueBox.querySelector('textarea')
+        if (field instanceof HTMLTextAreaElement) {
+          field.focus()
+          field.setSelectionRange(field.value.length, field.value.length)
+        }
+        return
+      }
+      case 'save':
+      case 'cancel': {
+        const field = queueBox.querySelector('textarea')
+        const text = field instanceof HTMLTextAreaElement ? field.value.trim() : ''
+        // An empty edit keeps the question as it was.
+        if (act === 'save' && text !== '') item.message = text
+        editing = null
+        drawQueuePanel()
+        box.focus()
+        drain()
+        return
+      }
+      case 'remove':
+        queue.splice(queue.indexOf(item), 1)
+        drawQueue()
+        drain()
+    }
+  }
+
+  /**
+   * Enter saves the edit of a waiting question, and Escape cancels it.
+   * @param {KeyboardEvent} event
+   */
+  const onQueueKeyDown = event => {
+    const field = event.target
+    if (!(field instanceof HTMLTextAreaElement)) {
       return
     }
-    item.user.remove()
-    if (act === 'edit') {
-      // Put the question in the box, before the text that the box has, with its context.
-      box.value = box.value.trim() === '' ? item.message : `${item.message}\n\n${box.value}`
-      setContext(item.context)
-      box.focus()
+    const act = event.key === 'Enter' && !event.shiftKey ? 'save' : event.key === 'Escape' ? 'cancel' : null
+    if (act !== null) {
+      event.preventDefault()
+      event.stopPropagation()
+      onQueueAct(act, field.getAttribute('data-queue-id') ?? '')
     }
-    drawQueue()
   }
 
   /** @param {Event} event */
@@ -1843,6 +1916,7 @@ export function wireChat(options) {
   log.addEventListener('scroll', onScroll)
   pane.addEventListener('wheel', onPaneWheel, { passive: false })
   box.addEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+  queueBox.addEventListener('keydown', /** @type {EventListener} */ (onQueueKeyDown))
   drawContext()
   void restoreThread().catch(() => undefined)
 
@@ -1931,6 +2005,7 @@ export function wireChat(options) {
     stop() {
       stopped = true
       queue.length = 0
+      editing = null
       stopActivity()
       inFlight?.abort()
       inFlight = null
@@ -1944,6 +2019,7 @@ export function wireChat(options) {
       marks.remove()
       threadList.stop()
       box.removeEventListener('keydown', /** @type {EventListener} */ (onKeyDown))
+      queueBox.removeEventListener('keydown', /** @type {EventListener} */ (onQueueKeyDown))
       stopResize()
       panel.stop()
       stopTabs()
