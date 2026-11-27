@@ -1062,7 +1062,7 @@ describe('a thread per place', () => {
     // Here a question waits for the answer instead of being refused.
     expect([el(root, '#chat-send').hidden, el(root, '#chat-stop').hidden]).toEqual([false, true])
     expect(el(root, '#msg').getAttribute('placeholder')).toBe(
-      'AI Chat is answering in “overall”. Ask here and it goes next…'
+      'AI Chat is answering in “overall”. Ask here and it waits its turn…'
     )
     stream.opts?.onEvent({ event: 'chunk', data: { text: 'The sum is the whole change.' } })
     await flush()
@@ -1471,7 +1471,7 @@ describe('a place’s thread, in its corners', () => {
     await flush()
   })
 
-  it('leaves send as it was while answers come in, and turns it off while a question waits', async () => {
+  it('keeps send on screen and on while answers come in, with stop next to it where the answer is', async () => {
     /** @type {Array<() => void>} */
     const ends = []
     const { root, chat } = mount({
@@ -1489,11 +1489,13 @@ describe('a place’s thread, in its corners', () => {
     // The answer coming in is the other thread's; this thread's send waits for nothing.
     expect([send.textContent, send.disabled, send.hidden]).toEqual(['send', false, false])
     await sendMessage(root, 'is the sum intended?')
-    expect([send.textContent, send.disabled]).toEqual(['send', true])
+    // A question waits, and the box still takes the next one.
+    expect([send.textContent, send.disabled, send.hidden]).toEqual(['send', false, false])
+    expect(el(root, '#msg').hasAttribute('disabled')).toBe(false)
     ends[0]?.()
     await flush()
-    // The waiting question went, and is answered here, so stop takes send's place.
-    expect([send.hidden, send.disabled, el(root, '#chat-stop').hidden]).toEqual([true, false, false])
+    // The waiting question went, and is answered here, so stop shows next to send.
+    expect([send.hidden, send.disabled, el(root, '#chat-stop').hidden]).toEqual([false, false, false])
     ends[1]?.()
     await flush()
     expect([send.textContent, send.disabled, send.hidden]).toEqual(['send', false, false])
@@ -1653,7 +1655,7 @@ describe('a place’s thread, in its corners', () => {
     expect(el(root, '#chat-log').textContent).not.toContain('what changed overall?')
   })
 
-  it('says where the reader is that a quick question cannot go yet, and leaves the box alone', async () => {
+  it('queues a quick question behind one that waits already, and leaves the box alone', async () => {
     const { root, chat } = mount({
       fetchThreads: async () => PLACED,
       streamChat: () => new Promise(() => {}),
@@ -1666,10 +1668,11 @@ describe('a place’s thread, in its corners', () => {
     chat.askQuestion(LAYER, 'What could break?')
     await flush()
     expect(/** @type {HTMLTextAreaElement} */ (el(root, '#msg')).value).toBe('')
-    expect(root.querySelector('.toast')?.textContent).toBe(
-      'A question already waits for the answer in “overall”. Ask this once it is sent.'
+    expect(root.querySelector('.toast')).toBeNull()
+    expect(el(root, '#chat-log .chat-waiting').textContent).toContain(
+      'Waiting. It is sent after the question before it.'
     )
-    expect(root.querySelector('.toast')?.getAttribute('data-tone')).toBe('failed')
+    expect(chat.holdsUnsent()).toBe(true)
   })
 
   it('records the thread a draft on screen gets as the one a reload opens, and only that one', async () => {
@@ -1743,9 +1746,9 @@ describe('a place’s thread, in its corners', () => {
       'Waiting for the answer in “point · Sum instead of product”.'
     )
     const box = el(root, '#msg')
-    expect(box.hasAttribute('disabled')).toBe(true)
+    expect(box.hasAttribute('disabled')).toBe(false)
     expect(box.getAttribute('placeholder')).toBe(
-      'A question already waits for the answer in “point · Sum instead of product”.'
+      'AI Chat is answering in “point · Sum instead of product”. Ask here and it waits its turn…'
     )
     ends[0]?.()
     await flush()
@@ -1756,6 +1759,242 @@ describe('a place’s thread, in its corners', () => {
     expect(el(root, '#chat-log').textContent).not.toContain('Waiting for the answer in')
     expect(el(root, '#chat-stop').hidden).toBe(false)
     ends[1]?.()
+    await flush()
+  })
+})
+
+describe('the question queue', () => {
+  /**
+   * A pane on the general thread whose answers end only when the test says so.
+   * @param {Partial<Parameters<typeof wireChat>[0]['api']>} [api]
+   */
+  const mountQueue = (api = {}) => {
+    /** @type {Array<{ onEvent: (event: { event: string, data: unknown }) => void, end: () => void, fail: (error: Error) => void }>} */
+    const streams = []
+    /** @type {Array<{ message: string, thread?: string }>} */
+    const sent = []
+    const mounted = mount({
+      fetchThreads: async () => PLACED,
+      streamChat: (_pr, input, opts) =>
+        new Promise((resolve, reject) => {
+          sent.push({
+            message: input.message,
+            ...(input.thread === undefined ? {} : { thread: input.thread }),
+          })
+          streams.push({ onEvent: opts.onEvent, end: () => resolve(undefined), fail: reject })
+        }),
+      ...api,
+    })
+    return { ...mounted, streams, sent }
+  }
+  /** @param {ParentNode} root */
+  const notes = root => [...root.querySelectorAll('#chat-log .chat-waiting')].map(n => n.textContent)
+  /**
+   * The command of a waiting question, found by the question's text.
+   * @param {ParentNode} root
+   * @param {string} question
+   * @param {string} act
+   */
+  const queueCmd = (root, question, act) => {
+    const turn = [...root.querySelectorAll('#chat-log .turn.u')].find(t => t.textContent?.includes(question))
+    const button = turn?.querySelector(`[data-queue-act="${act}"]`)
+    if (!(button instanceof HTMLElement)) throw new Error(`no ${act} on ${question}`)
+    return button
+  }
+  const T2 = 'pr-review-a-b-42-claude-t2'
+
+  it('queues two questions in the thread that answers, and sends them oldest first', async () => {
+    const { root, chat, streams, sent } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    await sendMessage(root, 'first?')
+    await sendMessage(root, 'second?')
+    await sendMessage(root, 'third?')
+    expect(notes(root)).toEqual([
+      'Waiting for the answer in “overall”. It is sent as soon as that answer ends. send noweditremove',
+      'Waiting. It is sent after the question before it. send noweditremove',
+      'Waiting. It is sent after the 2 questions before it. send noweditremove',
+    ])
+    expect(el(root, '#chat-stop').hidden).toBe(false)
+    expect(el(root, '#chat-send').hidden).toBe(false)
+    expect(chat.holdsUnsent()).toBe(true)
+    streams[0]?.end()
+    await flush()
+    // The next one is sent, and the notes move up.
+    expect(notes(root)).toEqual([
+      'Waiting for the answer in “overall”. It is sent as soon as that answer ends. send noweditremove',
+      'Waiting. It is sent after the question before it. send noweditremove',
+    ])
+    streams[1]?.end()
+    await flush()
+    streams[2]?.end()
+    await flush()
+    expect(chat.holdsUnsent()).toBe(false)
+    streams[3]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'first?', 'second?', 'third?'])
+    expect(sent.every(q => q.thread === T2)).toBe(true)
+    expect(notes(root)).toEqual([])
+    // Each answer is drawn in the thread on screen, under its own question.
+    expect(root.querySelectorAll('#chat-log .turn.a')).toHaveLength(4)
+  })
+
+  it('keeps the queue going after a stopped answer and after a failed one', async () => {
+    /** @type {unknown[]} */
+    const cancelled = []
+    const { root, streams, sent } = mountQueue({
+      cancelChat: async pr => {
+        cancelled.push(pr)
+        return { cancelled: true }
+      },
+    })
+    await flush()
+    await sendMessage(root, 'overall?')
+    await sendMessage(root, 'first?')
+    await sendMessage(root, 'second?')
+    el(root, '#chat-stop').click()
+    await flush()
+    expect(cancelled).toEqual([42])
+    streams[0]?.onEvent({ event: 'cancelled', data: {} })
+    streams[0]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'first?'])
+    streams[1]?.fail(new Error('the agent failed'))
+    await flush()
+    // Each question shows its own error, and the next one goes.
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'first?', 'second?'])
+    expect(el(root, '.turn.a .chat-warning').textContent).toBe('the agent failed')
+    streams[2]?.end()
+    await flush()
+  })
+
+  it('sends a waiting question now: it goes first, and the answer coming in stops', async () => {
+    /** @type {unknown[]} */
+    const cancelled = []
+    const { root, streams, sent } = mountQueue({
+      cancelChat: async pr => {
+        cancelled.push(pr)
+        return { cancelled: true }
+      },
+    })
+    await flush()
+    await sendMessage(root, 'overall?')
+    await sendMessage(root, 'first?')
+    await sendMessage(root, 'second?')
+    queueCmd(root, 'second?', 'send-now').click()
+    await flush()
+    expect(cancelled).toEqual([42])
+    // The notes follow the new order, in the order of the log.
+    expect(notes(root)).toEqual([
+      'Waiting. It is sent after the question before it. send noweditremove',
+      'Waiting for the answer in “overall”. It is sent as soon as that answer ends. send noweditremove',
+    ])
+    streams[0]?.onEvent({ event: 'cancelled', data: {} })
+    streams[0]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'second?'])
+    streams[1]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'second?', 'first?'])
+    streams[2]?.end()
+    await flush()
+  })
+
+  it('edits a waiting question: it leaves the queue and the log, and goes back in the box first', async () => {
+    const { root, chat, streams, sent } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    await sendMessage(root, 'first?')
+    await sendMessage(root, 'second?')
+    const box = /** @type {HTMLTextAreaElement} */ (el(root, '#msg'))
+    box.value = 'half a thought'
+    queueCmd(root, 'first?', 'edit').click()
+    expect(box.value).toBe('first?\n\nhalf a thought')
+    expect(document.activeElement).toBe(box)
+    expect(el(root, '#chat-log').textContent).not.toContain('first?')
+    expect(notes(root)).toEqual([
+      'Waiting for the answer in “overall”. It is sent as soon as that answer ends. send noweditremove',
+    ])
+    // With an empty box, the question is all the box holds.
+    box.value = ''
+    queueCmd(root, 'second?', 'edit').click()
+    expect(box.value).toBe('second?')
+    expect(chat.holdsUnsent()).toBe(false)
+    streams[0]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?'])
+  })
+
+  it('removes a waiting question from the queue and the log', async () => {
+    const { root, chat, streams, sent } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    await sendMessage(root, 'first?')
+    await sendMessage(root, 'second?')
+    queueCmd(root, 'first?', 'remove').click()
+    expect(el(root, '#chat-log').textContent).not.toContain('first?')
+    expect(notes(root)).toEqual([
+      'Waiting for the answer in “overall”. It is sent as soon as that answer ends. send noweditremove',
+    ])
+    expect(/** @type {HTMLTextAreaElement} */ (el(root, '#msg')).value).toBe('')
+    streams[0]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'second?'])
+    expect(chat.holdsUnsent()).toBe(false)
+    streams[1]?.end()
+    await flush()
+  })
+
+  it('sends two waiting questions of a new draft to one thread, and lists the draft once', async () => {
+    const T3 = 'pr-review-a-b-42-claude-t3'
+    const { root, chat, streams, sent } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    chat.ask(LAYER)
+    await flush()
+    await sendMessage(root, 'why this order?')
+    await sendMessage(root, 'and the tests?')
+    const drafts = () => [...root.querySelectorAll('#thread-index [data-draft-open]')].map(d => d.textContent)
+    expect(drafts()).toEqual(['Run pathquestion waiting'])
+    streams[0]?.end()
+    await flush()
+    expect(drafts()).toEqual(['Run pathstarting…'])
+    // The server names the draft's thread; the other waiting question goes to it too.
+    streams[1]?.onEvent({ event: 'turn', data: { thread: T3, agent: 'claude', seeded: true } })
+    streams[1]?.end()
+    await flush()
+    expect(sent).toEqual([
+      { message: 'overall?', thread: T2 },
+      { message: 'why this order?' },
+      { message: 'and the tests?', thread: T3 },
+    ])
+    streams[2]?.end()
+    await flush()
+  })
+
+  it('marks a saved thread with a waiting question as such in the list', async () => {
+    const { root, streams } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    pickThread(root, 'pr-review-a-b-42-claude-t1')
+    await flush()
+    await sendMessage(root, 'is the sum intended?')
+    await sendMessage(root, 'and the product?')
+    const status = (/** @type {string} */ name) => el(root, `[data-thread-open="${name}"] .muted`).textContent
+    expect(status('pr-review-a-b-42-claude-t1')).toBe('question waiting')
+    expect(status(T2)).toBe('answering…')
+    // Back in the general thread and again in the point's, the waiting questions come back in order.
+    pickThread(root, T2)
+    await flush()
+    expect(notes(root)).toEqual([])
+    pickThread(root, 'pr-review-a-b-42-claude-t1')
+    await flush()
+    expect(notes(root)).toHaveLength(2)
+    const questions = [...root.querySelectorAll('#chat-log .turn.u')].map(t => t.textContent ?? '')
+    expect(questions.findIndex(q => q.includes('is the sum intended?'))).toBeLessThan(
+      questions.findIndex(q => q.includes('and the product?'))
+    )
+    streams[0]?.end()
     await flush()
   })
 })
