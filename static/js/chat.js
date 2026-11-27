@@ -1055,6 +1055,8 @@ export function wireChat(options) {
     drawHead()
     drawMarks()
     drawBackLinks()
+    // The first waiting question names the thread it waits for as the list now does.
+    drawWaiting()
   }
 
   /**

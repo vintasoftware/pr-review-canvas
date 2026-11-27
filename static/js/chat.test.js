@@ -2059,6 +2059,37 @@ describe('the question queue', () => {
     await flush()
   })
 
+  it('names the thread a waiting question waits for once the server names it', async () => {
+    const T3 = 'pr-review-a-b-42-claude-t3'
+    let named = false
+    const { root, streams } = mountQueue({
+      fetchThreads: async () =>
+        named
+          ? {
+              ...PLACED,
+              threads: [
+                ...PLACED.threads,
+                { name: T3, agent: 'claude', title: 'one?', createdAt: '', turns: 1 },
+              ],
+            }
+          : PLACED,
+    })
+    await flush()
+    el(root, '#chat-new-thread').click()
+    await flush()
+    await sendMessage(root, 'one?')
+    await sendMessage(root, 'two?')
+    expect(notes(root)[0]).toContain('Waiting for the answer in “New thread”.')
+    named = true
+    streams[0]?.onEvent({ event: 'turn', data: { thread: T3, agent: 'claude', seeded: true } })
+    await flush()
+    expect(notes(root)[0]).toContain('Waiting for the answer in “one?”.')
+    streams[0]?.end()
+    await flush()
+    streams[1]?.end()
+    await flush()
+  })
+
   it('keeps a question of a second new thread apart from the first new thread', async () => {
     const T3 = 'pr-review-a-b-42-claude-t3'
     const { root, streams, sent } = mountQueue()
