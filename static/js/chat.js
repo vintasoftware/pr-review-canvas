@@ -383,7 +383,6 @@ export function wireChat(options) {
   const chip = mustFind(root, '#chat-ctx', HTMLElement)
   const clearButton = mustFind(root, '#chat-clear', HTMLElement)
   const bubble = mustFind(root, '#chat-unseen', HTMLElement)
-  const sendButton = mustFind(root, '#chat-send', HTMLButtonElement)
   const stopButton = mustFind(root, '#chat-stop', HTMLElement)
   const reviewPanel = qs(`#${REVIEW_PANEL_ID}`, pane)
 
@@ -467,11 +466,12 @@ export function wireChat(options) {
    */
   let live = null
   /**
-   * A question asked in another thread while an answer comes in. The server answers one question
-   * of a review at a time, so it is sent once that answer ends; one waits at a time.
-   * @type {Question & { user: HTMLElement, shown: boolean } | null}
+   * The questions asked while an answer comes in, oldest first. The server answers one question
+   * of a review at a time, so each is sent when the answer before it ends.
+   * @type {Array<Question & { id: string, user: HTMLElement, shown: boolean }>}
    */
-  let queued = null
+  const queue = []
+  let queueSeq = 0
   /**
    * Questions that never reached the agent while their thread was off screen, with the reason in
    * their answer. The server saved nothing of them, so they go back on screen with their thread.
@@ -519,7 +519,7 @@ export function wireChat(options) {
     restoring = false
     // What the log showed goes, the answer coming in and the waiting question with it.
     if (live !== null) live.shown = false
-    if (queued !== null) queued.shown = false
+    for (const q of queue) q.shown = false
     return logSeq
   }
 
@@ -654,24 +654,57 @@ export function wireChat(options) {
     )
 
   /**
-   * The composer of the thread on screen: stop while its own answer comes in; while another
-   * thread's answer does, a box whose question waits for that answer, until one is waiting.
+   * The composer of the thread on screen. It always takes a question: while an answer comes in,
+   * the question waits its turn. Stop shows while the open thread's own answer comes in.
    */
   const drawComposer = () => {
-    const answeringHere = live !== null && live.shown
-    sendButton.hidden = answeringHere
-    stopButton.hidden = !answeringHere
-    box.disabled = answeringHere || queued !== null
-    // A box that cannot take a question has no send either.
-    sendButton.disabled = queued !== null
+    stopButton.hidden = !(live !== null && live.shown)
     box.placeholder =
-      queued !== null
-        ? `A question already waits for the answer in “${answeringName()}”.`
-        : live !== null && !answeringHere
-          ? `AI Chat is answering in “${answeringName()}”. Ask here and it goes next…`
-          : askedIn(openPlace).kind === 'pr'
-            ? 'Ask AI Chat about this PR…'
-            : 'Ask about this, in this thread…'
+      live !== null
+        ? `AI Chat is answering in “${answeringName()}”. Ask here and it waits its turn…`
+        : askedIn(openPlace).kind === 'pr'
+          ? 'Ask AI Chat about this PR…'
+          : 'Ask about this, in this thread…'
+  }
+
+  /**
+   * The note on a waiting question: what it waits for, and its commands.
+   * @param {number} position how many questions wait before it
+   * @param {string} id
+   */
+  const waitingHtml = (position, id) => {
+    const text =
+      position === 0
+        ? `Waiting for the answer in “${answeringName()}”. It is sent as soon as that answer ends.`
+        : position === 1
+          ? 'Waiting. It is sent after the question before it.'
+          : `Waiting. It is sent after the ${position} questions before it.`
+    const cmd = /** @param {string} act @param {string} label */ (act, label) =>
+      `<button class="cmd" type="button" data-queue-act="${act}" data-queue-id="${esc(id)}">${label}</button>`
+    return (
+      `<p class="muted small chat-waiting">${esc(text)} ` +
+      `<span class="chat-waiting-cmds">${cmd('send-now', 'send now')}${cmd('edit', 'edit')}${cmd('remove', 'remove')}</span></p>`
+    )
+  }
+
+  /** Draws the note of each waiting question again, for its place in the queue. */
+  const drawWaiting = () => {
+    queue.forEach((q, position) => {
+      const html = waitingHtml(position, q.id)
+      const note = q.user.querySelector('.chat-waiting')
+      if (note === null) {
+        q.user.insertAdjacentHTML('beforeend', html)
+      } else {
+        note.outerHTML = html
+      }
+    })
+  }
+
+  /** Draws all that shows the queue. */
+  const drawQueue = () => {
+    drawWaiting()
+    drawComposer()
+    drawIndex()
   }
 
   /** Shows the open thread, in the AI Chat tab. */
@@ -720,12 +753,14 @@ export function wireChat(options) {
     }
     // A thread's first question is in no list until the server has made the thread, which takes
     // the review checkout and the agent's session first. Until then it is listed by its place.
-    const drafts = /** @type {Array<{ place: ChatContext | undefined, status: string }>} */ ([
-      ...(live !== null && live.thread === null ? [{ place: live.place, status: 'starting…' }] : []),
-      ...(queued !== null && queued.thread === null
-        ? [{ place: queued.place, status: 'question waiting' }]
-        : []),
-    ])
+    // A draft shows one time, also when many of its questions wait.
+    /** @type {Array<{ place: ChatContext | undefined, status: string }>} */
+    const drafts = []
+    for (const q of [live, ...queue]) {
+      if (q === null || q.thread !== null) continue
+      if (drafts.some(d => sameChatContext(d.place ?? WHOLE_PR, q.place ?? WHOLE_PR))) continue
+      drafts.push({ place: q.place, status: q === live ? 'starting…' : 'question waiting' })
+    }
     if (threads.length === 0 && drafts.length === 0) {
       index.innerHTML =
         '<p class="empty">No threads yet. Use ask on an attention point, a selection of lines, a file or a layer, or start a thread about the whole PR.</p>'
@@ -750,7 +785,7 @@ export function wireChat(options) {
           const status =
             t.name === live?.thread
               ? 'answering…'
-              : t.name === queued?.thread
+              : queue.some(q => q.thread === t.name)
                 ? 'question waiting'
                 : unseen.has(t.name)
                   ? 'new answer'
@@ -807,13 +842,9 @@ export function wireChat(options) {
     box.value = carry === undefined ? own : own.trim() === '' ? carry : `${own}\n\n${carry}`
   }
 
-  /** Puts the focus in the message box, or on the thread's name while the box waits. */
+  /** Puts the focus in the message box. */
   const focusBox = () => {
-    if (box.disabled) {
-      switchButton.focus()
-    } else {
-      box.focus()
-    }
+    box.focus()
   }
 
   /**
@@ -1077,7 +1108,7 @@ export function wireChat(options) {
 
   /**
    * Puts back the turns the saved transcript does not hold yet, when they belong to the thread on
-   * screen: the answer coming in, and the question waiting for it.
+   * screen: the answer coming in, and the questions waiting for it.
    * @param {ReadonlyArray<ChatTurn>} [saved] the thread's saved turns
    */
   const putBackPending = (saved = []) => {
@@ -1095,10 +1126,10 @@ export function wireChat(options) {
       live.redraw()
     }
     putBackRefused()
-    if (queued !== null && isHere(queued)) {
+    for (const q of queue.filter(isHere)) {
       emptyNote()
-      log.append(queued.user)
-      queued.shown = true
+      log.append(q.user)
+      q.shown = true
     }
     drawComposer()
   }
@@ -1140,7 +1171,7 @@ export function wireChat(options) {
    */
   const send = asked => {
     const message = (asked ?? box.value).trim()
-    if (message === '' || box.disabled) {
+    if (message === '') {
       return
     }
     if (asked === undefined) {
@@ -1151,13 +1182,9 @@ export function wireChat(options) {
     const question = { message, context, thread: activeThread, place: openPlace }
     const { turn } = appendTurn('user', renderMarkdown(message, { paths }), turnContext(context))
     if (live !== null) {
-      turn.insertAdjacentHTML(
-        'beforeend',
-        `<p class="muted small chat-waiting">Waiting for the answer in “${esc(answeringName())}”. It is sent as soon as that answer ends.</p>`
-      )
-      queued = { ...question, user: turn, shown: true }
-      drawComposer()
-      drawIndex()
+      queueSeq += 1
+      queue.push({ ...question, id: `q${queueSeq}`, user: turn, shown: true })
+      drawQueue()
       return
     }
     void runTurn(question, turn, true)
@@ -1165,7 +1192,7 @@ export function wireChat(options) {
 
   /**
    * Sends a question and draws its answer as it comes in, on screen while its thread is, and off
-   * screen otherwise. A question that waited for it goes next.
+   * screen otherwise. The oldest question that waits for it goes next.
    * @param {Question} question
    * @param {HTMLElement} user the question's turn
    * @param {boolean} shown whether the question's thread is on screen
@@ -1173,7 +1200,10 @@ export function wireChat(options) {
   const runTurn = async (question, user, shown) => {
     if (shown) {
       // The turn owns the log from here on, so a history load still on its way lands nowhere.
+      // The log stays as it is, so the waiting questions on it stay on screen.
+      const onScreen = queue.filter(q => q.shown)
       claimLog()
+      for (const q of onScreen) q.shown = true
       dispatch({ type: 'send' })
       scrollToBottom('follow')
     }
@@ -1182,6 +1212,8 @@ export function wireChat(options) {
     live = current
     // A first question's thread is listed by its place until the server names it.
     drawIndex()
+    // The first waiting question now waits for this answer.
+    drawWaiting()
     /** Whether the agent took the turn: until then there is no answer to have missed. */
     let agentTookTurn = false
     const activity = document.createElement('p')
@@ -1229,6 +1261,14 @@ export function wireChat(options) {
             const field = /** @param {string} key */ key => data[key]
             const thread = field('thread')
             if (event.event === 'turn' && typeof thread === 'string') {
+              // The other waiting questions of this draft go to the same thread.
+              if (current.thread === null) {
+                for (const q of queue) {
+                  if (q.thread === null && sameChatContext(q.place ?? WHOLE_PR, current.place ?? WHOLE_PR)) {
+                    q.thread = thread
+                  }
+                }
+              }
               current.thread = thread
               agentTookTurn = true
               // A draft's question names its thread here; the reader may be reading another one.
@@ -1344,11 +1384,11 @@ export function wireChat(options) {
         if (current.shown && scroll.pinned) {
           scrollToBottom('follow')
         }
-        const next = queued
-        queued = null
+        // A failed or stopped turn does not stop the queue.
+        const next = queue.shift()
         drawComposer()
         drawIndex()
-        if (next !== null) {
+        if (next !== undefined) {
           next.user.querySelector('.chat-waiting')?.remove()
           void runTurn(next, next.user, next.shown)
         }
@@ -1440,7 +1480,7 @@ export function wireChat(options) {
     const left = currentThread()
     // A draft whose first question is still on its way has no thread yet; the way back is its place.
     const leftDraft =
-      left === undefined && [live, queued].some(q => q !== null && q.thread === null && isHere(q))
+      left === undefined && [live, ...queue].some(q => q !== null && q.thread === null && isHere(q))
         ? (openPlace ?? WHOLE_PR)
         : undefined
     keepUnsent()
@@ -1500,6 +1540,36 @@ export function wireChat(options) {
     send()
   }
 
+  /**
+   * A command on a waiting question: send it now, edit it, or remove it.
+   * @param {string} act
+   * @param {string} id
+   */
+  const onQueueAct = (act, id) => {
+    const item = queue.find(q => q.id === id)
+    if (item === undefined) {
+      return
+    }
+    queue.splice(queue.indexOf(item), 1)
+    if (act === 'send-now') {
+      // Move it to the front and stop the current answer. The drain then sends it.
+      queue.unshift(item)
+      drawQueue()
+      const button = item.user.querySelector('[data-queue-act="send-now"]')
+      if (button instanceof HTMLElement) {
+        void runCommand(button, () => api.cancelChat(prNumber), { pendingLabel: 'sending…' })
+      }
+      return
+    }
+    item.user.remove()
+    if (act === 'edit') {
+      // Put the question in the box, before the text that the box has.
+      box.value = box.value.trim() === '' ? item.message : `${item.message}\n\n${box.value}`
+      focusBox()
+    }
+    drawQueue()
+  }
+
   /** @param {Event} event */
   const onClick = event => {
     const el = event.target instanceof Element ? event.target.closest('button') : null
@@ -1543,7 +1613,7 @@ export function wireChat(options) {
       // server has made it, the thread itself.
       threadList.close()
       const place = chatContextFromElement(el)
-      const pending = [live, queued].some(
+      const pending = [live, ...queue].some(
         q => q !== null && q.thread === null && sameChatContext(q.place ?? WHOLE_PR, place)
       )
       if (pending) {
@@ -1564,6 +1634,11 @@ export function wireChat(options) {
       }
       // The list, or the draft's way back, is gone from under the focus: the box takes it.
       focusBox()
+      return
+    }
+    const queueAct = el.getAttribute('data-queue-act')
+    if (queueAct !== null) {
+      onQueueAct(queueAct, el.getAttribute('data-queue-id') ?? '')
       return
     }
     if (el.id === 'chat-unseen') {
@@ -1601,8 +1676,8 @@ export function wireChat(options) {
         line: Number(el.getAttribute('data-line')),
       })
       // The pressed button is gone with the old card, so the focus goes to add to review.
-      const queue = redrawCard(card, entry)?.querySelector('[data-act="proposed-queue"]')
-      if (queue instanceof HTMLButtonElement) queue.focus()
+      const add = redrawCard(card, entry)?.querySelector('[data-act="proposed-queue"]')
+      if (add instanceof HTMLButtonElement) add.focus()
       return
     }
     const what = act === null ? undefined : PROPOSED_ACTS[act]
@@ -1808,26 +1883,16 @@ export function wireChat(options) {
         if (!threadPerPlace) setContext(next)
         openChat()
         await going
-        if (box.disabled) {
-          toast(
-            root,
-            live?.shown === true
-              ? 'An answer is coming in here. Ask this once it ends.'
-              : `A question already waits for the answer in “${answeringName()}”. Ask this once it is sent.`,
-            { tone: 'failed' }
-          )
-          return
-        }
         send(question)
       })()
     },
     /** Whether a question asked here waits to be sent, which a re-render would drop. */
     holdsUnsent() {
-      return queued !== null
+      return queue.length > 0
     },
     stop() {
       stopped = true
-      queued = null
+      queue.length = 0
       stopActivity()
       inFlight?.abort()
       inFlight = null
