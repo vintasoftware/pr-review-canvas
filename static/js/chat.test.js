@@ -2265,6 +2265,41 @@ describe('the question queue', () => {
     await flush()
   })
 
+  it('lists each new thread with a waiting question, and opens each one again', async () => {
+    const { root, streams } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    el(root, '#chat-new-thread').click()
+    await flush()
+    await sendMessage(root, 'a1?')
+    el(root, '#chat-new-thread').click()
+    await flush()
+    await sendMessage(root, 'b1?')
+    pickThread(root, 'pr-review-a-b-42-claude-t1')
+    await flush()
+    el(root, '#thread-switch').click()
+    const entries = () => [...root.querySelectorAll('#thread-index [data-draft-open]')]
+    expect(entries().map(d => d.textContent)).toEqual([
+      'New threadquestion waiting',
+      'New threadquestion waiting',
+    ])
+    const second = /** @type {HTMLElement} */ (entries()[1])
+    second.click()
+    await flush()
+    expect(queued(root)).toEqual(['b1? · After 1 question.'])
+    el(root, '#thread-switch').click()
+    const first = /** @type {HTMLElement} */ (entries()[0])
+    first.click()
+    await flush()
+    expect(queued(root)).toEqual([`a1? · ${NEXT}`])
+    streams[0]?.end()
+    await flush()
+    streams[1]?.end()
+    await flush()
+    streams[2]?.end()
+    await flush()
+  })
+
   it('keeps the questions of a place’s draft together after a new thread opened in between', async () => {
     const T3 = 'pr-review-a-b-42-claude-t3'
     const { root, chat, streams, sent } = mountQueue()

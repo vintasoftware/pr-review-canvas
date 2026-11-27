@@ -802,13 +802,13 @@ export function wireChat(options) {
     }
     // A thread's first question is in no list until the server has made the thread, which takes
     // the review checkout and the agent's session first. Until then it is listed by its place.
-    // A draft shows one time, also when many of its questions wait.
-    /** @type {Array<{ place: ChatContext | undefined, status: string }>} */
+    // A draft shows one time, also when many of its questions wait; two new threads are two drafts.
+    /** @type {Array<{ place: ChatContext | undefined, status: string, draft: number }>} */
     const drafts = []
     for (const q of [live, ...queue]) {
       if (q === null || q.thread !== null) continue
-      if (drafts.some(d => sameChatContext(d.place ?? WHOLE_PR, q.place ?? WHOLE_PR))) continue
-      drafts.push({ place: q.place, status: q === live ? 'starting…' : 'question waiting' })
+      if (drafts.some(d => d.draft === q.draft)) continue
+      drafts.push({ place: q.place, status: q === live ? 'starting…' : 'question waiting', draft: q.draft })
     }
     if (threads.length === 0 && drafts.length === 0) {
       index.innerHTML =
@@ -823,7 +823,7 @@ export function wireChat(options) {
         .filter(d => (d.place?.kind ?? 'pr') === kind)
         .map(
           d =>
-            `<li><button type="button" class="thread-item${activeThread === null && sameChatContext(d.place ?? WHOLE_PR, openPlace ?? WHOLE_PR) ? ' current" aria-current="true' : ''}" data-draft-open${chatContextAttrs(d.place ?? WHOLE_PR)}>` +
+            `<li><button type="button" class="thread-item${activeThread === null && d.draft === draft ? ' current" aria-current="true' : ''}" data-draft-open data-draft="${d.draft}"${chatContextAttrs(d.place ?? WHOLE_PR)}>` +
             `<span class="thread-item-t">${esc(d.place === undefined ? 'New thread' : placeName(d.place))}</span>` +
             `<span class="small muted">${esc(d.status)}</span></button></li>`
         )
@@ -1247,8 +1247,8 @@ export function wireChat(options) {
   }
 
   /**
-   * Ends an edit whose box leaves the screen, as cancel does: the question keeps its text, and the
-   * line goes on.
+   * Ends the edit when the reader leaves its thread or folds the panel, as cancel does: the
+   * question keeps its text, and the line goes on. Another tab, or a minimized pane, keeps it.
    */
   const endEdit = () => {
     if (editing === null) {
@@ -1540,15 +1540,18 @@ export function wireChat(options) {
    * An ask leaves the thread the reader was reading unasked for, so a draft an ask opened leads
    * back to it until its first question; new thread, clear, and the list are the reader's own move.
    * @param {ChatContext} anchor
-   * @param {{ fresh?: boolean, back?: boolean, carry?: string }} [opts]
+   * @param {{ fresh?: boolean, back?: boolean, carry?: string, draft?: number }} [opts] `draft`: the
+   *   number of the draft to open again, from its entry in the list or its way back
    */
   const openDraft = (anchor, opts = {}) => {
     const left = currentThread()
-    // A draft whose first question is still on its way has no thread yet; the way back is its place.
+    // A draft whose first question is still on its way has no thread yet; the way back is its place
+    // and its number.
     const leftDraft =
       left === undefined && [live, ...queue].some(q => q !== null && q.thread === null && isHere(q))
         ? (openPlace ?? WHOLE_PR)
         : undefined
+    const leftNumber = draft
     endEdit()
     keepUnsent()
     claimLog()
@@ -1558,13 +1561,13 @@ export function wireChat(options) {
     // A draft with a question on its way keeps the number of its oldest one. A fresh draft, or a
     // draft with no question on its way, takes a new number.
     const pending =
-      opts.fresh === true
+      opts.fresh === true || opts.draft !== undefined
         ? undefined
         : [live, ...queue].find(
             q => q !== null && q.thread === null && sameChatContext(q.place ?? WHOLE_PR, anchor)
           )
     draftCount += 1
-    draft = pending?.draft ?? draftCount
+    draft = opts.draft ?? pending?.draft ?? draftCount
     drawContext()
     restoreUnsent(opts.carry)
     proposed.clear()
@@ -1574,7 +1577,7 @@ export function wireChat(options) {
         : left !== undefined
           ? ` <button class="cmd" type="button" data-thread-open="${esc(left.name)}">back to “${esc(runningName(left, undefined))}”</button>`
           : leftDraft !== undefined && !sameChatContext(leftDraft, anchor)
-            ? ` <button class="cmd" type="button" data-draft-open${chatContextAttrs(leftDraft)}>back to “${esc(runningName(undefined, leftDraft.kind === 'pr' ? undefined : leftDraft))}”</button>`
+            ? ` <button class="cmd" type="button" data-draft-open data-draft="${leftNumber}"${chatContextAttrs(leftDraft)}>back to “${esc(runningName(undefined, leftDraft.kind === 'pr' ? undefined : leftDraft))}”</button>`
             : ''
     log.innerHTML =
       anchor.kind === 'pr'
@@ -1737,11 +1740,10 @@ export function wireChat(options) {
       // server has made it, the thread itself.
       threadList.close()
       const place = chatContextFromElement(el)
-      const pending = [live, ...queue].some(
-        q => q !== null && q.thread === null && sameChatContext(q.place ?? WHOLE_PR, place)
-      )
+      const number = Number(el.getAttribute('data-draft'))
+      const pending = [live, ...queue].some(q => q !== null && q.thread === null && q.draft === number)
       if (pending) {
-        openDraft(place)
+        openDraft(place, { draft: number })
       } else {
         void goToThread(place)
       }
