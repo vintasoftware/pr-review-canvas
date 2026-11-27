@@ -375,7 +375,7 @@ textarea:disabled {
   text-align: start;
   cursor: pointer;
 }
-/* The caret points up while the list shows, and down while it is folded. */
+/* The caret points up when the list shows, and down when the list is folded. */
 .chat-queue-head::after {
   content: '';
   margin-left: auto;
@@ -404,7 +404,7 @@ textarea:disabled {
   border-top: 1px solid var(--line);
   font-size: 13px;
 }
-/* A question shows on one line; its title holds the whole text. */
+/* A question shows on one line. Its title has the full text. */
 .chat-queue-text {
   grid-column: 1 / -1;
   overflow: hidden;
