@@ -1356,10 +1356,10 @@ the context line, which lists the thread's waiting questions, says when each goe
 ones that wait in other threads. Its head folds the list. Each waiting question has three commands:
 
 - **send now** puts it first and stops the answer coming in, so it goes next.
-- **edit** changes it in place: `Enter` saves, `Esc` cancels. It keeps its place in line and its
+- **edit** changes it in place: `Enter` saves, `Esc` cancels. It keeps its place in the queue and its
   context. While you edit the next question to go, it waits for you, and its row says so once the
   answer before it ends. Leaving the thread, or folding the panel, cancels the edit.
-- **remove** takes it out of the line.
+- **remove** takes it out of the queue.
 
 **stop** ends only the answer coming in; the questions that wait still go. An answer that fails does
 not stop them either: each question shows its own error. The waiting questions of a new thread all
