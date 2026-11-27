@@ -1781,7 +1781,11 @@ describe('the question queue', () => {
             message: input.message,
             ...(input.thread === undefined ? {} : { thread: input.thread }),
           })
-          streams.push({ onEvent: opts.onEvent, end: () => resolve(undefined), fail: reject })
+          const end = () => {
+            opts.onEvent({ event: 'chunk', data: { text: `answer to ${input.message}` } })
+            resolve(undefined)
+          }
+          streams.push({ onEvent: opts.onEvent, end, fail: reject })
         }),
       ...api,
     })
@@ -1789,6 +1793,12 @@ describe('the question queue', () => {
   }
   /** @param {ParentNode} root */
   const notes = root => [...root.querySelectorAll('#chat-log .chat-waiting')].map(n => n.textContent)
+  /**
+   * The turns of the log in order, each as its text: a question, or an answer.
+   * @param {ParentNode} root
+   */
+  const turns = root =>
+    [...root.querySelectorAll('#chat-log .turn')].map(t => t.querySelector('.prose')?.textContent?.trim())
   /**
    * The command of a waiting question, found by the question's text.
    * @param {ParentNode} root
@@ -1810,6 +1820,7 @@ describe('the question queue', () => {
     await sendMessage(root, 'first?')
     await sendMessage(root, 'second?')
     await sendMessage(root, 'third?')
+    expect(turns(root)).toEqual(['overall?', '', 'first?', 'second?', 'third?'])
     expect(notes(root)).toEqual([
       'Waiting for the answer in “overall”. It is sent as soon as that answer ends. send noweditremove',
       'Waiting. It is sent after the question before it. send noweditremove',
@@ -1820,7 +1831,8 @@ describe('the question queue', () => {
     expect(chat.holdsUnsent()).toBe(true)
     streams[0]?.end()
     await flush()
-    // The next one is sent, and the notes move up.
+    // The next one is sent, its answer goes under it, and the waiting questions stay at the end.
+    expect(turns(root)).toEqual(['overall?', 'answer to overall?', 'first?', '', 'second?', 'third?'])
     expect(notes(root)).toEqual([
       'Waiting for the answer in “overall”. It is sent as soon as that answer ends. send noweditremove',
       'Waiting. It is sent after the question before it. send noweditremove',
@@ -1835,8 +1847,17 @@ describe('the question queue', () => {
     expect(sent.map(q => q.message)).toEqual(['overall?', 'first?', 'second?', 'third?'])
     expect(sent.every(q => q.thread === T2)).toBe(true)
     expect(notes(root)).toEqual([])
-    // Each answer is drawn in the thread on screen, under its own question.
-    expect(root.querySelectorAll('#chat-log .turn.a')).toHaveLength(4)
+    // Each answer is under its own question.
+    expect(turns(root)).toEqual([
+      'overall?',
+      'answer to overall?',
+      'first?',
+      'answer to first?',
+      'second?',
+      'answer to second?',
+      'third?',
+      'answer to third?',
+    ])
   })
 
   it('keeps the queue going after a stopped answer and after a failed one', async () => {
@@ -1884,10 +1905,11 @@ describe('the question queue', () => {
     queueCmd(root, 'second?', 'send-now').click()
     await flush()
     expect(cancelled).toEqual([42])
-    // The notes follow the new order, in the order of the log.
+    // The log shows the waiting questions in their new order.
+    expect(turns(root)).toEqual(['overall?', '', 'second?', 'first?'])
     expect(notes(root)).toEqual([
-      'Waiting. It is sent after the question before it. send noweditremove',
       'Waiting for the answer in “overall”. It is sent as soon as that answer ends. send noweditremove',
+      'Waiting. It is sent after the question before it. send noweditremove',
     ])
     streams[0]?.onEvent({ event: 'cancelled', data: {} })
     streams[0]?.end()
@@ -1898,6 +1920,14 @@ describe('the question queue', () => {
     expect(sent.map(q => q.message)).toEqual(['overall?', 'second?', 'first?'])
     streams[2]?.end()
     await flush()
+    expect(turns(root)).toEqual([
+      'overall?',
+      'answer to overall?',
+      'second?',
+      'answer to second?',
+      'first?',
+      'answer to first?',
+    ])
   })
 
   it('edits a waiting question: it leaves the queue and the log, and goes back in the box first', async () => {

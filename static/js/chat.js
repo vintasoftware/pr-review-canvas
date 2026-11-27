@@ -467,11 +467,11 @@ export function wireChat(options) {
   let live = null
   /**
    * The questions asked while an answer comes in, oldest first. The server answers one question
-   * of a review at a time, so each is sent when the answer before it ends.
-   * @type {Array<Question & { id: string, user: HTMLElement, shown: boolean }>}
+   * of a review at a time, so each is sent when the answer before it ends. The id of its turn
+   * names it in its commands.
+   * @type {Array<Question & { user: HTMLElement, shown: boolean }>}
    */
   const queue = []
-  let queueSeq = 0
   /**
    * Questions that never reached the agent while their thread was off screen, with the reason in
    * their answer. The server saved nothing of them, so they go back on screen with their thread.
@@ -514,13 +514,17 @@ export function wireChat(options) {
   let restoring = false
 
   /** Takes the log over and returns the number that says so. */
-  const claimLog = () => {
+  const takeLog = () => {
     logSeq += 1
     restoring = false
-    // What the log showed goes, the answer coming in and the waiting question with it.
+    return logSeq
+  }
+
+  /** Takes the log over to replace it: what the log showed goes off screen. */
+  const claimLog = () => {
     if (live !== null) live.shown = false
     for (const q of queue) q.shown = false
-    return logSeq
+    return takeLog()
   }
 
   const applyWidth = /** @param {number} width */ width => {
@@ -687,10 +691,14 @@ export function wireChat(options) {
     )
   }
 
-  /** Draws the note of each waiting question again, for its place in the queue. */
+  /**
+   * Draws the note of each waiting question again, for its place in the queue. The waiting
+   * questions on screen go to the end of the log, in queue order, below each answer that started.
+   */
   const drawWaiting = () => {
     queue.forEach((q, position) => {
-      const html = waitingHtml(position, q.id)
+      if (q.shown) log.append(q.user)
+      const html = waitingHtml(position, q.user.id)
       const note = q.user.querySelector('.chat-waiting')
       if (note === null) {
         q.user.insertAdjacentHTML('beforeend', html)
@@ -840,11 +848,6 @@ export function wireChat(options) {
   const restoreUnsent = carry => {
     const own = unsent.get(unsentKey()) ?? ''
     box.value = carry === undefined ? own : own.trim() === '' ? carry : `${own}\n\n${carry}`
-  }
-
-  /** Puts the focus in the message box. */
-  const focusBox = () => {
-    box.focus()
   }
 
   /**
@@ -1182,8 +1185,7 @@ export function wireChat(options) {
     const question = { message, context, thread: activeThread, place: openPlace }
     const { turn } = appendTurn('user', renderMarkdown(message, { paths }), turnContext(context))
     if (live !== null) {
-      queueSeq += 1
-      queue.push({ ...question, id: `q${queueSeq}`, user: turn, shown: true })
+      queue.push({ ...question, user: turn, shown: true })
       drawQueue()
       return
     }
@@ -1200,10 +1202,7 @@ export function wireChat(options) {
   const runTurn = async (question, user, shown) => {
     if (shown) {
       // The turn owns the log from here on, so a history load still on its way lands nowhere.
-      // The log stays as it is, so the waiting questions on it stay on screen.
-      const onScreen = queue.filter(q => q.shown)
-      claimLog()
-      for (const q of onScreen) q.shown = true
+      takeLog()
       dispatch({ type: 'send' })
       scrollToBottom('follow')
     }
@@ -1546,7 +1545,7 @@ export function wireChat(options) {
    * @param {string} id
    */
   const onQueueAct = (act, id) => {
-    const item = queue.find(q => q.id === id)
+    const item = queue.find(q => q.user.id === id)
     if (item === undefined) {
       return
     }
@@ -1565,7 +1564,7 @@ export function wireChat(options) {
     if (act === 'edit') {
       // Put the question in the box, before the text that the box has.
       box.value = box.value.trim() === '' ? item.message : `${item.message}\n\n${box.value}`
-      focusBox()
+      box.focus()
     }
     drawQueue()
   }
@@ -1587,7 +1586,7 @@ export function wireChat(options) {
         setContext(WHOLE_PR)
       }
       // The command hides once the context is the whole PR, so the focus goes on to the box.
-      focusBox()
+      box.focus()
       return
     }
     if (el.id === 'chat-stop') {
@@ -1601,7 +1600,7 @@ export function wireChat(options) {
     if (el.id === 'new-thread' || el.id === 'chat-new-thread') {
       threadList.close()
       openDraft(WHOLE_PR, { fresh: true })
-      focusBox()
+      box.focus()
       return
     }
     if (el.id === 'thread-goto') {
@@ -1621,7 +1620,7 @@ export function wireChat(options) {
       } else {
         void goToThread(place)
       }
-      focusBox()
+      box.focus()
       return
     }
     const picked = el.getAttribute('data-thread-open')
@@ -1633,7 +1632,7 @@ export function wireChat(options) {
         void openThread(picked)
       }
       // The list, or the draft's way back, is gone from under the focus: the box takes it.
-      focusBox()
+      box.focus()
       return
     }
     const queueAct = el.getAttribute('data-queue-act')

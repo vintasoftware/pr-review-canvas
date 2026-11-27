@@ -173,10 +173,14 @@ test('another thread opens while an answer comes in, and questions asked there w
   )
 
   release()
-  // The waiting questions went in order once the first answer ended, and their answers arrive here.
+  // The waiting questions went in order once the first answer ended, each with its answer under it.
+  const turns = page.locator('#chat-log .turn')
   await expect(page.locator('#chat-log .turn.a')).toHaveCount(2)
   await expect(page.locator('#chat-log .chat-waiting')).toHaveCount(0)
-  await expect(page.locator('#chat-log .turn.a').nth(1)).toContainText('covered at')
+  await expect(turns.nth(0)).toContainText('And overall?')
+  await expect(turns.nth(1)).toContainText('covered at')
+  await expect(turns.nth(2)).toContainText('And the tests?')
+  await expect(turns.nth(3)).toContainText('covered at')
   // The first answer arrived in its own thread meanwhile.
   await page.locator('#thread-switch').click()
   await page.locator('#thread-index').getByText('Sum instead of product').click()
