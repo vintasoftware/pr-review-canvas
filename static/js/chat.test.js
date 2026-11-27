@@ -1972,6 +1972,33 @@ describe('the question queue', () => {
     await flush()
   })
 
+  it('sends the waiting questions of a new thread about the whole PR to one thread', async () => {
+    const T3 = 'pr-review-a-b-42-claude-t3'
+    const { root, streams, sent } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    el(root, '#thread-switch').click()
+    el(root, '#new-thread').click()
+    await flush()
+    await sendMessage(root, 'one?')
+    await sendMessage(root, 'two?')
+    await sendMessage(root, 'three?')
+    queueCmd(root, 'three?', 'remove').click()
+    expect(notes(root)).toHaveLength(2)
+    streams[0]?.end()
+    await flush()
+    streams[1]?.onEvent({ event: 'turn', data: { thread: T3, agent: 'claude', seeded: true } })
+    streams[1]?.end()
+    await flush()
+    expect(sent).toEqual([
+      { message: 'overall?', thread: T2 },
+      { message: 'one?' },
+      { message: 'two?', thread: T3 },
+    ])
+    streams[2]?.end()
+    await flush()
+  })
+
   it('marks a saved thread with a waiting question as such in the list', async () => {
     const { root, streams } = mountQueue()
     await flush()
