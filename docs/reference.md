@@ -1357,8 +1357,8 @@ ones that wait in other threads. Its head folds the list. Each waiting question 
 
 - **send now** puts it first and stops the answer coming in, so it goes next.
 - **edit** changes it in place: `Enter` saves, `Esc` cancels. It keeps its place in line and its
-  context. While you edit the next question to go, it waits for you. Leaving the thread, or folding
-  the panel, cancels the edit.
+  context. While you edit the next question to go, it waits for you, and its row says so once the
+  answer before it ends. Leaving the thread, or folding the panel, cancels the edit.
 - **remove** takes it out of the line.
 
 **stop** ends only the answer coming in; the questions that wait still go. An answer that fails does
