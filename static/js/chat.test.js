@@ -1829,7 +1829,7 @@ describe('the question queue', () => {
     editField(root).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
   const T2 = 'pr-review-a-b-42-claude-t2'
   const NEXT = 'Next, when the answer in “overall” ends.'
-  const HELD = 'The line waits for this edit. Enter sends it, Esc sends the old text.'
+  const HELD = 'The queue waits for this edit. Enter sends it, Esc sends the old text.'
 
   it('queues two questions in the thread that answers, and sends them oldest first', async () => {
     const { root, chat, streams, sent } = mountQueue()
@@ -2005,7 +2005,7 @@ describe('the question queue', () => {
     await flush()
   })
 
-  it('holds the line while the next question is in edit, and keeps what the reader typed', async () => {
+  it('holds the queue while the next question is in edit, and keeps what the reader typed', async () => {
     /** @type {unknown[]} */
     const cancelled = []
     const { root, streams, sent } = mountQueue({
@@ -2051,7 +2051,7 @@ describe('the question queue', () => {
     await flush()
   })
 
-  it('cancels an edit whose box leaves the screen, and the line goes on', async () => {
+  it('cancels an edit whose box leaves the screen, and the queue goes on', async () => {
     const { root, streams, sent } = mountQueue()
     await flush()
     await sendMessage(root, 'overall?')
