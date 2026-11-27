@@ -1141,14 +1141,14 @@ export function wireChat(options) {
   }
 
   /**
-   * Whether a question belongs to the thread on screen: the same saved thread, or the draft of
-   * the same place.
+   * Whether a question belongs to the thread on screen: the same saved thread, or the same draft,
+   * by its number. Two new threads about the same place are two drafts.
    * @param {Question} question
    */
   const isHere = question =>
     question.thread !== null
       ? question.thread === activeThread
-      : activeThread === null && sameChatContext(question.place ?? WHOLE_PR, openPlace ?? WHOLE_PR)
+      : activeThread === null && question.draft === draft
 
   /**
    * Puts back the turns the saved transcript does not hold yet, when they belong to the thread on
@@ -1179,7 +1179,11 @@ export function wireChat(options) {
    * thread takes it back: it failed already, so nothing new mixes with it.
    */
   const putBackRefused = () => {
-    for (const turn of refused.filter(isHere)) {
+    const here = /** @param {Question} q */ q =>
+      q.thread !== null
+        ? q.thread === activeThread
+        : activeThread === null && sameChatContext(q.place ?? WHOLE_PR, openPlace ?? WHOLE_PR)
+    for (const turn of refused.filter(here)) {
       emptyNote()
       log.append(turn.user, turn.answer)
       refused.splice(refused.indexOf(turn), 1)
@@ -1240,6 +1244,18 @@ export function wireChat(options) {
     const next = queue[0]
     queue.shift()
     void runTurn(next)
+  }
+
+  /**
+   * Ends an edit whose box leaves the screen, as cancel does: the question keeps its text, and the
+   * line goes on.
+   */
+  const endEdit = () => {
+    if (editing === null) {
+      return
+    }
+    editing = null
+    drain()
   }
 
   /**
@@ -1314,13 +1330,7 @@ export function wireChat(options) {
               // The other waiting questions of this draft go to the same thread.
               if (current.thread === null) {
                 for (const q of queue) {
-                  if (
-                    q.thread === null &&
-                    q.draft === current.draft &&
-                    sameChatContext(q.place ?? WHOLE_PR, current.place ?? WHOLE_PR)
-                  ) {
-                    q.thread = thread
-                  }
+                  if (q.thread === null && q.draft === current.draft) q.thread = thread
                 }
               }
               current.thread = thread
@@ -1508,6 +1518,7 @@ export function wireChat(options) {
    * @param {{ carry?: string }} [opts] `carry`: text the reader takes along from the thread left
    */
   const openThread = async (name, opts = {}) => {
+    endEdit()
     keepUnsent()
     activeThread = name
     if (unseen.has(name)) setUnseen(name, 0)
@@ -1538,6 +1549,7 @@ export function wireChat(options) {
       left === undefined && [live, ...queue].some(q => q !== null && q.thread === null && isHere(q))
         ? (openPlace ?? WHOLE_PR)
         : undefined
+    endEdit()
     keepUnsent()
     claimLog()
     activeThread = null
@@ -1614,6 +1626,7 @@ export function wireChat(options) {
   const onQueueAct = (act, id) => {
     if (act === 'toggle') {
       queueOpen = !queueOpen
+      if (!queueOpen) endEdit()
       drawQueuePanel()
       return
     }

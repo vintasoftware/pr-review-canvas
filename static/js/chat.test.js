@@ -2042,6 +2042,46 @@ describe('the question queue', () => {
     await flush()
   })
 
+  it('cancels an edit whose box leaves the screen, and the line goes on', async () => {
+    const { root, streams, sent } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    await sendMessage(root, 'first?')
+    await sendMessage(root, 'second?')
+    // A fold cancels the edit: the question keeps its text.
+    queueCmd(root, 'first?', 'edit').click()
+    editField(root).value = 'first, changed?'
+    el(root, '#chat-queue .chat-queue-head').click()
+    el(root, '#chat-queue .chat-queue-head').click()
+    expect(queued(root)).toEqual([`first? · ${NEXT}`, 'second? · After 1 question.'])
+    // Leaving the thread cancels it too, so the answer that ends sends the next question.
+    queueCmd(root, 'first?', 'edit').click()
+    editField(root).value = 'first, changed again?'
+    pickThread(root, 'pr-review-a-b-42-claude-t1')
+    await flush()
+    streams[0]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'first?'])
+    // An edit ended with an answer no longer coming in sends the question at once.
+    pickThread(root, T2)
+    await flush()
+    streams[1]?.end()
+    await flush()
+    streams[2]?.end()
+    await flush()
+    await sendMessage(root, 'third?')
+    await sendMessage(root, 'fourth?')
+    queueCmd(root, 'fourth?', 'edit').click()
+    streams[3]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'first?', 'second?', 'third?'])
+    el(root, '#chat-queue .chat-queue-head').click()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'first?', 'second?', 'third?', 'fourth?'])
+    streams[4]?.end()
+    await flush()
+  })
+
   it('removes a waiting question', async () => {
     const { root, chat, streams, sent } = mountQueue()
     await flush()
@@ -2196,6 +2236,32 @@ describe('the question queue', () => {
     expect(sent).toEqual([{ message: 'first new thread?' }, { message: 'second new thread?' }])
     expect(el(root, '#thread-title').textContent).toBe('New thread')
     streams[1]?.end()
+    await flush()
+  })
+
+  it('keeps a waiting question of a new thread out of a second new thread', async () => {
+    const T3 = 'pr-review-a-b-42-claude-t3'
+    const { root, streams, sent } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    el(root, '#chat-new-thread').click()
+    await flush()
+    await sendMessage(root, 'a1?')
+    el(root, '#chat-new-thread').click()
+    await flush()
+    // The second new thread does not list the first one's question, nor draw it when it goes.
+    expect(el(root, '#chat-queue').hidden).toBe(true)
+    streams[0]?.end()
+    await flush()
+    expect(turns(root)).toEqual([])
+    streams[1]?.onEvent({ event: 'turn', data: { thread: T3, agent: 'claude', seeded: true } })
+    await flush()
+    expect(el(root, '#thread-title').textContent).toBe('New thread')
+    await sendMessage(root, 'b1?')
+    streams[1]?.end()
+    await flush()
+    expect(sent).toEqual([{ message: 'overall?', thread: T2 }, { message: 'a1?' }, { message: 'b1?' }])
+    streams[2]?.end()
     await flush()
   })
 
