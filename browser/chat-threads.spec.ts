@@ -125,7 +125,7 @@ test('the wheel scrolls a long list of threads, and the page under a short one',
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
 })
 
-test('another thread opens while an answer comes in, and a question asked there goes next', async ({
+test('another thread opens while an answer comes in, and questions asked there wait their turn', async ({
   page,
   chatServer,
 }, testInfo) => {
@@ -158,11 +158,25 @@ test('another thread opens while an answer comes in, and a question asked there 
   await expect(page.locator('#chat-log')).toContainText(
     'Waiting for the answer in “point · Sum instead of product”.'
   )
+  // The box stays on, and a second question waits behind the first.
+  await expect(page.locator('#msg')).toBeEnabled()
+  await expect(page.locator('#chat-send')).toBeVisible()
+  await expect(page.locator('#msg')).toHaveAttribute(
+    'placeholder',
+    'AI Chat is answering in “point · Sum instead of product”. Ask here and it waits its turn…'
+  )
+  await page.locator('#msg').fill('And the tests?')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('#chat-log .chat-waiting')).toHaveCount(2)
+  await expect(page.locator('#chat-log .chat-waiting').nth(1)).toContainText(
+    'Waiting. It is sent after the question before it.'
+  )
 
   release()
-  // The waiting question went once the first answer ended, and its answer arrives here.
-  await expect(page.locator('#chat-log')).toContainText('covered at')
-  await expect(page.locator('#chat-log')).not.toContainText('Waiting for the answer in')
+  // The waiting questions went in order once the first answer ended, and their answers arrive here.
+  await expect(page.locator('#chat-log .turn.a')).toHaveCount(2)
+  await expect(page.locator('#chat-log .chat-waiting')).toHaveCount(0)
+  await expect(page.locator('#chat-log .turn.a').nth(1)).toContainText('covered at')
   // The first answer arrived in its own thread meanwhile.
   await page.locator('#thread-switch').click()
   await page.locator('#thread-index').getByText('Sum instead of product').click()
