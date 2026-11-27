@@ -107,6 +107,8 @@ export function renderChatShell(opts) {
     '<button class="cmd unseen" type="button" id="chat-unseen" hidden aria-live="polite"></button>' +
     // The questions that wait their turn in this thread; drawn while one waits.
     '<section class="chat-queue" id="chat-queue" aria-label="Queued questions" hidden></section>' +
+    // Says aloud when the line starts to wait for an edit; the panel redraws, so it lives outside.
+    '<p class="sr" id="chat-queue-status" aria-live="polite"></p>' +
     '<p class="ctx-line" id="chat-ctx-line">Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
     ' <button class="cmd" type="button" id="thread-goto" title="Go to the code" hidden>go to code</button>' +
     ' <button class="cmd" type="button" id="chat-clear" title="Clear: ask about the whole PR" hidden>clear</button></p>' +
@@ -339,6 +341,9 @@ function mustFind(root, selector, kind) {
   throw new Error(`the AI Chat pane has no ${selector}`)
 }
 
+/** What the question in edit says while the line waits for it. */
+const HELD = 'The line waits for this edit. Enter sends it, Esc sends the old text.'
+
 /**
  * Wires the pane. The returned handle is what the page uses to set the context from an `[ ask ]`
  * command and to take the wiring down before a re-render.
@@ -388,6 +393,7 @@ export function wireChat(options) {
   const bubble = mustFind(root, '#chat-unseen', HTMLElement)
   const stopButton = mustFind(root, '#chat-stop', HTMLElement)
   const queueBox = mustFind(root, '#chat-queue', HTMLElement)
+  const queueStatus = mustFind(root, '#chat-queue-status', HTMLElement)
   const reviewPanel = qs(`#${REVIEW_PANEL_ID}`, pane)
 
   /** @type {ChatContext} */
@@ -705,21 +711,23 @@ export function wireChat(options) {
     const position = queue.indexOf(q)
     const cmd = /** @param {string} act @param {string} label */ (act, label) =>
       `<button class="cmd" type="button" data-queue-act="${act}" data-queue-id="${esc(q.id)}">${label}</button>`
-    if (q.id === editing) {
-      return (
-        `<li class="chat-queue-item"><textarea class="chat-queue-edit" rows="2" data-queue-id="${esc(q.id)}" aria-label="Edit the waiting question">${esc(q.message)}</textarea>` +
-        `<span class="chat-queue-cmds">${cmd('save', 'save')}${cmd('cancel', 'cancel')}<span class="muted small">enter to save · esc to cancel</span></span></li>`
-      )
-    }
+    // The first question while no answer comes in is the one in edit: it holds the line.
     const when =
       position > 0
         ? `After ${position === 1 ? '1 question' : `${position} questions`}.`
         : live === null
-          ? 'Next.'
+          ? HELD
           : `Next, when the answer in “${answeringName()}” ends.`
+    const whenHtml = `<span class="muted small chat-queue-when">${esc(when)}</span>`
+    if (q.id === editing) {
+      return (
+        `<li class="chat-queue-item"><textarea class="chat-queue-edit" rows="2" data-queue-id="${esc(q.id)}" aria-label="Edit the waiting question">${esc(q.message)}</textarea>` +
+        `${whenHtml}<span class="chat-queue-cmds">${cmd('save', 'save')}${cmd('cancel', 'cancel')}<span class="muted small">enter to save · esc to cancel</span></span></li>`
+      )
+    }
     return (
       `<li class="chat-queue-item"><span class="chat-queue-text" title="${esc(q.message)}">${esc(q.message)}</span>` +
-      `<span class="muted small chat-queue-when">${esc(when)}</span>` +
+      whenHtml +
       `<span class="chat-queue-cmds">${cmd('send-now', 'send now')}${cmd('edit', 'edit')}${cmd('remove', 'remove')}</span></li>`
     )
   }
@@ -729,6 +737,8 @@ export function wireChat(options) {
    * many wait in other threads. An edit keeps its text and focus across a redraw.
    */
   const drawQueuePanel = () => {
+    const status = live === null && editing !== null && queue[0]?.id === editing ? HELD : ''
+    if (queueStatus.textContent !== status) queueStatus.textContent = status
     const here = queue.filter(isHere)
     queueBox.hidden = here.length === 0
     const field = queueBox.querySelector('textarea')
@@ -1455,8 +1465,8 @@ export function wireChat(options) {
           scrollToBottom('follow')
         }
         // A failed or stopped turn does not stop the queue.
-        drawQueue()
         drain()
+        drawQueue()
       }
     }
   }
