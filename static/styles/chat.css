@@ -395,15 +395,19 @@ textarea:disabled {
   padding: 0 10px 8px;
   list-style: none;
 }
+/* A row: the question on its own line, then when it goes, with its commands at the end. */
 .chat-queue-item {
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: baseline;
   padding-top: 6px;
   border-top: 1px solid var(--line);
   font-size: 13px;
 }
 /* A question shows on one line; its title holds the whole text. */
 .chat-queue-text {
+  grid-column: 1 / -1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -416,6 +420,7 @@ textarea:disabled {
   font-size: 12px;
 }
 .chat-queue-edit {
+  grid-column: 1 / -1;
   min-height: 40px;
   font: inherit;
 }
