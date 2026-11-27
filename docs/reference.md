@@ -1351,12 +1351,14 @@ Use **stop** to interrupt a reply. Only one chat turn can run per PR at a time. 
 coming in, ask, the list of threads, and **new thread** still open any thread, and the answer keeps
 arriving in its own. The message box stays open: a question you ask meanwhile, in this thread or in
 any other, waits its turn. Questions wait in the order you asked them, and each one is sent when the
-answer before it ends. A waiting question says what it waits for, and has three commands:
+answer before it ends; it goes into the thread then. Until then it is in the **Queued** panel over
+the context line, which lists the thread's waiting questions, says when each goes, and counts the
+ones that wait in other threads. Its head folds the list. Each waiting question has three commands:
 
 - **send now** puts it first and stops the answer coming in, so it goes next.
-- **edit** takes it out of the line and puts it back in the box, with the context it was asked about,
-  above any text the box holds.
-- **remove** takes it out of the line and the thread.
+- **edit** changes it in place: `Enter` saves, `Esc` cancels. It keeps its place in line and its
+  context. While you edit the next question to go, it waits for you.
+- **remove** takes it out of the line.
 
 **stop** ends only the answer coming in; the questions that wait still go. An answer that fails does
 not stop them either: each question shows its own error. The waiting questions of a new thread all
