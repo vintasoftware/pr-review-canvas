@@ -342,7 +342,7 @@ function mustFind(root, selector, kind) {
 }
 
 /** The text of the question in edit while the queue waits for it. */
-const HELD = 'The line waits for this edit. Enter sends it, Esc sends the old text.'
+const HELD = 'The queue waits for this edit. Enter sends it, Esc sends the old text.'
 
 /**
  * Wires the pane. The returned handle is what the page uses to set the context from an `[ ask ]`
