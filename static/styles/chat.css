@@ -353,6 +353,17 @@ textarea:disabled {
 .chat-activity.checking-out {
   color: var(--accent);
 }
+/* A waiting question: its note, then its commands on the same line, or on the next. */
+.chat-waiting {
+  margin: 6px 0 0;
+}
+.chat-waiting-cmds {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: 4px;
+  font-size: 12px;
+}
 .chat-composer {
   position: relative;
   padding: 12px 14px;
@@ -369,9 +380,6 @@ textarea {
 .chat-composer .cmd.fill {
   padding: 4px 10px;
   box-shadow: 2px 2px 0 var(--shadow);
-}
-.chat-composer .cmd.fill:disabled {
-  box-shadow: none;
 }
 
 /* ---- The side pane's tabs: AI Chat and the review being written ---- */
