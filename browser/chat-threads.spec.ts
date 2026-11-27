@@ -182,7 +182,7 @@ test('another thread opens while an answer comes in, and questions asked there w
   )
 
   release()
-  // The waiting questions went in order once the first answer ended, each with its answer under it.
+  // Each waiting question went in order, with its answer under it.
   const turns = page.locator('#chat-log .turn')
   await expect(page.locator('#chat-log .turn.a')).toHaveCount(2)
   await expect(queue).toBeHidden()

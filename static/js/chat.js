@@ -105,9 +105,9 @@ export function renderChatShell(opts) {
     // thread. The bubble sits on the composer too, so it clears it at any height.
     '<form class="chat-composer" id="chat-form">' +
     '<button class="cmd unseen" type="button" id="chat-unseen" hidden aria-live="polite"></button>' +
-    // The questions that wait their turn in this thread; drawn while one waits.
+    // The waiting questions of the open thread.
     '<section class="chat-queue" id="chat-queue" aria-label="Queued questions" hidden></section>' +
-    // Says aloud when the line starts to wait for an edit; the panel redraws, so it lives outside.
+    // Outside the panel, so a redraw does not reset what a screen reader hears.
     '<p class="sr" id="chat-queue-status" aria-live="polite"></p>' +
     '<p class="ctx-line" id="chat-ctx-line">Context: <span class="ctx-chip" id="chat-ctx">whole PR</span>' +
     ' <button class="cmd" type="button" id="thread-goto" title="Go to the code" hidden>go to code</button>' +
@@ -202,8 +202,7 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
 
 /**
  * A question and the thread it goes to: the one open when it was asked, by name, or for a draft
- * by its place. `draft` is the number of the draft it was asked in, so two new threads about the
- * same place stay apart.
+ * by its place. `draft` is the number of its draft: two new threads about one place are two drafts.
  * @typedef {{ message: string, context: ChatContext, thread: string | null, place: ChatContext | undefined, draft: number }} Question
  */
 
@@ -476,14 +475,13 @@ export function wireChat(options) {
    */
   let live = null
   /**
-   * The questions asked while an answer comes in, oldest first. The server answers one question
-   * of a review at a time, so each is sent when the answer before it ends. A waiting question
-   * shows in the queue panel of its thread, and goes into the log when it is sent.
+   * The waiting questions, oldest first. The server answers one question of a review at a time.
+   * A waiting question goes into the log when it is sent.
    * @type {Array<Question & { id: string }>}
    */
   const queue = []
   let queueSeq = 0
-  /** The id of the waiting question the reader edits in the panel. It holds the line. */
+  /** The id of the waiting question in edit. When it is first, the line waits for it. */
   /** @type {string | null} */
   let editing = null
   /** Whether the queue panel shows its list or only its head. */
@@ -687,9 +685,8 @@ export function wireChat(options) {
     )
 
   /**
-   * The composer of the thread on screen. It always takes a question: while an answer comes in,
-   * the question waits its turn in the queue panel. Stop shows while the open thread's own answer
-   * comes in.
+   * The composer of the thread on screen. It always takes a question. Stop shows while this
+   * thread's answer comes in.
    */
   const drawComposer = () => {
     drawQueuePanel()
@@ -703,15 +700,14 @@ export function wireChat(options) {
   }
 
   /**
-   * One waiting question in the panel: its text, when it goes, and its commands, or a box to edit
-   * it in.
+   * One row of the panel: a waiting question, or its edit box.
    * @param {Question & { id: string }} q
    */
   const queueItemHtml = q => {
     const position = queue.indexOf(q)
     const cmd = /** @param {string} act @param {string} label */ (act, label) =>
       `<button class="cmd" type="button" data-queue-act="${act}" data-queue-id="${esc(q.id)}">${label}</button>`
-    // The first question while no answer comes in is the one in edit: it holds the line.
+    // Only a question in edit is first while no answer comes in.
     const when =
       position > 0
         ? `After ${position === 1 ? '1 question' : `${position} questions`}.`
@@ -733,8 +729,7 @@ export function wireChat(options) {
   }
 
   /**
-   * The queue panel of the thread on screen: its waiting questions in the order they go, and how
-   * many wait in other threads. An edit keeps its text and focus across a redraw.
+   * The panel of the open thread. A redraw keeps the text and focus of an edit.
    */
   const drawQueuePanel = () => {
     const status = live === null && editing !== null && queue[0]?.id === editing ? HELD : ''
@@ -812,7 +807,7 @@ export function wireChat(options) {
     }
     // A thread's first question is in no list until the server has made the thread, which takes
     // the review checkout and the agent's session first. Until then it is listed by its place.
-    // A draft shows one time, also when many of its questions wait; two new threads are two drafts.
+    // One entry per draft, also when many of its questions wait.
     /** @type {Array<{ place: ChatContext | undefined, status: string, draft: number }>} */
     const drafts = []
     for (const q of [live, ...queue]) {
@@ -1151,8 +1146,8 @@ export function wireChat(options) {
   }
 
   /**
-   * Whether a question belongs to the thread on screen: the same saved thread, or the same draft,
-   * by its number. Two new threads about the same place are two drafts.
+   * Whether a question belongs to the thread on screen: the same saved thread, or the same draft
+   * number.
    * @param {Question} question
    */
   const isHere = question =>
@@ -1244,8 +1239,8 @@ export function wireChat(options) {
   }
 
   /**
-   * Sends the oldest waiting question once no answer comes in. A question the reader edits holds
-   * the line until the edit ends.
+   * Sends the oldest waiting question when no answer comes in. A first question in edit holds the
+   * line.
    */
   const drain = () => {
     if (stopped || live !== null || queue[0] === undefined || queue[0].id === editing) {
@@ -1257,8 +1252,8 @@ export function wireChat(options) {
   }
 
   /**
-   * Ends the edit when the reader leaves its thread or folds the panel, as cancel does: the
-   * question keeps its text, and the line goes on. Another tab, or a minimized pane, keeps it.
+   * Cancels the edit when the reader leaves its thread or folds the panel. Another tab or a
+   * minimized pane keeps it.
    */
   const endEdit = () => {
     if (editing === null) {
@@ -1269,8 +1264,8 @@ export function wireChat(options) {
   }
 
   /**
-   * Sends a question and draws it and its answer as it comes in, on screen while its thread is,
-   * and off screen otherwise. The oldest question that waits for it goes next.
+   * Sends a question and draws it and its answer, off screen when its thread is not on screen.
+   * The next waiting question goes after it.
    * @param {Question} question
    */
   const runTurn = async question => {
@@ -1287,8 +1282,7 @@ export function wireChat(options) {
     const answer = shown ? appendTurn('assistant', '') : makeTurn('assistant', '')
     const current = { ...question, user, answer: answer.turn, shown, redraw: () => {} }
     live = current
-    // A first question's thread is listed by its place until the server names it, and the first
-    // waiting question now waits for this answer.
+    // The list and the panel show the new turn.
     drawQueue()
     /** Whether the agent took the turn: until then there is no answer to have missed. */
     let agentTookTurn = false
@@ -1555,8 +1549,7 @@ export function wireChat(options) {
    */
   const openDraft = (anchor, opts = {}) => {
     const left = currentThread()
-    // A draft whose first question is still on its way has no thread yet; the way back is its place
-    // and its number.
+    // A draft has no thread yet: its way back is its place and its number.
     const leftDraft =
       left === undefined && [live, ...queue].some(q => q !== null && q.thread === null && isHere(q))
         ? (openPlace ?? WHOLE_PR)
@@ -1568,8 +1561,7 @@ export function wireChat(options) {
     activeThread = null
     openPlace = anchor.kind === 'pr' ? undefined : anchor
     context = anchor
-    // A draft with a question on its way keeps the number of its oldest one. A fresh draft, or a
-    // draft with no question on its way, takes a new number.
+    // A reopened draft keeps the number of its oldest pending question. Other drafts take a new one.
     const pending =
       opts.fresh === true || opts.draft !== undefined
         ? undefined
@@ -1631,8 +1623,7 @@ export function wireChat(options) {
   }
 
   /**
-   * A command of the queue panel: show or hide its list, or send now, edit, save, cancel, or
-   * remove a waiting question.
+   * Runs a command of the queue panel.
    * @param {string} act
    * @param {string} id
    */

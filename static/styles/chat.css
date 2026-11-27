@@ -353,8 +353,7 @@ textarea:disabled {
 .chat-activity.checking-out {
   color: var(--accent);
 }
-/* The questions that wait their turn in this thread, over the context line. A long queue
-   scrolls inside the panel, so the box stays in view. */
+/* A long queue scrolls inside the panel, so the box stays in view. */
 .chat-queue {
   max-height: 40vh;
   overflow: auto;
@@ -395,7 +394,7 @@ textarea:disabled {
   padding: 0 10px 8px;
   list-style: none;
 }
-/* A row: the question on its own line, then when it goes, with its commands at the end. */
+/* A row: the question, then when it goes and its commands. */
 .chat-queue-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -424,7 +423,7 @@ textarea:disabled {
   min-height: 40px;
   font: inherit;
 }
-/* In edit, when the question goes takes its own line, over save and cancel. */
+/* In edit, the when text has its own line. */
 .chat-queue-edit + .chat-queue-when {
   grid-column: 1 / -1;
 }

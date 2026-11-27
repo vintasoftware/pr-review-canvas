@@ -1492,7 +1492,7 @@ describe('a place’s thread, in its corners', () => {
     expect(el(root, '#msg').hasAttribute('disabled')).toBe(false)
     ends[0]?.()
     await flush()
-    // The waiting question went, and is answered here, so stop shows next to send.
+    // The waiting question is answered here, so stop shows next to send.
     expect([send.hidden, send.disabled, el(root, '#chat-stop').hidden]).toEqual([false, false, false])
     ends[1]?.()
     await flush()
@@ -2019,11 +2019,11 @@ describe('the question queue', () => {
     await sendMessage(root, 'first?')
     queueCmd(root, 'first?', 'edit').click()
     editField(root).value = 'first, edited?'
-    // While the answer comes in, the question in edit says when it goes, as the other rows do.
+    // During the answer, the row in edit says when it goes.
     const when = () => el(root, '#chat-queue .chat-queue-when').textContent
     const status = () => el(root, '#chat-queue-status').textContent
     expect([when(), status()]).toEqual([NEXT, ''])
-    // The answer ends during the edit: the question in edit waits, says so, and keeps the text.
+    // The answer ends during the edit: the question waits, says so, and keeps the text.
     streams[0]?.end()
     await flush()
     expect(sent.map(q => q.message)).toEqual(['overall?'])
@@ -2063,7 +2063,7 @@ describe('the question queue', () => {
     el(root, '#chat-queue .chat-queue-head').click()
     el(root, '#chat-queue .chat-queue-head').click()
     expect(queued(root)).toEqual([`first? · ${NEXT}`, 'second? · After 1 question.'])
-    // Leaving the thread cancels it too, so the answer that ends sends the next question.
+    // Leaving the thread cancels it too, and the next question goes.
     queueCmd(root, 'first?', 'edit').click()
     editField(root).value = 'first, changed again?'
     pickThread(root, 'pr-review-a-b-42-claude-t1')
@@ -2071,7 +2071,7 @@ describe('the question queue', () => {
     streams[0]?.end()
     await flush()
     expect(sent.map(q => q.message)).toEqual(['overall?', 'first?'])
-    // An edit ended with an answer no longer coming in sends the question at once.
+    // With no answer coming in, ending the edit sends the question at once.
     pickThread(root, T2)
     await flush()
     streams[1]?.end()
@@ -2258,7 +2258,7 @@ describe('the question queue', () => {
     await sendMessage(root, 'a1?')
     el(root, '#chat-new-thread').click()
     await flush()
-    // The second new thread does not list the first one's question, nor draw it when it goes.
+    // The second new thread does not show the first one's question.
     expect(el(root, '#chat-queue').hidden).toBe(true)
     streams[0]?.end()
     await flush()
