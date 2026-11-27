@@ -198,8 +198,8 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
 
 /**
  * A question and the thread it goes to: the one open when it was asked, by name, or for a draft
- * by its place. `draft` counts the fresh new threads opened before it, so two new threads about
- * the same place stay apart.
+ * by its place. `draft` is the number of the draft it was asked in, so two new threads about the
+ * same place stay apart.
  * @typedef {{ message: string, context: ChatContext, thread: string | null, place: ChatContext | undefined, draft: number }} Question
  */
 
@@ -484,8 +484,10 @@ export function wireChat(options) {
     cancels = Promise.all([cancels, call.catch(() => undefined)]).then(() => undefined)
     return call
   }
-  /** The fresh new threads opened so far. A question asked in a draft keeps this number. */
+  /** The number of the draft on screen. A question asked in it keeps this number. */
   let draft = 0
+  /** The drafts numbered so far. */
+  let draftCount = 0
   /**
    * Questions that never reached the agent while their thread was off screen, with the reason in
    * their answer. The server saved nothing of them, so they go back on screen with their thread.
@@ -1511,6 +1513,16 @@ export function wireChat(options) {
     activeThread = null
     openPlace = anchor.kind === 'pr' ? undefined : anchor
     context = anchor
+    // A draft with a question on its way keeps the number of its oldest one. A fresh draft, or a
+    // draft with no question on its way, takes a new number.
+    const pending =
+      opts.fresh === true
+        ? undefined
+        : [live, ...queue].find(
+            q => q !== null && q.thread === null && sameChatContext(q.place ?? WHOLE_PR, anchor)
+          )
+    draftCount += 1
+    draft = pending?.draft ?? draftCount
     drawContext()
     restoreUnsent(opts.carry)
     proposed.clear()
@@ -1528,7 +1540,6 @@ export function wireChat(options) {
         : `<p class="empty">A new thread about ${esc(chatContextLabel(anchor, layerTitle, pointTitle))}. Asking about it again comes back here.${back}</p>`
     dispatch({ type: 'thread-switch', pinned: true })
     if (opts.fresh === true) {
-      draft += 1
       putBackRefused()
     } else {
       putBackPending()

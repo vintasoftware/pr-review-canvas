@@ -2085,6 +2085,33 @@ describe('the question queue', () => {
     await flush()
   })
 
+  it('keeps the questions of a place’s draft together after a new thread opened in between', async () => {
+    const T3 = 'pr-review-a-b-42-claude-t3'
+    const { root, chat, streams, sent } = mountQueue()
+    await flush()
+    await sendMessage(root, 'overall?')
+    chat.ask(LAYER)
+    await flush()
+    await sendMessage(root, 'why this order?')
+    el(root, '#chat-new-thread').click()
+    await flush()
+    chat.ask(LAYER)
+    await flush()
+    await sendMessage(root, 'and the tests?')
+    streams[0]?.end()
+    await flush()
+    streams[1]?.onEvent({ event: 'turn', data: { thread: T3, agent: 'claude', seeded: true } })
+    streams[1]?.end()
+    await flush()
+    expect(sent).toEqual([
+      { message: 'overall?', thread: T2 },
+      { message: 'why this order?' },
+      { message: 'and the tests?', thread: T3 },
+    ])
+    streams[2]?.end()
+    await flush()
+  })
+
   it('marks a saved thread with a waiting question as such in the list', async () => {
     const { root, streams } = mountQueue()
     await flush()
