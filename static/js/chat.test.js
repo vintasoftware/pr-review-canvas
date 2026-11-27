@@ -1930,16 +1930,51 @@ describe('the question queue', () => {
     ])
   })
 
+  it('sends the next question only after each cancel has its reply', async () => {
+    /** @type {Array<() => void>} */
+    const replies = []
+    const { root, streams, sent } = mountQueue({
+      cancelChat: () =>
+        new Promise(resolve => {
+          replies.push(() => resolve({ cancelled: true }))
+        }),
+    })
+    await flush()
+    await sendMessage(root, 'overall?')
+    await sendMessage(root, 'first?')
+    await sendMessage(root, 'second?')
+    queueCmd(root, 'second?', 'send-now').click()
+    el(root, '#chat-stop').click()
+    // The answer ends by itself while both cancels are on their way.
+    streams[0]?.end()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?'])
+    replies[0]?.()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?'])
+    replies[1]?.()
+    await flush()
+    expect(sent.map(q => q.message)).toEqual(['overall?', 'second?'])
+    streams[1]?.end()
+    await flush()
+    streams[2]?.end()
+    await flush()
+  })
+
   it('edits a waiting question: it leaves the queue and the log, and goes back in the box first', async () => {
     const { root, chat, streams, sent } = mountQueue()
     await flush()
     await sendMessage(root, 'overall?')
+    chat.setContext(LAYER)
     await sendMessage(root, 'first?')
+    chat.setContext({ kind: 'pr' })
     await sendMessage(root, 'second?')
     const box = /** @type {HTMLTextAreaElement} */ (el(root, '#msg'))
     box.value = 'half a thought'
     queueCmd(root, 'first?', 'edit').click()
     expect(box.value).toBe('first?\n\nhalf a thought')
+    // The question goes back with the context it was asked about.
+    expect(chat.context).toEqual(LAYER)
     expect(document.activeElement).toBe(box)
     expect(el(root, '#chat-log').textContent).not.toContain('first?')
     expect(notes(root)).toEqual([
@@ -2026,6 +2061,27 @@ describe('the question queue', () => {
       { message: 'two?', thread: T3 },
     ])
     streams[2]?.end()
+    await flush()
+  })
+
+  it('keeps a question of a second new thread apart from the first new thread', async () => {
+    const T3 = 'pr-review-a-b-42-claude-t3'
+    const { root, streams, sent } = mountQueue()
+    await flush()
+    el(root, '#thread-switch').click()
+    el(root, '#new-thread').click()
+    await flush()
+    await sendMessage(root, 'first new thread?')
+    el(root, '#thread-switch').click()
+    el(root, '#new-thread').click()
+    await flush()
+    await sendMessage(root, 'second new thread?')
+    streams[0]?.onEvent({ event: 'turn', data: { thread: T3, agent: 'claude', seeded: true } })
+    streams[0]?.end()
+    await flush()
+    expect(sent).toEqual([{ message: 'first new thread?' }, { message: 'second new thread?' }])
+    expect(el(root, '#thread-title').textContent).toBe('New thread')
+    streams[1]?.end()
     await flush()
   })
 

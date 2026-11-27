@@ -198,8 +198,9 @@ const PROPOSED_ACTS = { 'proposed-post': 'post', 'proposed-queue': 'queue', 'pro
 
 /**
  * A question and the thread it goes to: the one open when it was asked, by name, or for a draft
- * by its place.
- * @typedef {{ message: string, context: ChatContext, thread: string | null, place: ChatContext | undefined }} Question
+ * by its place. `draft` counts the fresh new threads opened before it, so two new threads about
+ * the same place stay apart.
+ * @typedef {{ message: string, context: ChatContext, thread: string | null, place: ChatContext | undefined, draft: number }} Question
  */
 
 /**
@@ -472,6 +473,19 @@ export function wireChat(options) {
    * @type {Array<Question & { user: HTMLElement, shown: boolean }>}
    */
   const queue = []
+  /**
+   * The cancel requests on their way, as one promise. The server stops the turn that runs when a
+   * cancel arrives, so the next turn starts only after each cancel has its reply.
+   */
+  let cancels = Promise.resolve()
+  /** Asks the server to stop the turn that runs now. */
+  const cancelTurn = () => {
+    const call = api.cancelChat(prNumber)
+    cancels = Promise.all([cancels, call.catch(() => undefined)]).then(() => undefined)
+    return call
+  }
+  /** The fresh new threads opened so far. A question asked in a draft keeps this number. */
+  let draft = 0
   /**
    * Questions that never reached the agent while their thread was off screen, with the reason in
    * their answer. The server saved nothing of them, so they go back on screen with their thread.
@@ -1182,7 +1196,7 @@ export function wireChat(options) {
       unsent.delete(unsentKey())
     }
     /** @type {Question} */
-    const question = { message, context, thread: activeThread, place: openPlace }
+    const question = { message, context, thread: activeThread, place: openPlace, draft }
     const { turn } = appendTurn('user', renderMarkdown(message, { paths }), turnContext(context))
     if (live !== null) {
       queue.push({ ...question, user: turn, shown: true })
@@ -1263,7 +1277,11 @@ export function wireChat(options) {
               // The other waiting questions of this draft go to the same thread.
               if (current.thread === null) {
                 for (const q of queue) {
-                  if (q.thread === null && sameChatContext(q.place ?? WHOLE_PR, current.place ?? WHOLE_PR)) {
+                  if (
+                    q.thread === null &&
+                    q.draft === current.draft &&
+                    sameChatContext(q.place ?? WHOLE_PR, current.place ?? WHOLE_PR)
+                  ) {
                     q.thread = thread
                   }
                 }
@@ -1358,6 +1376,12 @@ export function wireChat(options) {
         }
       }
     } finally {
+      // Wait for each cancel reply, also for a cancel sent during the wait.
+      let waited
+      do {
+        waited = cancels
+        await waited
+      } while (waited !== cancels)
       inFlight = null
       live = null
       // A pane taken down has nothing on screen to finish, and nothing to send after this turn.
@@ -1504,6 +1528,7 @@ export function wireChat(options) {
         : `<p class="empty">A new thread about ${esc(chatContextLabel(anchor, layerTitle, pointTitle))}. Asking about it again comes back here.${back}</p>`
     dispatch({ type: 'thread-switch', pinned: true })
     if (opts.fresh === true) {
+      draft += 1
       putBackRefused()
     } else {
       putBackPending()
@@ -1556,14 +1581,15 @@ export function wireChat(options) {
       drawQueue()
       const button = item.user.querySelector('[data-queue-act="send-now"]')
       if (button instanceof HTMLElement) {
-        void runCommand(button, () => api.cancelChat(prNumber), { pendingLabel: 'sending…' })
+        void runCommand(button, cancelTurn, { pendingLabel: 'sending…' })
       }
       return
     }
     item.user.remove()
     if (act === 'edit') {
-      // Put the question in the box, before the text that the box has.
+      // Put the question in the box, before the text that the box has, with its context.
       box.value = box.value.trim() === '' ? item.message : `${item.message}\n\n${box.value}`
+      setContext(item.context)
       box.focus()
     }
     drawQueue()
@@ -1590,7 +1616,7 @@ export function wireChat(options) {
       return
     }
     if (el.id === 'chat-stop') {
-      void runCommand(el, () => api.cancelChat(prNumber), { pendingLabel: 'stopping…' })
+      void runCommand(el, cancelTurn, { pendingLabel: 'stopping…' })
       return
     }
     if (el.id === 'thread-switch') {
