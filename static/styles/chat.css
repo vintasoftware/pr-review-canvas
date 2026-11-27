@@ -424,6 +424,10 @@ textarea:disabled {
   min-height: 40px;
   font: inherit;
 }
+/* In edit, when the question goes takes its own line, over save and cancel. */
+.chat-queue-edit + .chat-queue-when {
+  grid-column: 1 / -1;
+}
 .chat-composer {
   position: relative;
   padding: 12px 14px;
