@@ -125,7 +125,7 @@ test('the wheel scrolls a long list of threads, and the page under a short one',
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
 })
 
-test('another thread opens while an answer comes in, and a question asked there goes next', async ({
+test('another thread opens while an answer comes in, and questions asked there wait their turn', async ({
   page,
   chatServer,
 }, testInfo) => {
@@ -155,14 +155,41 @@ test('another thread opens while an answer comes in, and a question asked there 
   await expect(page.locator('#thread-title')).toHaveText('New thread')
   await page.locator('#msg').fill('And overall?')
   await page.keyboard.press('Enter')
-  await expect(page.locator('#chat-log')).toContainText(
-    'Waiting for the answer in “point · Sum instead of product”.'
+  // The question waits in the queue panel, not in the log.
+  const queue = page.locator('#chat-queue')
+  await expect(queue).toContainText('And overall?')
+  await expect(queue).toContainText('Next, when the answer in “point · Sum instead of product” ends.')
+  await expect(page.locator('#chat-log')).not.toContainText('And overall?')
+  // The box stays on, and a second question waits behind the first.
+  await expect(page.locator('#msg')).toBeEnabled()
+  await expect(page.locator('#chat-send')).toBeVisible()
+  await expect(page.locator('#msg')).toHaveAttribute(
+    'placeholder',
+    'AI Chat is answering in “point · Sum instead of product”. Ask here and it waits its turn…'
+  )
+  await page.locator('#msg').fill('And the tests?')
+  await page.keyboard.press('Enter')
+  await expect(queue.locator('.chat-queue-head')).toHaveText('Queued · 2')
+  await expect(queue.locator('.chat-queue-item').nth(1)).toContainText('After 1 question.')
+  // The second one is edited in place, and keeps its place.
+  await queue.locator('.chat-queue-item').nth(1).getByRole('button', { name: 'edit' }).click()
+  await expect(queue.locator('textarea')).toBeFocused()
+  await page.keyboard.press('End')
+  await page.keyboard.type(' And which are missing?')
+  await page.keyboard.press('Enter')
+  await expect(queue.locator('.chat-queue-item').nth(1)).toContainText(
+    'And the tests? And which are missing?'
   )
 
   release()
-  // The waiting question went once the first answer ended, and its answer arrives here.
-  await expect(page.locator('#chat-log')).toContainText('covered at')
-  await expect(page.locator('#chat-log')).not.toContainText('Waiting for the answer in')
+  // Each waiting question went in order, with its answer under it.
+  const turns = page.locator('#chat-log .turn')
+  await expect(page.locator('#chat-log .turn.a')).toHaveCount(2)
+  await expect(queue).toBeHidden()
+  await expect(turns.nth(0)).toContainText('And overall?')
+  await expect(turns.nth(1)).toContainText('covered at')
+  await expect(turns.nth(2)).toContainText('And the tests? And which are missing?')
+  await expect(turns.nth(3)).toContainText('covered at')
   // The first answer arrived in its own thread meanwhile.
   await page.locator('#thread-switch').click()
   await page.locator('#thread-index').getByText('Sum instead of product').click()

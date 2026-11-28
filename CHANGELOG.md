@@ -61,6 +61,12 @@
 
 ### AI Chat
 
+- The message box stays open while an answer comes in. A question asked meanwhile, in any thread,
+  waits its turn, and the questions that wait go in the order you asked them. Before, the box locked
+  while the open thread's answer came in, and only one question asked in another thread could wait.
+  The thread's waiting questions show in a **Queued** panel over the context line, each with
+  **send now**, **edit** in place, and **remove**. **stop** and an answer that
+  fails end only the answer coming in; the waiting questions still go. A reload drops them.
 - A symbolic link in a review checkout is written as a small file that holds the link's target, so
   reading it never opens a file outside the checkout. A checkout an earlier version made is made
   again the next time its review is chatted about or generated.

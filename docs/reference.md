@@ -1349,12 +1349,25 @@ the reason, and sends once you choose the part of the range inside one chunk.
 
 Use **stop** to interrupt a reply. Only one chat turn can run per PR at a time. While an answer is
 coming in, ask, the list of threads, and **new thread** still open any thread, and the answer keeps
-arriving in its own. A question asked in another thread meanwhile waits, marked as waiting, and is
-sent once the answer ends; one question waits at a time. If the server cannot take it then, a
-message says so wherever you are, and its thread shows the question with the reason; for a question
-asked from **new thread**, the next new thread does. Updating the review while a question waits asks
-first, as it does for unsent text. A timeout or incomplete answer can be retried; increase
-`chatTimeoutSec` if replies need more time.
+arriving in its own. The message box stays open: a question you ask meanwhile, in this thread or in
+any other, waits its turn. Questions wait in the order you asked them, and each one is sent when the
+answer before it ends; it goes into the thread then. Until then it is in the **Queued** panel over
+the context line, which lists the thread's waiting questions, says when each goes, and counts the
+ones that wait in other threads. Its head folds the list. Each waiting question has three commands:
+
+- **send now** puts it first and stops the answer coming in, so it goes next.
+- **edit** changes it in place: `Enter` saves, `Esc` cancels. It keeps its place in the queue and its
+  context. While you edit the next question to go, it waits for you, and its row says so once the
+  answer before it ends. Leaving the thread, or folding the panel, cancels the edit.
+- **remove** takes it out of the queue.
+
+**stop** ends only the answer coming in; the questions that wait still go. An answer that fails does
+not stop them either: each question shows its own error. The waiting questions of a new thread all
+go to the thread its first question starts. If the server cannot take a question, a message says so
+wherever you are, and its thread shows the question with the reason; for a question asked from
+**new thread**, the next new thread does. Waiting questions live in the page: a reload drops them,
+and updating the review while one waits asks first, as it does for unsent text. A timeout or
+incomplete answer can be retried; increase `chatTimeoutSec` if replies need more time.
 
 ### Review checkouts
 

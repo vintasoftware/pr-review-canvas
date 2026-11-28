@@ -353,6 +353,80 @@ textarea:disabled {
 .chat-activity.checking-out {
   color: var(--accent);
 }
+/* A long queue scrolls inside the panel, so the box stays in view. */
+.chat-queue {
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+.chat-queue-head {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+/* The caret points up when the list shows, and down when the list is folded. */
+.chat-queue-head::after {
+  content: '';
+  margin-left: auto;
+  padding: 3px;
+  border: solid currentcolor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-135deg);
+}
+.chat-queue-head[aria-expanded='false']::after {
+  transform: rotate(45deg);
+}
+.chat-queue-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 10px 8px;
+  list-style: none;
+}
+/* A row: the question, then when it goes and its commands. */
+.chat-queue-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: baseline;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+/* A question shows on one line. Its title has the full text. */
+.chat-queue-text {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-queue-cmds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.chat-queue-edit {
+  grid-column: 1 / -1;
+  min-height: 40px;
+  font: inherit;
+}
+/* In edit, the when text has its own line. */
+.chat-queue-edit + .chat-queue-when {
+  grid-column: 1 / -1;
+}
 .chat-composer {
   position: relative;
   padding: 12px 14px;
@@ -369,9 +443,6 @@ textarea {
 .chat-composer .cmd.fill {
   padding: 4px 10px;
   box-shadow: 2px 2px 0 var(--shadow);
-}
-.chat-composer .cmd.fill:disabled {
-  box-shadow: none;
 }
 
 /* ---- The side pane's tabs: AI Chat and the review being written ---- */
