@@ -105,7 +105,6 @@ export function renderChatShell(opts) {
     // thread. The bubble sits on the composer too, so it clears it at any height.
     '<form class="chat-composer" id="chat-form">' +
     '<button class="cmd unseen" type="button" id="chat-unseen" hidden aria-live="polite"></button>' +
-    // The waiting questions of the open thread.
     '<section class="chat-queue" id="chat-queue" aria-label="Queued questions" hidden></section>' +
     // This element is outside the panel. A redraw of the panel does not reset what a screen
     // reader hears.
@@ -487,14 +486,12 @@ export function wireChat(options) {
    */
   /** @type {string | null} */
   let editing = null
-  /** Whether the queue panel shows its list or only its head. */
   let queueOpen = true
   /**
    * The cancel requests that have no reply yet, as one promise. The server stops the turn that runs
    * when a cancel arrives. Thus the next turn starts only after each cancel has its reply.
    */
   let cancels = Promise.resolve()
-  /** Asks the server to stop the turn that runs now. */
   const cancelTurn = () => {
     const call = api.cancelChat(prNumber)
     cancels = Promise.all([cancels, call.catch(() => undefined)]).then(() => undefined)
@@ -502,7 +499,6 @@ export function wireChat(options) {
   }
   /** The number of the draft on screen. A question asked in it keeps this number. */
   let draft = 0
-  /** The drafts numbered so far. */
   let draftCount = 0
   /**
    * Questions that never reached the agent while their thread was off screen, with the reason in
@@ -758,7 +754,6 @@ export function wireChat(options) {
     }
   }
 
-  /** Draws all that shows the queue. */
   const drawQueue = () => {
     drawComposer()
     drawIndex()
@@ -1231,7 +1226,6 @@ export function wireChat(options) {
     }
     /** @type {Question} */
     const question = { message, context, thread: activeThread, place: openPlace, draft }
-    // A question waits while an answer comes in, or while others wait before it.
     if (live !== null || queue.length > 0) {
       queueSeq += 1
       queue.push({ ...question, id: `q${queueSeq}` })
@@ -1285,7 +1279,6 @@ export function wireChat(options) {
     const answer = shown ? appendTurn('assistant', '') : makeTurn('assistant', '')
     const current = { ...question, user, answer: answer.turn, shown, redraw: () => {} }
     live = current
-    // The list and the panel show the new turn.
     drawQueue()
     /** Whether the agent took the turn: until then there is no answer to have missed. */
     let agentTookTurn = false
@@ -1627,7 +1620,6 @@ export function wireChat(options) {
   }
 
   /**
-   * Runs a command of the queue panel.
    * @param {string} act
    * @param {string} id
    */
@@ -1644,7 +1636,7 @@ export function wireChat(options) {
     }
     switch (act) {
       case 'send-now': {
-        // Move it to the front and stop the current answer. The drain then sends it.
+        // The drain sends it when the current answer stops.
         queue.splice(queue.indexOf(item), 1)
         queue.unshift(item)
         drawQueue()
@@ -1686,7 +1678,6 @@ export function wireChat(options) {
   }
 
   /**
-   * Enter saves the edit of a waiting question, and Escape cancels it.
    * @param {KeyboardEvent} event
    */
   const onQueueKeyDown = event => {
